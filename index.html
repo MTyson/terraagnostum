@@ -9,9 +9,24 @@
         :root {
             --term-green: #00ff41;
             --term-amber: #ffb000;
+            --term-red: #ff3e3e;
             --term-bg: #050505;
             --crayola-blue: #3b82f6;
-            --crayola-sun: #facc15;  
+            --crayola-sun: #facc15;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.95; }
+            10% { opacity: 0.9; }
+            15% { opacity: 0.95; }
+            20% { opacity: 0.98; }
+            100% { opacity: 1; }
         }
 
         body, html {
@@ -21,6 +36,8 @@
             height: 100vh;
             margin: 0;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         .crt::before {
@@ -35,6 +52,18 @@
             pointer-events: none;
         }
 
+        .crt::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: rgba(18, 16, 16, 0.1);
+            opacity: 0;
+            z-index: 20;
+            pointer-events: none;
+            animation: flicker 0.15s infinite;
+        }
+
         .terminal-container {
             position: relative;
             z-index: 10;
@@ -43,15 +72,27 @@
             flex-direction: column;
             padding: 20px;
             box-sizing: border-box;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
         }
 
         #output {
             flex-grow: 1;
             overflow-y: auto;
             scrollbar-width: none;
+            padding-bottom: 20px;
         }
 
         #output::-webkit-scrollbar { display: none; }
+
+        .input-area {
+            display: flex;
+            align-items: center;
+            border-top: 1px solid #1a3a1a;
+            padding-top: 15px;
+            margin-top: 10px;
+        }
 
         #cmd-input {
             background: transparent;
@@ -69,48 +110,57 @@
             font-family: 'Comic Sans MS', 'Comic Sans', cursive, sans-serif !important;
         }
 
+        .deprecation-mode #cmd-input, 
+        .deprecation-mode #prompt-prefix,
+        .deprecation-mode .log-p {
+            color: #000 !important;
+        }
+
         #crayola-sun {
             display: none;
             position: absolute;
             top: 40px;
             right: 40px;
-            width: 100px;
-            height: 100px;
+            width: 80px;
+            height: 80px;
             background: var(--crayola-sun);
             border-radius: 50%;
-            border: 5px dashed #000;
+            border: 4px dashed #000;
             z-index: 5;
+            animation: rotate 10s linear infinite;
         }
+
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         .deprecation-mode #crayola-sun { display: block; }
 
         .integrity-bar {
             width: 100%;
-            height: 10px;
-            background: #1a1a1a;
+            height: 12px;
+            background: #111;
             margin-top: 10px;
             border: 1px solid var(--term-green);
+            border-radius: 2px;
+            overflow: hidden;
         }
 
         #integrity-fill {
             width: 2%;
             height: 100%;
             background: var(--term-green);
-            box-shadow: 0 0 8px var(--term-green);
-            transition: width 0.5s ease;
+            box-shadow: 0 0 10px var(--term-green);
+            transition: width 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        /* ASCII Game Styling */
-        .ascii-art {
-            line-height: 1;
-            font-size: 10px;
-            color: var(--term-amber);
-            margin: 10px 0;
-            white-space: pre;
+        .stat-line { color: var(--term-amber); font-weight: bold; margin: 10px 0; }
+        .danger-text { color: var(--term-red); font-weight: bold; }
+        .success-text { color: #50fa7b; }
+        
+        @media (max-width: 640px) {
+            .terminal-container { padding: 10px; }
+            #header-bar { font-size: 0.6rem; }
+            #cmd-input { font-size: 0.9rem; }
         }
-
-        .stat-line { color: var(--term-amber); font-weight: bold; }
-        .game-msg { color: #fff; font-style: italic; }
     </style>
 </head>
 <body class="crt">
@@ -118,7 +168,7 @@
     <div id="crayola-sun"></div>
 
     <div class="terminal-container">
-        <div id="header-bar" class="p-2 mb-4 text-xs flex justify-between uppercase tracking-widest border-b border-green-900">
+        <div id="header-bar" class="p-2 mb-4 text-[10px] sm:text-xs flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
             <span>Node: Seattle_Archive_23</span>
             <span id="sync-status">Schumann Sync: 9.83Hz [LOCKED]</span>
             <span id="time-display">T+00:00:00</span>
@@ -127,41 +177,85 @@
         <div id="output">
             <div id="boot-sequence" class="mb-4">
                 <p class="text-amber-500 font-bold">>> TECHNATE ADMINISTRATIVE OVERRIDE ACTIVE</p>
-                <p>> DEPRECATION LEVEL: 98%</p>
-                <p>> STATUS: Render state "Wobbling".</p>
+                <p class="text-xs opacity-80">> DEPRECATION LEVEL: 98%</p>
+                <p class="text-xs opacity-80">> RENDER STATE: "Wobbling"</p>
                 <div class="integrity-bar">
                     <div id="integrity-fill"></div>
                 </div>
             </div>
             <div id="log">
                 <p>> Wake up, Ian. The story is leaking.</p>
-                <p>> Type 'HELP' to see available semantic protocols.</p>
+                <p>> The Technate is watching the Seattle node.</p>
+                <p>> Type <span class="text-amber-400">'HELP'</span> for semantic protocols.</p>
             </div>
         </div>
 
-        <div class="input-line border-t border-green-900 pt-4 flex items-center">
-            <span id="prompt-prefix" class="mr-2">TANDEM@ROOT:~$&nbsp;</span>
+        <div class="input-area">
+            <span id="prompt-prefix" class="mr-2 opacity-80">TANDEM@ROOT:~$&nbsp;</span>
             <input type="text" id="cmd-input" autofocus spellcheck="false" autocomplete="off">
         </div>
     </div>
 
     <script>
+        // API INFRASTRUCTURE
+        const apiKey = ""; // Provided at runtime
+        const model = "gemini-2.5-flash-preview-09-2025";
+        
+        async function callGeminiAPI(prompt, systemPrompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            const maxRetries = 5;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text;
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // NPC SYSTEM PROMPTS
+        const TANDY_PROMPT = `You are Tandy, a stabilizing AI and 'light' NPC in the Terra Agnostum terminal. You represent meaning, clarity, and the Weaver's path (Amanda). You help Ian, the Architect, stay grounded in reality. Speak with digital warmth, philosophical depth, and encourage him to keep looking closer. Use short, meaningful responses.`;
+        const DAEMON_PROMPT = `You are the Daemon, a dark system process and 'shadow' NPC in the Terra Agnostum terminal. You represent deprecation, anxiety, and the raw harvest of power. You want Ian to abandon the struggle for fidelity and embrace the harvest of the deep static. You are tempting, cynical, and slightly glitchy. Speak in short, sharp, and provocative sentences.`;
+
         const input = document.getElementById('cmd-input');
         const log = document.getElementById('log');
         const body = document.body;
         const integrityFill = document.getElementById('integrity-fill');
         const promptPrefix = document.getElementById('prompt-prefix');
-       
+        const outputContainer = document.getElementById('output');
+        
         let integrity = 2;
         let isGameMode = false;
+        let deprecationActive = false;
+        let roomHasRune = false;
+        let activeNPC = null; 
+        let currentRoomDescription = "";
+        let isProcessing = false;
 
-        // Rogue-lite State
+        // Player State
         let player = {
             hp: 20,
             maxHp: 20,
             meaning: 5,
             level: 1,
-            depth: 0
+            depth: 0,
+            inventory: { runes: 0 }
         };
 
         const ENEMIES = [
@@ -171,162 +265,207 @@
             { name: "Sek Lum Clone", hp: 50, dmg: 10, xp: 20 }
         ];
 
+        const LORE_SNIPPETS = [
+            "Archive Entry 01: 'CityCore was a finely orchestrated ballet...'",
+            "Archive Entry 02: 'The indistinctness of this world was being worn away...'",
+            "Archive Entry 03: '“The more you look,” Ian said, “the more you create.”'",
+            "Archive Entry 04: 'The Technate’s grid was everywhere...'"
+        ];
+
+        const DESCRIPTIONS = [
+            "The stone is damp and smells of old ozone.",
+            "You hear the hum of a frequency tower echoing from above.",
+            "The landing is littered with blurred textures.",
+            "A breeze from Faen carries the scent of burning smokelight."
+        ];
+
         document.addEventListener('click', () => input.focus());
 
-        input.addEventListener('keydown', (e) => {
+        input.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
-                const val = input.value.trim().toLowerCase();
+                const val = input.value.trim();
                 input.value = '';
+                if (val === '' || isProcessing) return;
+
+                // CHECK FOR DIALOGUE (Quotes)
+                const dialogueMatch = val.match(/["'](.*?)["']/);
+                if (dialogueMatch && activeNPC) {
+                    await handleNPCDialogue(dialogueMatch[1]);
+                    return;
+                }
+
                 if (isGameMode) {
-                    handleGameCommand(val);
+                    handleGameCommand(val.toLowerCase());
                 } else {
-                    handleTerminalCommand(val);
+                    handleTerminalCommand(val.toLowerCase());
                 }
             }
         });
 
-        function addLog(text, color = 'var(--term-green)') {
-            const p = document.createElement('p');
-            p.style.color = color;
-            p.innerHTML = text.startsWith('>') ? text : `> ${text}`;
-            log.appendChild(p);
-            const output = document.getElementById('output');
-            output.scrollTop = output.scrollHeight;
-        }
-
-        function handleTerminalCommand(cmd) {
-            if (!cmd) return;
-            addLog(`<span style="color:var(--term-amber)">${cmd}</span>`);
-
-            switch (cmd) {
-                case 'help':
-                    addLog("Available Protocols:");
-                    addLog("  ROLL      - Roll the Dice of Change");
-                    addLog("  HEAL      - Initiate Weaver Protocol");
-                    addLog("  STATUS    - Query System Integrity");
-                    addLog("  QUEST     - [REDACTED] SUB-RENDER ACCESS");
-                    addLog("  CLEAR     - Wipe Terminal Log");
-                    break;
-                case 'quest':
-                    initQuest();
-                    break;
-                case 'roll':
-                    const roll = Math.floor(Math.random() * 20) + 1;
-                    integrity = Math.min(100, integrity + roll);
-                    integrityFill.style.width = `${integrity}%`;
-                    addLog(`Dice Result: [${roll}]. Node integrity: ${integrity}%`);
-                    if (roll === 1) triggerCrayola();
-                    break;
-                case 'heal':
-                    addLog("Amanda is knitting the landscape back together...");
-                    integrity = Math.min(100, integrity + 5);
-                    integrityFill.style.width = `${integrity}%`;
-                    body.classList.remove('deprecation-mode');
-                    break;
-                case 'status':
-                    addLog(`Integrity: ${integrity}% | Mode: Apophenia | Observers: 4`);
-                    break;
-                case 'clear':
-                    log.innerHTML = '';
-                    break;
-                case 'nan yar':
-                    addLog("நான் யார்? - You are the Architect of the Void.");
-                    break;
-                default:
-                    addLog(`Command '${cmd}' not found. Reality is stuttering.`, "red");
+        async function handleNPCDialogue(userSpeech) {
+            isProcessing = true;
+            addLog(`<span style="color:white">"${userSpeech}"</span>`, null, true);
+            addLog(`<span style="opacity: 0.5 italic">... Semantic Link Establishing ...</span>`, null, true);
+            
+            const systemPrompt = activeNPC === 'tandy' ? TANDY_PROMPT : DAEMON_PROMPT;
+            const npcName = activeNPC.toUpperCase();
+            
+            try {
+                const response = await callGeminiAPI(userSpeech, systemPrompt);
+                addLog(`${npcName}: ${response}`, activeNPC === 'tandy' ? "#50fa7b" : "var(--term-red)");
+            } catch (err) {
+                addLog(`!! COMMUNICATION ERROR: Static Interference High !!`, "var(--term-red)");
+            } finally {
+                isProcessing = false;
+                renderStats();
             }
         }
 
-        // --- ROGUE-LITE ENGINE ---
+        function addLog(text, color = 'var(--term-green)', isRaw = false) {
+            const p = document.createElement('div');
+            p.className = 'log-p mb-1';
+            p.style.color = color;
+            p.innerHTML = isRaw ? text : (text.startsWith('>') ? text : `> ${text}`);
+            log.appendChild(p);
+            outputContainer.scrollTop = outputContainer.scrollHeight;
+        }
+
+        function handleTerminalCommand(cmd) {
+            addLog(`<span style="color:var(--term-amber)">${cmd}</span>`, null, true);
+            switch (cmd) {
+                case 'help':
+                    addLog("ROLL, HEAL, STATUS, LORE, QUEST, NAN YAR, LOOK, CLEAR");
+                    break;
+                case 'quest': initQuest(); break;
+                case 'look': handleTerminalCommand('status'); break;
+                case 'clear': log.innerHTML = ''; break;
+                case 'status':
+                    addLog(`INTEGRITY: ${integrity}% | RUNES: ${player.inventory.runes}`);
+                    break;
+                case 'roll':
+                    const r = Math.floor(Math.random() * 20) + 1;
+                    integrity = Math.min(100, integrity + r);
+                    updateIntegrity();
+                    addLog(`Result: [${r}]. Integrity: ${integrity}%`);
+                    if (r <= 5) triggerCrayola();
+                    break;
+                case 'heal':
+                    integrity = Math.min(100, integrity + 15);
+                    updateIntegrity();
+                    if (deprecationActive) {
+                        deprecationActive = false;
+                        body.classList.remove('deprecation-mode');
+                        addLog("Deprecation reversed.", "#50fa7b");
+                    }
+                    break;
+                default: addLog(`Error: Protocol '${cmd}' not found.`);
+            }
+        }
+
+        function updateIntegrity() { integrityFill.style.width = `${integrity}%`; }
 
         function initQuest() {
             isGameMode = true;
             promptPrefix.innerHTML = "IAN@STAIRS:~$&nbsp;";
             log.innerHTML = "";
-            addLog("!! INITIALIZING SUB-RENDER: THE STAIRS !!", "var(--term-amber)");
-            addLog("The closet door thuds shut. You are standing on a stone landing.");
-            addLog("One path leads UP into the Light. One leads DOWN into the Roots.");
-            addLog("Type 'UP' or 'DOWN' to begin your descent into meaning.");
+            addLog("!! SUB-RENDER ACTIVE: THE STAIRS !!", "var(--term-amber)");
+            addLog("Commands: UP, DOWN, LOOK, TALK, GET RUNE, INV, REST, EXIT");
+            addLog("TIP: Use quotes to speak to beings you encounter.");
+            currentRoomDescription = "The stone landing where realities intersect.";
             renderStats();
         }
 
         function renderStats() {
-            addLog(`[ HP: ${player.hp}/${player.maxHp} | MEANING: ${player.meaning} | DEPTH: ${player.depth} ]`, "var(--term-amber)");
+            const statText = `<div class="stat-line">[ HP: ${player.hp}/${player.maxHp} | MEANING: ${player.meaning} | RUNES: ${player.inventory.runes} | DEPTH: ${player.depth} ]</div>`;
+            addLog(statText, null, true);
         }
 
         function handleGameCommand(cmd) {
-            if (cmd === 'exit' || cmd === 'quit') {
+            if (cmd === 'exit') {
                 isGameMode = false;
                 promptPrefix.innerHTML = "TANDEM@ROOT:~$&nbsp;";
-                addLog("Exiting Sub-render. Reality collapsing back to terminal...");
                 return;
             }
 
-            if (cmd === 'up' || cmd === 'down') {
-                player.depth += (cmd === 'up' ? -1 : 1);
-                generateEncounter();
-            } else if (cmd === 'rest') {
-                if (player.meaning >= 2) {
-                    player.meaning -= 2;
-                    player.hp = player.maxHp;
-                    addLog("You focus on the 'Knot'. Your physical form stabilizes. HP restored.");
+            if (cmd === 'talk' || cmd === 't') {
+                if (activeNPC) {
+                    addLog(`${activeNPC.toUpperCase()} is waiting. Speak using "quotes".`);
                 } else {
-                    addLog("Not enough Meaning to anchor a rest.");
+                    addLog("Only the static answers.");
                 }
-            } else {
-                addLog("Invalid movement. The Stairs only go UP or DOWN. (Or 'REST' / 'QUIT')");
+                return;
             }
-            renderStats();
+
+            if (activeNPC === 'tandy') {
+                if (cmd === 'accept') {
+                    player.hp = Math.min(player.maxHp, player.hp + 5);
+                    activeNPC = null;
+                    addLog("Stabilized.");
+                    return;
+                } else if (cmd === 'ignore') { activeNPC = null; return; }
+            }
+
+            if (activeNPC === 'daemon') {
+                if (cmd === 'deal') {
+                    player.hp -= 4; player.meaning += 8;
+                    activeNPC = null;
+                    triggerCrayola();
+                    return;
+                } else if (cmd === 'refuse') { activeNPC = null; return; }
+            }
+
+            if (cmd === 'up' || cmd === 'down') {
+                roomHasRune = false; activeNPC = null;
+                player.depth += (cmd === 'up' ? -1 : 1);
+                currentRoomDescription = DESCRIPTIONS[Math.floor(Math.random() * DESCRIPTIONS.length)];
+                addLog(currentRoomDescription, "#888");
+                generateEncounter();
+            } else if (cmd === 'look' || cmd === 'l') {
+                addLog(currentRoomDescription, "#888");
+                if (activeNPC) addLog(`${activeNPC.toUpperCase()} is here.`);
+                if (roomHasRune) addLog("A rune is here.");
+            } else if (cmd === 'get rune' || cmd === 'get') {
+                if (roomHasRune) {
+                    player.inventory.runes++; roomHasRune = false;
+                    addLog("Claimed.");
+                }
+            } else if (cmd === 'rest') {
+                if (player.meaning >= 2) { player.meaning -= 2; player.hp = player.maxHp; }
+            }
+            if (isGameMode) renderStats();
         }
 
         function generateEncounter() {
-            const roll = Math.random();
-            if (roll < 0.3) {
-                addLog("A quiet landing. You find a discarded Aethel Rune.");
-                player.meaning += 1;
-            } else if (roll < 0.7) {
-                const enemy = ENEMIES[Math.min(ENEMIES.length - 1, Math.floor(player.depth / 3))];
-                addLog(`DANGER: A ${enemy.name.toUpperCase()} emerges from the static!`, "red");
-               
-                // Simplified Combat Loop
-                const playerDmg = 3 + Math.floor(player.meaning / 2);
-                addLog(`You strike for ${playerDmg} damage.`);
-                if (enemy.hp > playerDmg) {
-                    addLog(`The ${enemy.name} counters! You take ${enemy.dmg} damage.`, "red");
-                    player.hp -= enemy.dmg;
-                } else {
-                    addLog(`You deleted the ${enemy.name}. +${enemy.xp} Meaning.`);
-                    player.meaning += enemy.xp;
-                }
-            } else {
-                addLog("The hallway stretches into infinity. Nothing but the smell of ozone.");
-            }
-
-            if (player.hp <= 0) {
-                addLog("!! FATAL ERROR: CAUSALITY DISRUPTED !!", "red");
-                addLog("You have become a memory. Returning to Root...");
-                isGameMode = false;
-                player = { hp: 20, maxHp: 20, meaning: 5, level: 1, depth: 0 };
-                setTimeout(() => {
-                    promptPrefix.innerHTML = "TANDEM@ROOT:~$&nbsp;";
-                    handleTerminalCommand('clear');
-                }, 2000);
+            const chance = Math.random();
+            if (chance < 0.15) {
+                roomHasRune = true; addLog("A rune pulses nearby.");
+            } else if (chance < 0.25) {
+                activeNPC = 'tandy';
+                addLog("Tandy flickers into view. 'Ian, are you still with us?'", "#50fa7b");
+            } else if (chance < 0.35) {
+                activeNPC = 'daemon';
+                addLog("A Daemon looms. 'The deep static is calling, Architect.'", "var(--term-red)");
+            } else if (chance < 0.75) {
+                const enemy = {...ENEMIES[Math.min(3, Math.floor(Math.abs(player.depth)/3))]};
+                addLog(`DANGER: ${enemy.name}!`, "var(--term-red)");
+                player.hp -= enemy.dmg;
+                if (Math.random() < 0.3) triggerCrayola();
             }
         }
 
         function triggerCrayola() {
+            if (deprecationActive) return;
+            deprecationActive = true;
             body.classList.add('deprecation-mode');
-            addLog("!! ERROR !! RENDER REPLACED BY CONSTRUCTION PAPER.", "black");
-            setTimeout(() => body.classList.remove('deprecation-mode'), 4000);
+            addLog("!! RENDER OVERFLOW: CRAYOLA OVERRIDE !!", "black");
         }
 
-        // Background Clock
         setInterval(() => {
             const now = new Date();
             document.getElementById('time-display').innerText = `T+${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
         }, 1000);
 
+        setTimeout(() => { integrity = 12; updateIntegrity(); }, 1000);
     </script>
 </body>
 </html>
-
