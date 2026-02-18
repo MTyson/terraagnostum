@@ -25,31 +25,35 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     /**
      * MODEL PIVOT:
-     * We are using gemini-2.0-flash with generateContent.
-     * This model supports the "IMAGE" modality in generationConfig.
+     * We are switching to the dedicated Imagen 3.0 model.
+     * This model requires the ":predict" endpoint and an "instances" payload.
      */
-    const model = "gemini-2.0-flash";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const model = "imagen-3.0-generate-001";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
 
     try {
       const incomingPayload = req.body;
       
       let promptText = "A lofi glitch terminal art piece.";
+      
+      // Handle different possible frontend payload structures
       if (incomingPayload.instances && incomingPayload.instances[0]?.prompt) {
         promptText = incomingPayload.instances[0].prompt;
-      } else if (incomingPayload.contents) {
+      } else if (incomingPayload.contents && incomingPayload.contents[0]?.parts[0]?.text) {
         promptText = incomingPayload.contents[0].parts[0].text;
       }
 
-      const geminiPayload = {
-        contents: [
+      // Payload structure required for Imagen predict endpoint
+      const predictPayload = {
+        instances: [
           {
-            role: "user",
-            parts: [{ text: promptText }]
+            prompt: promptText
           }
         ],
-        generationConfig: {
-          responseModalities: ["IMAGE"]
+        parameters: {
+          sampleCount: 1,
+          aspectRatio: "1:1",
+          outputMimeType: "image/png"
         }
       };
 
@@ -58,34 +62,32 @@ export default async function handler(req, res) {
         headers: { 
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(geminiPayload)
+        body: JSON.stringify(predictPayload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        // Detailed error logging to help identify the exact mismatch
-        console.error("Source API Error:", JSON.stringify(data, null, 2));
+        console.error("Imagen API Error:", JSON.stringify(data, null, 2));
         return res.status(response.status).json({
-          error: data.error?.message || "Source Error",
+          error: data.error?.message || "Imagen Source Error",
           code: data.error?.code,
           status: data.error?.status,
-          detailedError: data // Returns the full object for terminal inspection
+          detailedError: data
         });
       }
 
-      const candidates = data.candidates || [];
-      const imagePart = candidates[0]?.content?.parts?.find(p => p.inlineData);
-      const base64Data = imagePart?.inlineData?.data;
+      // Imagen returns data in predictions[0].bytesBase64Encoded
+      const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
 
       if (!base64Data) {
         return res.status(500).json({ 
-          error: "No image data returned from source.",
-          reason: candidates[0]?.finishReason || "UNKNOWN",
+          error: "No image data returned from Imagen source.",
           details: data 
         });
       }
 
+      // Return in the format the frontend (index.html) expects
       return res.status(200).json({
         predictions: [{ bytesBase64Encoded: base64Data }]
       });
