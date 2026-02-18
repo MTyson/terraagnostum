@@ -157,7 +157,7 @@
 
         <div id="output">
             <div id="log">
-                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.2]</p>
+                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.3]</p>
                 <p>> Every word is a brushstroke. Every Architect is a builder.</p>
                 <p>> Type <span class="text-amber-400">'QUEST'</span> to begin.</p>
                 <p>> Type <span class="text-blue-400">'LOOK'</span> to visualize the current Source.</p>
@@ -176,6 +176,7 @@
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- 1. CONFIGURATION ---
+        // ACTION REQUIRED: Fill this with your Firebase project settings from the Firebase Console.
         const localFirebaseConfig = {
             apiKey: "", 
             authDomain: "",
@@ -185,7 +186,7 @@
             appId: ""
         };
 
-        const apiKey = ""; 
+        const apiKey = ""; // Gemini API key for local/Imagen use
         let firebaseConfig;
         try {
             firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : localFirebaseConfig;
@@ -194,14 +195,29 @@
         }
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'terra-agnostum-shared';
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        
+        // --- 2. GATED INITIALIZATION ---
+        // This prevents the auth/invalid-api-key error from breaking the whole terminal.
+        let app, auth, db;
+        let isSharedModeActive = false;
+
+        try {
+            if (firebaseConfig.apiKey) {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                isSharedModeActive = true;
+            } else {
+                console.warn("TECHNATE LOG: Firebase API Key missing. Running in Isolated Mode.");
+            }
+        } catch (err) {
+            console.error("TECHNATE LOG: Firebase Initialization Error:", err.message);
+        }
 
         const API_PATH = "/api/generate";
         let user = null;
 
-        // --- 2. STATE ---
+        // --- 3. STATE ---
         let worldState = {
             rooms: {
                 "archive": {
@@ -217,27 +233,35 @@
             currentRoom: "archive"
         };
 
-        // --- 3. AUTH & SYNC ---
+        // --- 4. AUTH & SYNC ---
         const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+            if (!isSharedModeActive) return;
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                addLog("AUTH LINK FAILED: Verify Firebase Config.", "var(--term-red)");
             }
         };
 
-        onAuthStateChanged(auth, (u) => {
-            user = u;
-            if (user) {
-                addLog(`Architect Authenticated: ${user.uid.substring(0, 8)}...`, "var(--crayola-blue)");
-                setupWorldListener();
-            }
-        });
-
-        initAuth();
+        if (isSharedModeActive) {
+            onAuthStateChanged(auth, (u) => {
+                user = u;
+                if (user) {
+                    addLog(`Architect Authenticated: ${user.uid.substring(0, 8)}...`, "var(--crayola-blue)");
+                    setupWorldListener();
+                }
+            });
+            initAuth();
+        } else {
+            addLog("NOTICE: Running in Isolated Mode (No Shared Reality).", "var(--term-amber)");
+        }
 
         function setupWorldListener() {
-            if (!user) return;
+            if (!user || !db) return;
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
             
             onSnapshot(roomRef, (docSnap) => {
@@ -261,10 +285,12 @@
                         lastUpdated: serverTimestamp()
                     });
                 }
+            }, (err) => {
+                addLog("SYNC ERROR: Check Firestore Rules.", "var(--term-red)");
             });
         }
 
-        // --- 4. ASSET GENERATION (IMAGEN) ---
+        // --- 5. ASSET GENERATION (IMAGEN) ---
         async function projectVisual(prompt) {
             const buffer = document.getElementById('visual-buffer');
             const img = document.getElementById('visual-image');
@@ -293,12 +319,12 @@
                     addLog("VISUAL BUFFER UPDATED.", "var(--term-amber)");
                 }
             } catch (err) {
-                addLog("VISUAL BUFFER ERROR: Failed to project Source.", "var(--term-red)");
+                addLog("VISUAL BUFFER ERROR: Check API key.", "var(--term-red)");
                 loader.classList.add('hidden');
             }
         }
 
-        // --- 5. LOGGING & CORE UI ---
+        // --- 6. LOGGING & CORE UI ---
         function addLog(text, color = 'var(--term-green)', isRaw = false) {
             const outputContainer = document.getElementById('output');
             const log = document.getElementById('log');
@@ -311,7 +337,7 @@
             outputContainer.scrollTop = outputContainer.scrollHeight;
         }
 
-        // --- 6. AI INTERACTION (GAME MASTER) ---
+        // --- 7. AI INTERACTION (GAME MASTER) ---
         async function callGeminiAPI(prompt, systemPrompt) {
             const payload = {
                 contents: [{ role: "user", parts: [{ text: `SHARED WORLD: ${JSON.stringify(worldState.rooms[localPlayer.currentRoom])}. PLAYER: HP ${localPlayer.hp}. DIAL: ${prompt}` }] }],
@@ -350,7 +376,7 @@
             return JSON.parse(textResponse);
         }
 
-        // --- 7. HANDLERS ---
+        // --- 8. HANDLERS ---
         let isGameMode = false;
         let isProcessing = false;
         let activeNPC = null;
@@ -383,17 +409,19 @@
                     if (m.visual_prompt) projectVisual(m.visual_prompt);
                     
                     // Sync shift to Firestore
-                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', localPlayer.currentRoom);
-                    await updateDoc(roomRef, {
-                        manifestations: arrayUnion({
-                            action: m.action,
-                            value: m.value,
-                            author: user.uid,
-                            text: result.text,
-                            timestamp: Date.now()
-                        }),
-                        lastUpdated: serverTimestamp()
-                    });
+                    if (isSharedModeActive && user) {
+                        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', localPlayer.currentRoom);
+                        await updateDoc(roomRef, {
+                            manifestations: arrayUnion({
+                                action: m.action,
+                                value: m.value,
+                                author: user.uid,
+                                text: result.text,
+                                timestamp: Date.now()
+                            }),
+                            lastUpdated: serverTimestamp()
+                        });
+                    }
                 }
             } catch (err) {
                 const statusEl = document.getElementById(statusId);
@@ -442,27 +470,27 @@
         const input = document.getElementById('cmd-input');
         input.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
-                // Prevent default behavior which can sometimes interfere in specialized environments
                 e.preventDefault();
                 
                 const val = input.value.trim();
-                if (val === '' || isProcessing) return;
+                if (val === '') return;
+                
+                if (isProcessing) {
+                    addLog("SYSTEM BUSY: Synchronizing Source...", "var(--term-amber)");
+                    return;
+                }
+                
                 input.value = '';
-
                 const cmd = val.toLowerCase();
                 
-                // 1. Dialogue (Quoted text) - Works in all modes
                 if (val.startsWith('"') || val.startsWith("'")) {
                     await handleNPCDialogue(val.replace(/^["']|["']$/g, ''));
-                } 
-                // 2. Global Core Command
-                else if (cmd === 'quest') {
+                } else if (cmd === 'quest') {
                     isGameMode = true;
-                    document.getElementById('prompt-prefix').innerHTML = `${user?.uid?.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
+                    const archId = user?.uid?.substring(0,4) || 'GUEST';
+                    document.getElementById('prompt-prefix').innerHTML = `${archId}@ARCHIVE:~$&nbsp;`;
                     addLog("COLLABORATIVE LINK ESTABLISHED.");
-                } 
-                // 3. Game Mode Logic
-                else if (isGameMode) {
+                } else if (isGameMode) {
                     if (cmd === 'look') {
                         addLog(worldState.rooms.archive.description, "#888");
                         projectVisual(worldState.rooms.archive.visualPrompt);
@@ -475,9 +503,7 @@
                     } else {
                         addLog("Command unrecognized by the Source.");
                     }
-                } 
-                // 4. Terminal Command (Default mode)
-                else {
+                } else {
                     handleTerminalCommand(cmd);
                 }
             }
