@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GEMINI_API_KEY is not configured in Vercel.' });
   }
 
-  // --- GET: DIAGNOSTIC MODE (For the LIST command) ---
+  // --- GET: DIAGNOSTIC MODE ---
   if (req.method === 'GET') {
     try {
       const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
@@ -21,35 +21,37 @@ export default async function handler(req, res) {
     }
   }
 
-  // --- POST: GENERATION MODE (For the LOOK command) ---
+  // --- POST: GENERATION MODE ---
   if (req.method === 'POST') {
     /**
      * MODEL PIVOT: 
-     * Based on your diagnostic LIST, the specific identifier for 
-     * image generation is "gemini-2.0-flash-exp-image-generation".
+     * "gemini-2.0-flash-exp-image-generation" is an Imagen-style model.
+     * It requires the ":predict" endpoint, NOT ":generateContent".
      */
     const model = "gemini-2.0-flash-exp-image-generation";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
 
     try {
       const incomingPayload = req.body;
       
+      // Extract prompt from the "instances" format sent by the frontend
       let promptText = "A lofi glitch terminal art piece.";
-      if (incomingPayload.instances && incomingPayload.instances[0] && incomingPayload.instances[0].prompt) {
+      if (incomingPayload.instances && incomingPayload.instances[0]?.prompt) {
         promptText = incomingPayload.instances[0].prompt;
       } else if (incomingPayload.contents) {
         promptText = incomingPayload.contents[0].parts[0].text;
       }
 
-      const geminiPayload = {
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: promptText }]
-          }
+      /**
+       * PREDICT PAYLOAD:
+       * This model expects "instances" containing the prompt.
+       */
+      const predictPayload = {
+        instances: [
+          { prompt: promptText }
         ],
-        generationConfig: {
-          responseModalities: ["IMAGE"]
+        parameters: {
+          sampleCount: 1
         }
       };
 
@@ -58,19 +60,21 @@ export default async function handler(req, res) {
         headers: { 
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(geminiPayload)
+        body: JSON.stringify(predictPayload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        console.error("Gemini API Error Detail:", JSON.stringify(data, null, 2));
+        console.error("Imagen Predict API Error:", JSON.stringify(data, null, 2));
         return res.status(response.status).json(data);
       }
 
-      const candidates = data.candidates || [];
-      const imagePart = candidates[0]?.content?.parts?.find(p => p.inlineData);
-      const base64Data = imagePart?.inlineData?.data;
+      /**
+       * PREDICT RESPONSE:
+       * The output is usually at predictions[0].bytesBase64Encoded.
+       */
+      const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
 
       if (!base64Data) {
         return res.status(500).json({ 
@@ -79,6 +83,7 @@ export default async function handler(req, res) {
         });
       }
 
+      // Return in the format the frontend expects
       return res.status(200).json({
         predictions: [{ bytesBase64Encoded: base64Data }]
       });
