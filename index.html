@@ -1,39 +1,340 @@
-/**
- * Vercel Serverless Function: Imagen Proxy
- * Path: /api/image.js
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TERRA AGNOSTUM | Shared Reality Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --term-green: #00ff41;
+            --term-amber: #ffb000;
+            --term-red: #ff3e3e;
+            --term-bg: #050505;
+            --crayola-blue: #3b82f6;
+        }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            100% { opacity: 1; }
+        }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY is not configured in Vercel.' });
-  }
+        body, html {
+            background-color: var(--term-bg);
+            color: var(--term-green);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
 
-  // Model URL for Imagen 4.0
-  const model = "imagen-4.0-generate-001";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 20;
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+        }
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req.body)
-    });
+        .terminal-container {
+            position: relative;
+            z-index: 10;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
 
-    const data = await response.json();
+        #output {
+            flex-grow: 1;
+            overflow-y: auto;
+            scrollbar-width: none;
+            padding-bottom: 20px;
+        }
 
-    if (!response.ok) {
-      console.error("Imagen API Error:", JSON.stringify(data, null, 2));
-      return res.status(response.status).json(data);
-    }
+        .visual-buffer {
+            width: 100%;
+            height: 250px;
+            border: 1px solid #1a3a1a;
+            margin-bottom: 15px;
+            background: #000;
+            display: none;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+        }
 
-    return res.status(200).json(data);
-  } catch (error) {
-    console.error("Proxy execution error:", error);
-    return res.status(500).json({ error: 'Failed to communicate with Imagen Source.' });
-  }
-}
+        #visual-image { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            opacity: 0.7; 
+        }
+
+        .visual-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 2px 8px;
+            font-size: 10px;
+            color: var(--term-amber);
+            text-transform: uppercase;
+        }
+
+        .input-area {
+            display: flex;
+            align-items: center;
+            border-top: 1px solid #1a3a1a;
+            padding-top: 15px;
+            margin-top: 10px;
+        }
+
+        #cmd-input {
+            background: transparent;
+            border: none;
+            color: var(--term-green);
+            outline: none;
+            flex-grow: 1;
+            font-family: inherit;
+            font-size: 1.1rem;
+        }
+
+        .loading-dots:after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: ''; }
+        }
+    </style>
+</head>
+<body class="crt">
+
+    <div class="terminal-container">
+        <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
+            <span>Node: Seattle_Archive_23</span>
+            <span id="sync-status">SYNC: INITIALIZING</span>
+            <span id="time-display">T+00:00:00</span>
+        </div>
+
+        <div id="visual-buffer" class="visual-buffer">
+            <div class="visual-overlay">Source Projection</div>
+            <img id="visual-image" src="" alt="">
+            <div id="visual-loading" class="absolute inset-0 flex items-center justify-center text-amber-500 text-xs italic hidden">
+                RENDERING REALITY<span class="loading-dots"></span>
+            </div>
+        </div>
+
+        <div id="output">
+            <div id="log">
+                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.7]</p>
+                <p>> Every word is a brushstroke. Every Architect is a builder.</p>
+                <p>> Type <span class="text-amber-400">'QUEST'</span> to begin Architect mode.</p>
+                <p>> Type <span class="text-blue-400">'LOOK'</span> to pulse the visual buffer.</p>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <span id="prompt-prefix" class="mr-2 opacity-80">GUEST@ROOT:~$&nbsp;</span>
+            <input type="text" id="cmd-input" autofocus spellcheck="false" autocomplete="off">
+        </div>
+    </div>
+
+    <script type="module">
+        // Use CDN imports for raw HTML compatibility
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+
+        // --- 1. CONFIGURATION (HARDCODED FOR RAW HTML) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
+            authDomain: "terra-agnostum.firebaseapp.com",
+            projectId: "terra-agnostum",
+            storageBucket: "terra-agnostum.firebasestorage.app",
+            messagingSenderId: "809154092201",
+            appId: "1:809154092201:web:95aaddd47c6ce021cf1db8",
+            measurementId: "G-WHKGMMH4PW"
+        };
+
+        const appId = 'terra-agnostum-shared';
+        const API_GENERATE = "/api/generate";
+        const API_IMAGE = "/api/image";
+
+        // --- 2. INITIALIZATION ---
+        let app, auth, db, analytics;
+        let isSyncEnabled = false;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            isSyncEnabled = true;
+            try { analytics = getAnalytics(app); } catch(e) {}
+            
+            document.getElementById('sync-status').innerText = "SYNC: READY";
+            document.getElementById('sync-status').style.color = "var(--term-amber)";
+        } catch (e) {
+            console.error("Firebase Init Error", e);
+            document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
+        }
+
+        // --- 3. STATE ---
+        let worldState = { 
+            archive: { 
+                description: "The Primary Archive. Stone walls etched with flickering code.", 
+                visualPrompt: "A dark high-tech dungeon archive, green glowing terminal symbols on damp stone walls.",
+                manifestations: [] 
+            } 
+        };
+        let localPlayer = { hp: 20, currentRoom: "archive" };
+        let user = null;
+
+        // --- 4. AUTH & SYNC ---
+        if (isSyncEnabled) {
+            onAuthStateChanged(auth, (u) => {
+                user = u;
+                if (user) {
+                    addLog(`ARCHITECT LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
+                    setupWorldListener();
+                }
+            });
+            signInAnonymously(auth).catch(e => {
+                addLog("AUTH ERROR: Enable Anonymous Auth in Firebase Console.", "var(--term-red)");
+            });
+        }
+
+        function setupWorldListener() {
+            if (!db) return;
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
+            
+            onSnapshot(roomRef, (snap) => {
+                if (snap.exists()) {
+                    worldState.archive = snap.data();
+                    document.getElementById('sync-status').innerText = "SYNC: LIVE";
+                    document.getElementById('sync-status').style.color = "var(--term-green)";
+                } else {
+                    setDoc(roomRef, { ...worldState.archive, lastUpdated: serverTimestamp() });
+                }
+            }, (err) => {
+                addLog("SYNC ERROR: Verify Firestore Rules.", "var(--term-red)");
+            });
+        }
+
+        // --- 5. VISUAL PROJECTION ---
+        async function projectVisual(prompt) {
+            const loader = document.getElementById('visual-loading');
+            const buffer = document.getElementById('visual-buffer');
+            const img = document.getElementById('visual-image');
+            
+            buffer.style.display = 'block';
+            loader.classList.remove('hidden');
+            img.style.display = 'none';
+
+            try {
+                const res = await fetch(API_IMAGE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ instances: [{ prompt: `Cyberpunk lofi glitch art: ${prompt}` }] })
+                });
+                const data = await res.json();
+                if (data.predictions?.[0]) {
+                    img.src = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+                    img.style.display = 'block';
+                    addLog("VISUAL BUFFER PULSED.", "var(--term-amber)");
+                }
+            } catch (e) { addLog("VISUAL BUFFER ERROR", "var(--term-red)"); }
+            finally { loader.classList.add('hidden'); }
+        }
+
+        // --- 6. LOGGING ---
+        function addLog(text, color = 'var(--term-green)') {
+            const log = document.getElementById('log');
+            const p = document.createElement('div');
+            p.style.color = color;
+            p.className = 'mb-1';
+            p.innerHTML = `> ${text}`;
+            log.appendChild(p);
+            const output = document.getElementById('output');
+            output.scrollTop = output.scrollHeight;
+        }
+
+        // --- 7. AI ---
+        async function callGemini(userInput, systemPrompt) {
+            const response = await fetch(API_GENERATE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: "user", parts: [{ text: `ROOM: ${JSON.stringify(worldState.archive)}. INPUT: ${userInput}` }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: { responseMimeType: "application/json" }
+                })
+            });
+            const data = await response.json();
+            return JSON.parse(data.candidates[0].content.parts[0].text);
+        }
+
+        // --- 8. INPUT ---
+        let activeNPC = null;
+        let isProcessing = false;
+        const input = document.getElementById('cmd-input');
+
+        input.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = input.value.trim();
+                input.value = '';
+                if (!val || isProcessing) return;
+
+                if (val.startsWith('"') || val.startsWith("'")) {
+                    if (!activeNPC) { addLog("The Archive is silent."); return; }
+                    isProcessing = true;
+                    addLog(`<span class="italic text-amber-500">PULSING SOURCE...</span>`);
+                    try {
+                        const sys = `You are ${activeNPC.toUpperCase()}. GM persona. Respond JSON {text, manifestation: {action, visual_prompt}}.`;
+                        const res = await callGemini(val, sys);
+                        addLog(`${activeNPC.toUpperCase()}: ${res.text}`, activeNPC === 'tandy' ? "#50fa7b" : "#ff3e3e");
+                        if (res.manifestation?.visual_prompt) projectVisual(res.manifestation.visual_prompt);
+                        if (isSyncEnabled && user) {
+                            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
+                            await updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: res.text, timestamp: Date.now() }) });
+                        }
+                    } catch (err) { addLog("LINK ERROR", "var(--term-red)"); }
+                    finally { isProcessing = false; }
+                } else if (val.toLowerCase() === 'quest') {
+                    addLog("ARCHITECT MODE ACTIVE.");
+                    document.getElementById('prompt-prefix').innerText = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
+                } else if (val.toLowerCase() === 'look') {
+                    addLog(worldState.archive.description, "#888");
+                    projectVisual(worldState.archive.visualPrompt);
+                } else if (val.toLowerCase().startsWith('summon')) {
+                    activeNPC = val.split(' ')[1]?.toLowerCase();
+                    if (activeNPC) addLog(`${activeNPC.toUpperCase()} frequency found.`);
+                } else {
+                    addLog("Command unrecognized.");
+                }
+            }
+        });
+
+        setInterval(() => {
+            document.getElementById('time-display').innerText = `T+${new Date().toLocaleTimeString([], {hour12:false})}`;
+        }, 1000);
+    </script>
+</body>
+</html>
