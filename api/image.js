@@ -39,20 +39,22 @@ export default async function handler(req, res) {
     }
 
     /**
-     * NATIVE IMAGE GENERATION SPECS
+     * NATIVE IMAGE GENERATION SPECS (REFINED)
      * Model: gemini-2.0-flash-exp-image-generation
      * Endpoint: generateContent
-     * Config: responseModalities: ["IMAGE"]
+     * * FIX: Many tiers currently require ["TEXT", "IMAGE"] even for the 
+     * image-generation specific model to prevent the 400 Modality error.
      */
     const model = "gemini-2.0-flash-exp-image-generation";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const geminiPayload = {
       contents: [{
-        parts: [{ text: promptText }]
+        parts: [{ text: `Generate a high-fidelity visual for the following prompt: ${promptText}` }]
       }],
       generationConfig: {
-        responseModalities: ["IMAGE"]
+        // Including TEXT alongside IMAGE is the documented fix for the 400 error
+        responseModalities: ["TEXT", "IMAGE"]
       }
     };
 
@@ -75,15 +77,18 @@ export default async function handler(req, res) {
 
     /**
      * NATIVE RESPONSE PARSING:
-     * Gemini 2.0 Native returns parts. One part will contain the inlineData (base64).
+     * We filter parts to find the image. Since we requested TEXT as well,
+     * there may be multiple parts in the candidate.
      */
     const parts = data.candidates?.[0]?.content?.parts || [];
     const imagePart = parts.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image/'));
     const base64Data = imagePart?.inlineData?.data;
 
     if (!base64Data) {
+      const textResponse = parts.find(p => p.text)?.text;
       return res.status(500).json({ 
-        error: "The Source completed the request but returned no visual part.",
+        error: "The Source returned a text response but no visual part.",
+        textMetadata: textResponse,
         details: data 
       });
     }
