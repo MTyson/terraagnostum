@@ -113,11 +113,10 @@
 
         <div id="output">
             <div id="log">
-                <p class="text-amber-500 font-bold">>> DIRECT SOURCE LINK ACTIVE [v1beta-2.5-lite]</p>
+                <p class="text-amber-500 font-bold">>> TECHNATE PROXY ACTIVE [2.5-lite]</p>
                 <p>> Wake up, Ian. The story is leaking.</p>
                 <p>> Type <span class="text-amber-400">'QUEST'</span> to begin the descent.</p>
                 <p>> Type <span class="text-blue-400">'TEST'</span> for optimized latency check.</p>
-                <p>> Type <span class="text-white">'LIST'</span> to discover available Source models.</p>
             </div>
         </div>
 
@@ -141,63 +140,29 @@
             outputContainer.scrollTop = outputContainer.scrollHeight;
         }
 
-        // --- 2. API CONFIGURATION ---
-        // PASTE YOUR KEY HERE
-        const apiKey = ""; 
-        // Switched to the Lite version for speed and cost efficiency
-        const modelAlias = "gemini-2.5-flash-lite";
+        // --- 2. PROXY CONFIGURATION ---
+        const API_PATH = "/api/generate";
 
         /**
-         * DISCOVERY CALL: listModels
-         */
-        async function callListModelsAPI() {
-            if (!apiKey) {
-                addLog("ERROR: API Key is missing.", "var(--term-red)");
-                return;
-            }
-            addLog("Discovery request sent...", "var(--term-amber)");
-            const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error?.message || "Discovery Rejected");
-                addLog("AVAILABLE MODELS (Content Generation):", "var(--term-amber)");
-                data.models.forEach(m => {
-                    if (m.supportedGenerationMethods?.includes("generateContent")) {
-                        addLog(m.name.replace('models/', ''), "#50fa7b");
-                    }
-                });
-            } catch (err) {
-                addLog(`DISCOVERY FAILURE: ${err.message}`, "var(--term-red)");
-            }
-        }
-
-        /**
-         * STABLE TEST API CALL (v1beta)
+         * STABLE TEST API CALL (via Proxy)
          */
         async function callSimpleTestAPI() {
-            if (!apiKey) {
-                addLog("ERROR: API Key is missing.", "var(--term-red)");
-                return;
-            }
-
             const startTime = Date.now();
             const statusId = 'test-status-' + startTime;
-            addLog(`<span id="${statusId}" class="text-amber-500 italic">Pinging Source (${modelAlias})... [0.0s]</span>`, null, true);
+            addLog(`<span id="${statusId}" class="text-amber-500 italic">Pinging Source Proxy... [0.0s]</span>`, null, true);
             
             const timerInterval = setInterval(() => {
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 const el = document.getElementById(statusId);
-                if (el) el.innerText = `Pinging Source (${modelAlias})... [${elapsed}s]`;
+                if (el) el.innerText = `Pinging Source Proxy... [${elapsed}s]`;
             }, 100);
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelAlias}:generateContent?key=${apiKey}`;
             const payload = {
                 contents: [{ parts: [{ text: "SUCCESS" }] }]
             };
 
             try {
-                const response = await fetch(url, {
+                const response = await fetch(API_PATH, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -206,7 +171,7 @@
                 clearInterval(timerInterval);
                 const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
-                if (!response.ok) throw new Error(data.error?.message || "Link Rejected");
+                if (!response.ok) throw new Error(data.error?.message || data.error || "Link Rejected");
                 const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
                 addLog(`SOURCE REPLY (${totalTime}s): ${resultText}`, "#50fa7b");
             } catch (err) {
@@ -216,13 +181,10 @@
         }
 
         /**
-         * PRODUCTION GAME API CALL (v1beta)
+         * PRODUCTION GAME API CALL (via Proxy)
          */
         async function callGeminiAPI(prompt, systemPrompt) {
-            if (!apiKey) throw new Error("KEY_MISSING");
-
             const startTime = Date.now();
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelAlias}:generateContent?key=${apiKey}`;
             
             const payload = {
                 contents: [{ role: "user", parts: [{ text: `PLAYER: HP ${player.hp}, Runes ${player.inventory.runes}, Depth ${player.depth}. DIAL: ${prompt}` }] }],
@@ -250,14 +212,14 @@
                 }
             };
 
-            const response = await fetch(url, {
+            const response = await fetch(API_PATH, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error?.message || "Source Link Failure");
+            if (!response.ok) throw new Error(data.error?.message || data.error || "Source Link Failure");
             
             const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
             console.log(`Source latency: ${totalTime}s`);
@@ -391,10 +353,9 @@
 
         function handleTerminalCommand(c) {
             addLog(`<span style="color:var(--term-amber)">${c}</span>`, null, true);
-            if (c === 'help') addLog("QUEST, TEST, LIST, STATUS, LORE, CLEAR");
+            if (c === 'help') addLog("QUEST, TEST, STATUS, LORE, CLEAR");
             else if (c === 'status') addLog(`INTEGRITY: 12% | RUNES: ${player.inventory.runes}`);
             else if (c === 'test') callSimpleTestAPI();
-            else if (c === 'list') callListModelsAPI();
             else if (c === 'lore') {
                 addLog("THE NODE: Ontological anchor.");
                 addLog("THE WEAVER: Amanda. Knitting reality.");

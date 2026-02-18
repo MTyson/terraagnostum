@@ -1,26 +1,25 @@
 /**
  * Vercel Serverless Function
  * Path: /api/generate.js
- * * FIXED VERSION: Uses gemini-1.5-flash-latest to resolve Google's 404 model error.
+ * Optimized for gemini-2.5-flash-lite on v1beta.
  */
 
 export default async function handler(req, res) {
-  // 1. Only allow POST requests (prevents the "Method not allowed" when visiting in browser)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // PASTE YOUR KEY HERE
-  const apiKey = "AIzaSyA27FcclPlGatD2-8pPWCmMumHzNVHc5KQ"; 
+  // API Key pulled from environment variables for security
+  const apiKey = process.env.GEMINI_API_KEY; 
 
   if (!apiKey) {
     return res.status(500).json({ 
-      error: 'Technate Secret Key missing in generate.js. Please paste it into the apiKey variable.' 
+      error: 'Technate Secret Key (GEMINI_API_KEY) missing in environment.' 
     });
   }
 
-  // The 'gemini-1.5-flash-latest' identifier is more robust than the alias.
-  const model = "gemini-1.5-flash-latest";
+  // Using v1beta and the new lite model for maximum speed
+  const model = "gemini-2.5-flash-lite";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   try {
@@ -33,16 +32,13 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      // Log the specific error from Google to the terminal where 'vercel dev' is running
-      console.error("Google API Error:", JSON.stringify(data, null, 2));
-      
-      // Pass the error back to the frontend with the status code Google provided
+      console.error("LOG: Source API Error:", JSON.stringify(data, null, 2));
       return res.status(response.status).json(data);
     }
 
     return res.status(200).json(data);
   } catch (error) {
-    console.error("Proxy execution error:", error);
+    console.error("LOG: Proxy execution error:", error);
     return res.status(500).json({ error: 'Failed to establish link with the Source.' });
   }
 }
