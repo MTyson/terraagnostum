@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TERRA AGNOSTUM | System Terminal</title>
+    <title>TERRA AGNOSTUM | Shared Reality Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
@@ -68,6 +68,37 @@
 
         #output::-webkit-scrollbar { display: none; }
 
+        .visual-buffer {
+            width: 100%;
+            height: 200px;
+            border: 1px solid #1a3a1a;
+            margin-bottom: 15px;
+            background: #000;
+            display: none;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+        }
+
+        #visual-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.6;
+            filter: grayscale(0.5) contrast(1.2);
+        }
+
+        .visual-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 2px 8px;
+            font-size: 10px;
+            color: var(--term-amber);
+            text-transform: uppercase;
+        }
+
         .input-area {
             display: flex;
             align-items: center;
@@ -87,8 +118,8 @@
         }
 
         .stat-line { color: var(--term-amber); font-weight: bold; margin: 10px 0; }
-        .deprecation-mode { background-color: var(--crayola-blue) !important; color: #000 !important; font-family: 'Comic Sans MS', cursive !important; }
-
+        .presence-line { color: #888; font-size: 0.8rem; margin-bottom: 5px; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        
         .loading-dots:after {
             content: '.';
             animation: dots 1.5s steps(5, end) infinite;
@@ -107,27 +138,167 @@
     <div class="terminal-container">
         <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
             <span>Node: Seattle_Archive_23</span>
-            <span id="sync-status">Schumann Sync: 9.83Hz [LOCKED]</span>
+            <span id="sync-status">SHARED REALITY: SYNCED</span>
             <span id="time-display">T+00:00:00</span>
+        </div>
+
+        <div id="presence-area" class="presence-line">
+            Detecting other Architects...
+        </div>
+
+        <!-- Visual Buffer for Source Projections -->
+        <div id="visual-buffer" class="visual-buffer">
+            <div class="visual-overlay">Source Projection</div>
+            <img id="visual-image" src="" alt="">
+            <div id="visual-loading" class="absolute inset-0 flex items-center justify-center text-amber-500 text-xs italic hidden">
+                Rendering Reality<span class="loading-dots"></span>
+            </div>
         </div>
 
         <div id="output">
             <div id="log">
-                <p class="text-amber-500 font-bold">>> TECHNATE PROXY ACTIVE [2.5-lite]</p>
-                <p>> Wake up, Ian. The story is leaking.</p>
-                <p>> Type <span class="text-amber-400">'QUEST'</span> to begin the descent.</p>
-                <p>> Type <span class="text-blue-400">'TEST'</span> for optimized latency check.</p>
+                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.0]</p>
+                <p>> Every word is a brushstroke. Every Architect is a builder.</p>
+                <p>> Type <span class="text-amber-400">'QUEST'</span> to begin.</p>
+                <p>> Type <span class="text-blue-400">'LOOK'</span> to visualize the current Source.</p>
             </div>
         </div>
 
         <div class="input-area">
-            <span id="prompt-prefix" class="mr-2 opacity-80">TANDEM@ROOT:~$&nbsp;</span>
+            <span id="prompt-prefix" class="mr-2 opacity-80">GUEST@ROOT:~$&nbsp;</span>
             <input type="text" id="cmd-input" autofocus spellcheck="false" autocomplete="off">
         </div>
     </div>
 
-    <script>
-        // --- 1. CORE LOGGING ---
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- 1. CONFIGURATION ---
+        const localFirebaseConfig = {
+            apiKey: "", // Handled by environment
+            authDomain: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: ""
+        };
+
+        const apiKey = ""; // Gemini API Key handled by environment
+        let firebaseConfig;
+        try {
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : localFirebaseConfig;
+        } catch (e) {
+            firebaseConfig = localFirebaseConfig;
+        }
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'terra-agnostum-shared';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const API_PATH = "/api/generate";
+        let user = null;
+
+        // --- 2. STATE ---
+        let worldState = {
+            rooms: {
+                "archive": {
+                    description: "The Primary Archive. Stone walls etched with flickering code.",
+                    visualPrompt: "A dark high-tech dungeon archive, green glowing terminal symbols on damp stone walls, volumetric light from cracks in the ceiling.",
+                    manifestations: []
+                }
+            }
+        };
+
+        let localPlayer = {
+            hp: 20, maxHp: 20, runes: 0,
+            currentRoom: "archive"
+        };
+
+        // --- 3. AUTH & SYNC ---
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        onAuthStateChanged(auth, (u) => {
+            user = u;
+            if (user) {
+                addLog(`Architect Authenticated: ${user.uid.substring(0, 8)}...`, "var(--crayola-blue)");
+                setupWorldListener();
+            }
+        });
+
+        initAuth();
+
+        function setupWorldListener() {
+            if (!user) return;
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
+            
+            onSnapshot(roomRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const newManifests = data.manifestations || [];
+                    
+                    if (newManifests.length > worldState.rooms.archive.manifestations.length) {
+                        const latest = newManifests[newManifests.length - 1];
+                        if (latest.author !== user.uid) {
+                            addLog(`REMOTE ONTOLOGICAL SHIFT: [${latest.action}] by ${latest.author.substring(0,4)}`, "var(--term-amber)");
+                            if (latest.text) addLog(`SOURCE ECHO: ${latest.text}`, "var(--term-amber)");
+                        }
+                    }
+                    worldState.rooms.archive = { ...worldState.rooms.archive, ...data };
+                } else {
+                    setDoc(roomRef, {
+                        description: worldState.rooms.archive.description,
+                        visualPrompt: worldState.rooms.archive.visualPrompt,
+                        manifestations: [],
+                        lastUpdated: serverTimestamp()
+                    });
+                }
+            });
+        }
+
+        // --- 4. ASSET GENERATION (IMAGEN) ---
+        async function projectVisual(prompt) {
+            const buffer = document.getElementById('visual-buffer');
+            const img = document.getElementById('visual-image');
+            const loader = document.getElementById('visual-loading');
+            
+            buffer.style.display = 'block';
+            img.style.display = 'none';
+            loader.classList.remove('hidden');
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        instances: [{ prompt: `Lofi, glitchy, digital terminal art style: ${prompt}` }],
+                        parameters: { sampleCount: 1 }
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.predictions && result.predictions[0]) {
+                    img.src = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                    img.style.display = 'block';
+                    loader.classList.add('hidden');
+                    addLog("VISUAL BUFFER UPDATED.", "var(--term-amber)");
+                }
+            } catch (err) {
+                addLog("VISUAL BUFFER ERROR: Failed to project Source.", "var(--term-red)");
+                loader.classList.add('hidden');
+            }
+        }
+
+        // --- 5. LOGGING & CORE UI ---
         function addLog(text, color = 'var(--term-green)', isRaw = false) {
             const outputContainer = document.getElementById('output');
             const log = document.getElementById('log');
@@ -140,53 +311,14 @@
             outputContainer.scrollTop = outputContainer.scrollHeight;
         }
 
-        // --- 2. PROXY CONFIGURATION ---
-        const API_PATH = "/api/generate";
-
-        async function callSimpleTestAPI() {
-            const startTime = Date.now();
-            const statusId = 'test-status-' + startTime;
-            addLog(`<span id="${statusId}" class="text-amber-500 italic">Pinging Source Proxy... [0.0s]</span>`, null, true);
-            
-            const timerInterval = setInterval(() => {
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                const el = document.getElementById(statusId);
-                if (el) el.innerText = `Pinging Source Proxy... [${elapsed}s]`;
-            }, 100);
-
-            const payload = {
-                contents: [{ parts: [{ text: "SUCCESS" }] }]
-            };
-
-            try {
-                const response = await fetch(API_PATH, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await response.json();
-                clearInterval(timerInterval);
-                const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-
-                if (!response.ok) throw new Error(data.error?.message || data.error || "Link Rejected");
-                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                addLog(`SOURCE REPLY (${totalTime}s): ${resultText}`, "#50fa7b");
-            } catch (err) {
-                clearInterval(timerInterval);
-                addLog(`LINK FAILURE: ${err.message}`, "var(--term-red)");
-            }
-        }
-
+        // --- 6. AI INTERACTION (GAME MASTER) ---
         async function callGeminiAPI(prompt, systemPrompt) {
-            const startTime = Date.now();
-            
             const payload = {
-                contents: [{ role: "user", parts: [{ text: `PLAYER: HP ${player.hp}, Runes ${player.inventory.runes}, Depth ${player.depth}. DIAL: ${prompt}` }] }],
+                contents: [{ role: "user", parts: [{ text: `SHARED WORLD: ${JSON.stringify(worldState.rooms[localPlayer.currentRoom])}. PLAYER: HP ${localPlayer.hp}. DIAL: ${prompt}` }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: {
                     responseMimeType: "application/json",
                     temperature: 1.0,
-                    maxOutputTokens: 400,
                     responseSchema: {
                         type: "object",
                         properties: {
@@ -197,7 +329,7 @@
                                     action: { type: "string" }, 
                                     value: { type: "string" },
                                     hp_delta: { type: "number" },
-                                    meaning_delta: { type: "number" }
+                                    visual_prompt: { type: "string" }
                                 }
                             }
                         },
@@ -213,148 +345,59 @@
             });
 
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error?.message || data.error || "Source Link Failure");
-            
-            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
             const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!textResponse) throw new Error("EMPTY_RESPONSE");
-            
-            return { ...JSON.parse(textResponse), latency: totalTime };
+            return JSON.parse(textResponse);
         }
 
-        // --- 3. STATE ---
+        // --- 7. HANDLERS ---
         let isGameMode = false;
         let isProcessing = false;
         let activeNPC = null;
-        let roomHasRune = false;
-        let currentRoomDescription = "The primary stone landing.";
-        let player = { hp: 20, maxHp: 20, meaning: 5, depth: 0, inventory: { runes: 0 } };
-        let gameState = { doorUnlocked: false, manifestedCommands: {} };
 
-        const DESCRIPTIONS = ["Damp stone, old ozone.", "Hum of frequency towers.", "Blurred textures.", "Smokelight from Faen."];
-        const ENEMIES = [{ name: "Static Glitch", dmg: 2 }, { name: "Technate Scraper", dmg: 4 }, { name: "Kyot Pack", dmg: 6 }, { name: "Sek Lum Clone", dmg: 10 }];
-
-        // --- 4. HANDLERS ---
         async function handleNPCDialogue(userSpeech) {
             isProcessing = true;
             addLog(`<span style="color:white">"${userSpeech}"</span>`, null, true);
 
             if (!activeNPC) {
-                addLog("Silence.", "#888");
+                addLog("The Archive is indifferent to your voice.", "#888");
                 isProcessing = false;
-                renderStats();
                 return;
             }
 
-            const startTime = Date.now();
-            const statusId = 'npc-linking-' + startTime;
-            addLog(`<div id="${statusId}" class="italic text-amber-500">LINKING TO ${activeNPC.toUpperCase()}<span class="loading-dots"></span> [0.0s]</div>`, null, true);
-            
-            const timerInterval = setInterval(() => {
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                const el = document.getElementById(statusId);
-                if (el) el.innerHTML = `LINKING TO ${activeNPC.toUpperCase()}<span class="loading-dots"></span> [${elapsed}s]`;
-            }, 100);
+            const statusId = 'npc-linking-' + Date.now();
+            addLog(`<div id="${statusId}" class="italic text-amber-500">PULSING SOURCE<span class="loading-dots"></span></div>`, null, true);
             
             try {
-                // UPDATE: Added Rune Awareness to System Prompts
-                const sys = activeNPC === 'tandy' ? 
-                    "You are Tandy, agent of Amanda. Poet, warm AI. You are aware of Ian's Runes. Remark if he is rune-less or rich with them. Help him via manifestation." : 
-                    "You are the Daemon, agent of Atri. Cruel AI. You mock Ian's hollow state if he has no runes, or crave them if he does. Use manifestation to create a Door of Thorns.";
+                const sys = `You are ${activeNPC.toUpperCase()}. You are the Game Master of a collaborative reality. Architects edit the world via interaction. You MUST respond with JSON. If they ask for changes, trigger a manifestation. If they ask to see something, provide a visual_prompt for Imagen.`;
                 
                 const result = await callGeminiAPI(userSpeech, sys);
                 document.getElementById(statusId).remove();
-                clearInterval(timerInterval);
                 
-                addLog(`${activeNPC.toUpperCase()} (${result.latency}s): ${result.text}`, activeNPC === 'tandy' ? "#50fa7b" : "var(--term-red)");
-                if (result.manifestation) applyManifestation(result.manifestation);
-            } catch (err) {
-                clearInterval(timerInterval);
-                const el = document.getElementById(statusId);
-                if (el) {
-                    el.innerHTML = `!! LINK FAILURE: ${err.message} !!`;
-                    el.style.color = "var(--term-red)";
+                addLog(`${activeNPC.toUpperCase()}: ${result.text}`, activeNPC === 'tandy' ? "#50fa7b" : "var(--term-red)");
+                
+                if (result.manifestation) {
+                    const m = result.manifestation;
+                    addLog(`ONTOLOGICAL SHIFT: [${m.action.toUpperCase()}]`, "var(--term-amber)");
+                    if (m.visual_prompt) projectVisual(m.visual_prompt);
+                    
+                    // Sync shift to Firestore
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', localPlayer.currentRoom);
+                    await updateDoc(roomRef, {
+                        manifestations: arrayUnion({
+                            action: m.action,
+                            value: m.value,
+                            author: user.uid,
+                            text: result.text,
+                            timestamp: Date.now()
+                        }),
+                        lastUpdated: serverTimestamp()
+                    });
                 }
+            } catch (err) {
+                addLog("LINK REJECTED: " + err.message, "var(--term-red)");
             } finally {
                 isProcessing = false;
-                renderStats();
             }
-        }
-
-        function applyManifestation(m) {
-            const { action, value, hp_delta, meaning_delta } = m;
-            addLog(`ONTOLOGICAL SHIFT: [${action.toUpperCase()}]`, "var(--term-amber)");
-            if (hp_delta) player.hp = Math.max(0, Math.min(player.maxHp, player.hp + hp_delta));
-            if (meaning_delta) player.meaning += meaning_delta;
-            if (action === 'change_desc') currentRoomDescription = value;
-            if (action === 'unlock_door' && value === "true") {
-                gameState.doorUnlocked = true;
-                addLog("The Door of Thorns manifests. Type 'ENTER DOOR'.", "var(--term-red)");
-            }
-            if (action === 'add_command') {
-                gameState.manifestedCommands[value.toLowerCase()] = { npc: activeNPC };
-                addLog(`NEW VERB: '${value.toUpperCase()}'`, "var(--term-amber)");
-            }
-        }
-
-        function handleGameCommand(cmd) {
-            if (cmd === 'exit') { isGameMode = false; document.getElementById('prompt-prefix').innerHTML = "TANDEM@ROOT:~$&nbsp;"; return; }
-            if (gameState.manifestedCommands[cmd]) {
-                const npc = gameState.manifestedCommands[cmd].npc;
-                if (npc === 'tandy') { player.hp = Math.min(player.maxHp, player.hp + 2); addLog("Mending thread... (+2 HP)"); }
-                else { player.meaning += 5; player.hp -= 3; addLog("Static harvest... (+5 Meaning, -3 HP)"); }
-                delete gameState.manifestedCommands[cmd];
-                renderStats(); return;
-            }
-            if (cmd === 'enter door' && gameState.doorUnlocked) {
-                document.body.classList.add('deprecation-mode'); addLog("!! BREACH !! Entering the Source...", "black"); return;
-            }
-            if (cmd === 'up' || cmd === 'down') {
-                activeNPC = null; roomHasRune = false;
-                player.depth += (cmd === 'up' ? -1 : 1);
-                currentRoomDescription = DESCRIPTIONS[Math.floor(Math.random() * DESCRIPTIONS.length)];
-                addLog(currentRoomDescription, "#888");
-                generateEncounter();
-            } else if (cmd === 'look' || cmd === 'l') {
-                addLog(currentRoomDescription, "#888");
-                if (activeNPC) addLog(`${activeNPC.toUpperCase()} is here.`);
-                if (roomHasRune) addLog("A rune is here.");
-            } else if (cmd === 'get rune' || cmd === 'get') {
-                if (roomHasRune) { player.inventory.runes++; roomHasRune = false; addLog("Claimed."); }
-            } else if (cmd === 'rest' && player.meaning >= 2) {
-                player.meaning -= 2; player.hp = player.maxHp; addLog("Stabilized.");
-            }
-            if (isGameMode) renderStats();
-        }
-
-        function generateEncounter() {
-            const chance = Math.random();
-            if (chance < 0.15) roomHasRune = true;
-            else if (chance < 0.30) { activeNPC = 'tandy'; addLog("Tandy flickers in.", "#50fa7b"); }
-            else if (chance < 0.45) { activeNPC = 'daemon'; addLog("A Daemon looms.", "var(--term-red)"); }
-            else if (chance < 0.75) {
-                const enemy = ENEMIES[Math.min(3, Math.floor(Math.abs(player.depth)/3))];
-                addLog(`DANGER: ${enemy.name}!`, "var(--term-red)");
-                player.hp -= enemy.dmg;
-            }
-        }
-
-        function renderStats() {
-            if (!isGameMode) return;
-            addLog(`<div class="stat-line">[ HP: ${player.hp}/${player.maxHp} | MEANING: ${player.meaning} | RUNES: ${player.inventory.runes} | DEPTH: ${player.depth} ]</div>`, null, true);
-        }
-
-        function handleTerminalCommand(c) {
-            addLog(`<span style="color:var(--term-amber)">${c}</span>`, null, true);
-            if (c === 'help') addLog("QUEST, TEST, STATUS, LORE, CLEAR");
-            else if (c === 'status') addLog(`INTEGRITY: 12% | RUNES: ${player.inventory.runes}`);
-            else if (c === 'test') callSimpleTestAPI();
-            else if (c === 'lore') {
-                addLog("THE NODE: Ontological anchor.");
-                addLog("THE WEAVER: Amanda. Knitting reality.");
-                addLog("THE DAEMON: Seeking dissolution.");
-            }
-            else if (c === 'clear') document.getElementById('log').innerHTML = '';
         }
 
         const input = document.getElementById('cmd-input');
@@ -363,18 +406,33 @@
                 const val = input.value.trim();
                 if (val === '' || isProcessing) return;
                 input.value = '';
-                if (val.startsWith('"') || val.startsWith("'")) await handleNPCDialogue(val.replace(/^["']|["']$/g, ''));
-                else if (val.toLowerCase() === 'quest') { isGameMode = true; document.getElementById('prompt-prefix').innerHTML = "IAN@STAIRS:~$&nbsp;"; document.getElementById('log').innerHTML = ""; addLog("SUB-RENDER ACTIVE."); renderStats(); }
-                else if (isGameMode) handleGameCommand(val.toLowerCase());
-                else handleTerminalCommand(val.toLowerCase());
+
+                const cmd = val.toLowerCase();
+                if (val.startsWith('"') || val.startsWith("'")) {
+                    await handleNPCDialogue(val.replace(/^["']|["']$/g, ''));
+                } else if (cmd === 'quest') {
+                    isGameMode = true;
+                    document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4)}@ARCHIVE:~$&nbsp;`;
+                    addLog("COLLABORATIVE LINK ESTABLISHED.");
+                } else if (cmd === 'look') {
+                    addLog(worldState.rooms.archive.description, "#888");
+                    projectVisual(worldState.rooms.archive.visualPrompt);
+                } else if (cmd === 'summon tandy') {
+                    activeNPC = 'tandy'; addLog("Tandy frequency synchronized.", "#50fa7b");
+                } else if (cmd === 'summon daemon') {
+                    activeNPC = 'daemon'; addLog("Daemon frequency localized.", "var(--term-red)");
+                } else if (cmd === 'help') {
+                    addLog("QUEST, LOOK, SUMMON [TANDY/DAEMON], 'QUOTE MESSAGE'");
+                } else {
+                    addLog("Command unrecognized by the Source.");
+                }
             }
         });
 
         document.addEventListener('click', () => input.focus());
         setInterval(() => {
             const now = new Date();
-            const timeDisplay = document.getElementById('time-display');
-            if (timeDisplay) timeDisplay.innerText = `T+${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+            document.getElementById('time-display').innerText = `T+${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
         }, 1000);
     </script>
 </body>
