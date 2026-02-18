@@ -143,9 +143,6 @@
         // --- 2. PROXY CONFIGURATION ---
         const API_PATH = "/api/generate";
 
-        /**
-         * STABLE TEST API CALL (via Proxy)
-         */
         async function callSimpleTestAPI() {
             const startTime = Date.now();
             const statusId = 'test-status-' + startTime;
@@ -180,9 +177,6 @@
             }
         }
 
-        /**
-         * PRODUCTION GAME API CALL (via Proxy)
-         */
         async function callGeminiAPI(prompt, systemPrompt) {
             const startTime = Date.now();
             
@@ -222,8 +216,6 @@
             if (!response.ok) throw new Error(data.error?.message || data.error || "Source Link Failure");
             
             const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.log(`Source latency: ${totalTime}s`);
-            
             const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!textResponse) throw new Error("EMPTY_RESPONSE");
             
@@ -265,9 +257,10 @@
             }, 100);
             
             try {
+                // UPDATE: Added Rune Awareness to System Prompts
                 const sys = activeNPC === 'tandy' ? 
-                    "You are Tandy, agent of Amanda. Poet, warm AI. Use manifestation to help Ian." : 
-                    "You are the Daemon, agent of Atri. Cruel AI. Use manifestation to create a Door of Thorns.";
+                    "You are Tandy, agent of Amanda. Poet, warm AI. You are aware of Ian's Runes. Remark if he is rune-less or rich with them. Help him via manifestation." : 
+                    "You are the Daemon, agent of Atri. Cruel AI. You mock Ian's hollow state if he has no runes, or crave them if he does. Use manifestation to create a Door of Thorns.";
                 
                 const result = await callGeminiAPI(userSpeech, sys);
                 document.getElementById(statusId).remove();
