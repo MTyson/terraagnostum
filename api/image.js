@@ -36,7 +36,9 @@ export default async function handler(req, res) {
   /**
    * FALLBACK STRATEGY:
    * 1. Try Imagen 3.0 via :predict (Native Image Model)
-   * 2. Fallback to Gemini 2.0 Flash via :generateContent (Multimodal Output)
+   * 2. Fallback to Gemini 2.0 Flash EXP via :generateContent (Multimodal Output)
+   * * Note: The "exp" version is crucial here because the stable 2.0-flash often
+   * has image modality generation restricted in the v1beta gate.
    */
   
   async function tryImagen() {
@@ -54,7 +56,8 @@ export default async function handler(req, res) {
   }
 
   async function tryGeminiMultimodal() {
-    const model = "gemini-2.0-flash";
+    // Switching to the -exp suffix to bypass the modality restriction
+    const model = "gemini-2.0-flash-exp";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: 'POST',
