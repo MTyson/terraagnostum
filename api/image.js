@@ -21,72 +21,93 @@ export default async function handler(req, res) {
     }
   }
 
-  // --- POST: GENERATION MODE ---
-  if (req.method === 'POST') {
-    /**
-     * TARGET MODEL: gemini-2.0-flash-exp-image-generation
-     * This model was found in your ListModels output. 
-     * It is an Imagen-based model that requires the :predict endpoint.
-     */
-    const model = "gemini-2.0-flash-exp-image-generation";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
-
-    try {
-      const incomingPayload = req.body;
-      let promptText = "A lofi glitch terminal art piece.";
-      
-      if (incomingPayload.instances && incomingPayload.instances[0]?.prompt) {
-        promptText = incomingPayload.instances[0].prompt;
-      } else if (incomingPayload.contents && incomingPayload.contents[0]?.parts[0]?.text) {
-        promptText = incomingPayload.contents[0].parts[0].text;
-      }
-
-      // Minimal payload for the :predict endpoint
-      const predictPayload = {
-        instances: [
-          { prompt: promptText }
-        ],
-        parameters: {
-          sampleCount: 1
-        }
-      };
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(predictPayload)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Log the specific error to help distinguish between 403 (Billing) and 400 (Syntax)
-        return res.status(response.status).json({
-          error: data.error?.message || "Source Error",
-          code: data.error?.code,
-          status: data.error?.status,
-          detailedError: data
-        });
-      }
-
-      // Extract the Base64 string from the Google response
-      const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
-
-      if (!base64Data) {
-        return res.status(500).json({ 
-          error: "The Source returned a success code but no image data (Base64 string).",
-          details: data 
-        });
-      }
-
-      // Return the JSON object containing the Base64 string to the frontend
-      return res.status(200).json({
-        predictions: [{ bytesBase64Encoded: base64Data }]
-      });
-    } catch (error) {
-      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
-    }
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  return res.status(405).json({ error: 'Method not allowed' });
+  const incomingPayload = req.body;
+  let promptText = "A lofi glitch terminal art piece.";
+  if (incomingPayload.instances && incomingPayload.instances[0]?.prompt) {
+    promptText = incomingPayload.instances[0].prompt;
+  } else if (incomingPayload.contents && incomingPayload.contents[0]?.parts[0]?.text) {
+    promptText = incomingPayload.contents[0].parts[0].text;
+  }
+
+  /**
+   * FALLBACK STRATEGY:
+   * 1. Try Imagen 3.0 via :predict (Native Image Model)
+   * 2. Fallback to Gemini 2.0 Flash via :generateContent (Multimodal Output)
+   */
+  
+  async function tryImagen() {
+    const model = "imagen-3.0-generate-001";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instances: [{ prompt: promptText }],
+        parameters: { sampleCount: 1 }
+      })
+    });
+    return response;
+  }
+
+  async function tryGeminiMultimodal() {
+    const model = "gemini-2.0-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: promptText }] }],
+        generationConfig: { responseModalities: ["IMAGE"] }
+      })
+    });
+    return response;
+  }
+
+  try {
+    // Attempt 1: Imagen
+    let response = await tryImagen();
+    let data = await response.json();
+
+    // If Imagen fails with 404 or Billing errors, try Gemini Multimodal
+    if (!response.ok && (response.status === 404 || data.error?.message?.includes("billed users"))) {
+      console.log("Imagen failed, attempting Gemini Multimodal fallback...");
+      response = await tryGeminiMultimodal();
+      data = await response.json();
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: data.error?.message || "Source Error",
+        details: data
+      });
+    }
+
+    // Extraction logic based on which model responded
+    let base64Data = null;
+    
+    // Check Imagen format
+    if (data.predictions?.[0]?.bytesBase64Encoded) {
+      base64Data = data.predictions[0].bytesBase64Encoded;
+    } 
+    // Check Gemini format
+    else if (data.candidates?.[0]?.content?.parts) {
+      const part = data.candidates[0].content.parts.find(p => p.inlineData);
+      base64Data = part?.inlineData?.data;
+    }
+
+    if (!base64Data) {
+      return res.status(500).json({ error: "No image data in Source response.", details: data });
+    }
+
+    return res.status(200).json({
+      predictions: [{ bytesBase64Encoded: base64Data }]
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+  }
 }
