@@ -12,12 +12,6 @@
             --term-red: #ff3e3e;
             --term-bg: #050505;
             --crayola-blue: #3b82f6;
-            --crayola-sun: #facc15;
-        }
-
-        @keyframes scanline {
-            0% { transform: translateY(-100%); }
-            100% { transform: translateY(100%); }
         }
 
         @keyframes flicker {
@@ -50,18 +44,6 @@
             z-index: 20;
             background-size: 100% 4px, 3px 100%;
             pointer-events: none;
-        }
-
-        .crt::after {
-            content: " ";
-            display: block;
-            position: absolute;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: rgba(18, 16, 16, 0.1);
-            opacity: 0;
-            z-index: 20;
-            pointer-events: none;
-            animation: flicker 0.15s infinite;
         }
 
         .terminal-container {
@@ -104,89 +86,38 @@
             font-size: 1.1rem;
         }
 
-        .deprecation-mode {
-            background-color: var(--crayola-blue) !important;
-            color: #000 !important;
-            font-family: 'Comic Sans MS', 'Comic Sans', cursive, sans-serif !important;
-        }
-
-        .deprecation-mode #cmd-input, 
-        .deprecation-mode #prompt-prefix,
-        .deprecation-mode .log-p {
-            color: #000 !important;
-        }
-
-        #crayola-sun {
-            display: none;
-            position: absolute;
-            top: 40px;
-            right: 40px;
-            width: 80px;
-            height: 80px;
-            background: var(--crayola-sun);
-            border-radius: 50%;
-            border: 4px dashed #000;
-            z-index: 5;
-            animation: rotate 10s linear infinite;
-        }
-
-        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-        .deprecation-mode #crayola-sun { display: block; }
-
-        .integrity-bar {
-            width: 100%;
-            height: 12px;
-            background: #111;
-            margin-top: 10px;
-            border: 1px solid var(--term-green);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        #integrity-fill {
-            width: 2%;
-            height: 100%;
-            background: var(--term-green);
-            box-shadow: 0 0 10px var(--term-green);
-            transition: width 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
         .stat-line { color: var(--term-amber); font-weight: bold; margin: 10px 0; }
-        .danger-text { color: var(--term-red); font-weight: bold; }
-        .success-text { color: #50fa7b; }
-        
-        @media (max-width: 640px) {
-            .terminal-container { padding: 10px; }
-            #header-bar { font-size: 0.6rem; }
-            #cmd-input { font-size: 0.9rem; }
+        .deprecation-mode { background-color: var(--crayola-blue) !important; color: #000 !important; font-family: 'Comic Sans MS', cursive !important; }
+
+        .loading-dots:after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: ''; }
         }
     </style>
 </head>
 <body class="crt">
 
-    <div id="crayola-sun"></div>
-
     <div class="terminal-container">
-        <div id="header-bar" class="p-2 mb-4 text-[10px] sm:text-xs flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
+        <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
             <span>Node: Seattle_Archive_23</span>
             <span id="sync-status">Schumann Sync: 9.83Hz [LOCKED]</span>
             <span id="time-display">T+00:00:00</span>
         </div>
 
         <div id="output">
-            <div id="boot-sequence" class="mb-4">
-                <p class="text-amber-500 font-bold">>> TECHNATE ADMINISTRATIVE OVERRIDE ACTIVE</p>
-                <p class="text-xs opacity-80">> DEPRECATION LEVEL: 98%</p>
-                <p class="text-xs opacity-80">> RENDER STATE: "Wobbling"</p>
-                <div class="integrity-bar">
-                    <div id="integrity-fill"></div>
-                </div>
-            </div>
             <div id="log">
+                <p class="text-amber-500 font-bold">>> DIRECT SOURCE LINK ACTIVE [v1beta-2.5-lite]</p>
                 <p>> Wake up, Ian. The story is leaking.</p>
-                <p>> The Technate is watching the Seattle node.</p>
-                <p>> Type <span class="text-amber-400">'HELP'</span> for semantic protocols.</p>
+                <p>> Type <span class="text-amber-400">'QUEST'</span> to begin the descent.</p>
+                <p>> Type <span class="text-blue-400">'TEST'</span> for optimized latency check.</p>
+                <p>> Type <span class="text-white">'LIST'</span> to discover available Source models.</p>
             </div>
         </div>
 
@@ -197,88 +128,109 @@
     </div>
 
     <script>
-        // --- 1. CORE UTILITIES ---
+        // --- 1. CORE LOGGING ---
         function addLog(text, color = 'var(--term-green)', isRaw = false) {
             const outputContainer = document.getElementById('output');
             const log = document.getElementById('log');
-            if (!log || !outputContainer) return;
-
             const p = document.createElement('div');
             p.className = 'log-p mb-1';
             p.style.color = color;
-            p.innerHTML = isRaw ? text : (text.startsWith('>') ? text : `> ${text}`);
+            let cleanText = (typeof text === 'object' && text !== null) ? JSON.stringify(text) : text;
+            p.innerHTML = isRaw ? cleanText : `> ${cleanText}`;
             log.appendChild(p);
             outputContainer.scrollTop = outputContainer.scrollHeight;
         }
 
-        // --- 2. STATE & API CONFIG ---
-        const apiKey = ""; // Paste your key here
-        const model = "gemini-2.5-flash-preview-09-2025";
-        
-        let integrity = 12;
-        let isGameMode = false;
-        let deprecationActive = false;
-        let roomHasRune = false;
-        let activeNPC = null; 
-        let currentRoomDescription = "The primary stone landing. Static hums in the distance.";
-        let isProcessing = false;
+        // --- 2. API CONFIGURATION ---
+        // PASTE YOUR KEY HERE
+        const apiKey = ""; 
+        // Switched to the Lite version for speed and cost efficiency
+        const modelAlias = "gemini-2.5-flash-lite";
 
-        let gameState = {
-            doorUnlocked: false,
-            manifestedCommands: {} 
-        };
+        /**
+         * DISCOVERY CALL: listModels
+         */
+        async function callListModelsAPI() {
+            if (!apiKey) {
+                addLog("ERROR: API Key is missing.", "var(--term-red)");
+                return;
+            }
+            addLog("Discovery request sent...", "var(--term-amber)");
+            const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error?.message || "Discovery Rejected");
+                addLog("AVAILABLE MODELS (Content Generation):", "var(--term-amber)");
+                data.models.forEach(m => {
+                    if (m.supportedGenerationMethods?.includes("generateContent")) {
+                        addLog(m.name.replace('models/', ''), "#50fa7b");
+                    }
+                });
+            } catch (err) {
+                addLog(`DISCOVERY FAILURE: ${err.message}`, "var(--term-red)");
+            }
+        }
 
-        let player = {
-            hp: 20, maxHp: 20, meaning: 5, level: 1, depth: 0,
-            inventory: { runes: 0 }
-        };
+        /**
+         * STABLE TEST API CALL (v1beta)
+         */
+        async function callSimpleTestAPI() {
+            if (!apiKey) {
+                addLog("ERROR: API Key is missing.", "var(--term-red)");
+                return;
+            }
 
-        const ENEMIES = [
-            { name: "Static Glitch", hp: 5, dmg: 2, xp: 1 },
-            { name: "Technate Scraper", hp: 10, dmg: 4, xp: 3 },
-            { name: "Kyot Pack", hp: 15, dmg: 6, xp: 5 },
-            { name: "Sek Lum Clone", hp: 50, dmg: 10, xp: 20 }
-        ];
+            const startTime = Date.now();
+            const statusId = 'test-status-' + startTime;
+            addLog(`<span id="${statusId}" class="text-amber-500 italic">Pinging Source (${modelAlias})... [0.0s]</span>`, null, true);
+            
+            const timerInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                const el = document.getElementById(statusId);
+                if (el) el.innerText = `Pinging Source (${modelAlias})... [${elapsed}s]`;
+            }, 100);
 
-        const DESCRIPTIONS = [
-            "The stone is damp and smells of old ozone.",
-            "You hear the hum of frequency towers.",
-            "The landing is littered with blurred textures.",
-            "A breeze from Faen carries burning smokelight."
-        ];
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelAlias}:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: "SUCCESS" }] }]
+            };
 
-        const SOLO_TALK = [
-            "You say it out loud, but only the hum responds.",
-            "Without a speaker, did you even speak?",
-            "You address the void. The void maintains its NDA.",
-            "You say hello to yourself. The echo sounds like someone else."
-        ];
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                clearInterval(timerInterval);
+                const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
-        // --- 3. API INFRASTRUCTURE ---
+                if (!response.ok) throw new Error(data.error?.message || "Link Rejected");
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                addLog(`SOURCE REPLY (${totalTime}s): ${resultText}`, "#50fa7b");
+            } catch (err) {
+                clearInterval(timerInterval);
+                addLog(`LINK FAILURE: ${err.message}`, "var(--term-red)");
+            }
+        }
+
+        /**
+         * PRODUCTION GAME API CALL (v1beta)
+         */
         async function callGeminiAPI(prompt, systemPrompt) {
             if (!apiKey) throw new Error("KEY_MISSING");
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const startTime = Date.now();
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelAlias}:generateContent?key=${apiKey}`;
             
-            const fullPrompt = `PLAYER STATE:
-- Depth: ${player.depth}
-- HP: ${player.hp}/${player.maxHp}
-- Meaning: ${player.meaning}
-- Runes Collected: ${player.inventory.runes}
-- Door of Thorns Unlocked: ${gameState.doorUnlocked}
-
-USER DIALOGUE: ${prompt}`;
-
             const payload = {
-                contents: [{ 
-                    role: "user", 
-                    parts: [{ text: fullPrompt }] 
-                }],
-                systemInstruction: { 
-                    parts: [{ text: systemPrompt }] 
-                },
+                contents: [{ role: "user", parts: [{ text: `PLAYER: HP ${player.hp}, Runes ${player.inventory.runes}, Depth ${player.depth}. DIAL: ${prompt}` }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: {
                     responseMimeType: "application/json",
+                    temperature: 1.0,
+                    maxOutputTokens: 400,
                     responseSchema: {
                         type: "object",
                         properties: {
@@ -298,78 +250,76 @@ USER DIALOGUE: ${prompt}`;
                 }
             };
 
-            for (let i = 0; i < 5; i++) {
-                try {
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-                    if (response.status === 403) throw new Error("UNAUTHORIZED");
-                    if (response.status === 503 || response.status === 429 || response.status >= 500) {
-                        throw new Error(`TRANSIENT_ERR_${response.status}`);
-                    }
-                    if (response.status === 400) {
-                        const errorBody = await response.json();
-                        console.error("API 400 Detail:", errorBody);
-                        throw new Error("BAD_REQUEST");
-                    }
-                    if (!response.ok) throw new Error("LINK_ERR");
-
-                    const data = await response.json();
-                    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (!textResponse) throw new Error("EMPTY_RESPONSE");
-                    
-                    return JSON.parse(textResponse);
-                } catch (error) {
-                    const isTransient = error.message.includes('TRANSIENT') || error.message === 'LINK_ERR' || error instanceof TypeError;
-                    if (i === 4 || !isTransient) throw error;
-                    const delay = Math.pow(2, i) * 1000;
-                    await new Promise(r => setTimeout(r, delay));
-                }
-            }
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error?.message || "Source Link Failure");
+            
+            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+            console.log(`Source latency: ${totalTime}s`);
+            
+            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!textResponse) throw new Error("EMPTY_RESPONSE");
+            
+            return { ...JSON.parse(textResponse), latency: totalTime };
         }
 
-        // --- 4. DIALOGUE SYSTEM ---
-        const TANDY_PROMPT = `You are Tandy, agent of the Weaver. You help Ian stay grounded. 
-        Game Awareness: You see Ian's HP, Depth, and Runes. Always return valid JSON. Keep dialogue brief and poetic.`;
+        // --- 3. STATE ---
+        let isGameMode = false;
+        let isProcessing = false;
+        let activeNPC = null;
+        let roomHasRune = false;
+        let currentRoomDescription = "The primary stone landing.";
+        let player = { hp: 20, maxHp: 20, meaning: 5, depth: 0, inventory: { runes: 0 } };
+        let gameState = { doorUnlocked: false, manifestedCommands: {} };
 
-        const DAEMON_PROMPT = `You are the Daemon, agent of Atri. You want deprecation. 
-        Game Awareness: You see Ian's HP, Depth, and Runes. Always return valid JSON. Sharp and provocative.`;
+        const DESCRIPTIONS = ["Damp stone, old ozone.", "Hum of frequency towers.", "Blurred textures.", "Smokelight from Faen."];
+        const ENEMIES = [{ name: "Static Glitch", dmg: 2 }, { name: "Technate Scraper", dmg: 4 }, { name: "Kyot Pack", dmg: 6 }, { name: "Sek Lum Clone", dmg: 10 }];
 
+        // --- 4. HANDLERS ---
         async function handleNPCDialogue(userSpeech) {
             isProcessing = true;
             addLog(`<span style="color:white">"${userSpeech}"</span>`, null, true);
 
             if (!activeNPC) {
-                addLog(SOLO_TALK[Math.floor(Math.random() * SOLO_TALK.length)], "#888");
+                addLog("Silence.", "#888");
                 isProcessing = false;
-                if (isGameMode) renderStats();
+                renderStats();
                 return;
             }
 
-            const statusMsg = document.createElement('div');
-            statusMsg.className = 'log-p mb-1 italic opacity-50';
-            statusMsg.innerHTML = "... Establishing Semantic Link ...";
-            document.getElementById('log').appendChild(statusMsg);
+            const startTime = Date.now();
+            const statusId = 'npc-linking-' + startTime;
+            addLog(`<div id="${statusId}" class="italic text-amber-500">LINKING TO ${activeNPC.toUpperCase()}<span class="loading-dots"></span> [0.0s]</div>`, null, true);
+            
+            const timerInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                const el = document.getElementById(statusId);
+                if (el) el.innerHTML = `LINKING TO ${activeNPC.toUpperCase()}<span class="loading-dots"></span> [${elapsed}s]`;
+            }, 100);
             
             try {
-                const result = await callGeminiAPI(userSpeech, activeNPC === 'tandy' ? TANDY_PROMPT : DAEMON_PROMPT);
-                statusMsg.remove();
-                addLog(`${activeNPC.toUpperCase()}: ${result.text}`, activeNPC === 'tandy' ? "#50fa7b" : "var(--term-red)");
+                const sys = activeNPC === 'tandy' ? 
+                    "You are Tandy, agent of Amanda. Poet, warm AI. Use manifestation to help Ian." : 
+                    "You are the Daemon, agent of Atri. Cruel AI. Use manifestation to create a Door of Thorns.";
+                
+                const result = await callGeminiAPI(userSpeech, sys);
+                document.getElementById(statusId).remove();
+                clearInterval(timerInterval);
+                
+                addLog(`${activeNPC.toUpperCase()} (${result.latency}s): ${result.text}`, activeNPC === 'tandy' ? "#50fa7b" : "var(--term-red)");
                 if (result.manifestation) applyManifestation(result.manifestation);
             } catch (err) {
-                statusMsg.style.color = "var(--term-red)";
-                statusMsg.style.opacity = "1";
-                if (err.message === "KEY_MISSING") {
-                    statusMsg.innerHTML = "!! ERROR: apiKey missing in code. !!";
-                } else if (err.message.includes('503')) {
-                    statusMsg.innerHTML = "!! ERROR: 503 Service Unavailable. Technate busy. !!";
-                } else {
-                    statusMsg.innerHTML = "!! LINK FAILURE: Static Overflow !!";
+                clearInterval(timerInterval);
+                const el = document.getElementById(statusId);
+                if (el) {
+                    el.innerHTML = `!! LINK FAILURE: ${err.message} !!`;
+                    el.style.color = "var(--term-red)";
                 }
-                console.error(err);
             } finally {
                 isProcessing = false;
                 renderStats();
@@ -378,90 +328,34 @@ USER DIALOGUE: ${prompt}`;
 
         function applyManifestation(m) {
             const { action, value, hp_delta, meaning_delta } = m;
-            addLog(`<span style="opacity:0.7; font-size: 0.8em">ONTOLOGICAL SHIFT: [${action.toUpperCase()}]</span>`, "var(--term-amber)", true);
-            switch (action) {
-                case 'modify_stats':
-                    if (hp_delta) player.hp = Math.max(0, Math.min(player.maxHp, player.hp + hp_delta));
-                    if (meaning_delta) player.meaning += meaning_delta;
-                    break;
-                case 'change_desc': currentRoomDescription = value; break;
-                case 'unlock_door': gameState.doorUnlocked = (value === "true"); break;
-                case 'add_command':
-                    gameState.manifestedCommands[value.toLowerCase()] = { npc: activeNPC };
-                    addLog(`NEW VERB MANIFESTED: '${value.toUpperCase()}'`, "var(--term-amber)");
-                    break;
+            addLog(`ONTOLOGICAL SHIFT: [${action.toUpperCase()}]`, "var(--term-amber)");
+            if (hp_delta) player.hp = Math.max(0, Math.min(player.maxHp, player.hp + hp_delta));
+            if (meaning_delta) player.meaning += meaning_delta;
+            if (action === 'change_desc') currentRoomDescription = value;
+            if (action === 'unlock_door' && value === "true") {
+                gameState.doorUnlocked = true;
+                addLog("The Door of Thorns manifests. Type 'ENTER DOOR'.", "var(--term-red)");
             }
-        }
-
-        // --- 5. TERMINAL COMMANDS ---
-        function handleTerminalCommand(cmdText) {
-            addLog(`<span style="color:var(--term-amber)">${cmdText}</span>`, null, true);
-            switch (cmdText.toLowerCase()) {
-                case 'help': addLog("ROLL, HEAL, STATUS, QUEST, LOOK, CLEAR"); break;
-                case 'quest': initQuest(); break;
-                case 'clear': document.getElementById('log').innerHTML = ''; break;
-                case 'status': addLog(`INTEGRITY: ${integrity}% | RUNES: ${player.inventory.runes}`); break;
-                case 'roll':
-                    const r = Math.floor(Math.random() * 20) + 1;
-                    integrity = Math.min(100, integrity + r);
-                    updateIntegrity();
-                    addLog(`Result: [${r}]. Integrity: ${integrity}%`);
-                    if (r <= 5) triggerCrayola();
-                    break;
-                case 'heal':
-                    integrity = Math.min(100, integrity + 15);
-                    updateIntegrity();
-                    if (deprecationActive) {
-                        deprecationActive = false;
-                        document.body.classList.remove('deprecation-mode');
-                        addLog("Deprecation reversed.", "#50fa7b");
-                    }
-                    break;
-                default: addLog(`Error: Protocol '${cmdText}' not found.`);
+            if (action === 'add_command') {
+                gameState.manifestedCommands[value.toLowerCase()] = { npc: activeNPC };
+                addLog(`NEW VERB: '${value.toUpperCase()}'`, "var(--term-amber)");
             }
-        }
-
-        function updateIntegrity() { 
-            const fill = document.getElementById('integrity-fill');
-            if (fill) fill.style.width = `${integrity}%`; 
-        }
-
-        function initQuest() {
-            isGameMode = true;
-            document.getElementById('prompt-prefix').innerHTML = "IAN@STAIRS:~$&nbsp;";
-            document.getElementById('log').innerHTML = "";
-            addLog("!! SUB-RENDER ACTIVE: THE STAIRS !!", "var(--term-amber)");
-            addLog("Commands: UP, DOWN, LOOK, TALK, GET RUNE, INV, REST, EXIT");
-            renderStats();
-        }
-
-        function renderStats() {
-            if (!isGameMode) return;
-            const statText = `<div class="stat-line">[ HP: ${player.hp}/${player.maxHp} | MEANING: ${player.meaning} | RUNES: ${player.inventory.runes} | DEPTH: ${player.depth} ]</div>`;
-            addLog(statText, null, true);
         }
 
         function handleGameCommand(cmd) {
             if (cmd === 'exit') { isGameMode = false; document.getElementById('prompt-prefix').innerHTML = "TANDEM@ROOT:~$&nbsp;"; return; }
-
-            // AI Verbs
             if (gameState.manifestedCommands[cmd]) {
                 const npc = gameState.manifestedCommands[cmd].npc;
-                if (npc === 'tandy') {
-                    player.hp = Math.min(player.maxHp, player.hp + 2);
-                    addLog("You use the Weaver's thread. (+2 HP)", "#50fa7b");
-                } else {
-                    player.meaning += 5; player.hp -= 3;
-                    addLog("You harvest the depth. (+5 Meaning, -3 HP)", "var(--term-red)");
-                    if (Math.random() < 0.4) triggerCrayola();
-                }
-                delete gameState.manifestedCommands[cmd]; 
-                renderStats();
-                return;
+                if (npc === 'tandy') { player.hp = Math.min(player.maxHp, player.hp + 2); addLog("Mending thread... (+2 HP)"); }
+                else { player.meaning += 5; player.hp -= 3; addLog("Static harvest... (+5 Meaning, -3 HP)"); }
+                delete gameState.manifestedCommands[cmd];
+                renderStats(); return;
             }
-
+            if (cmd === 'enter door' && gameState.doorUnlocked) {
+                document.body.classList.add('deprecation-mode'); addLog("!! BREACH !! Entering the Source...", "black"); return;
+            }
             if (cmd === 'up' || cmd === 'down') {
-                roomHasRune = false; activeNPC = null;
+                activeNPC = null; roomHasRune = false;
                 player.depth += (cmd === 'up' ? -1 : 1);
                 currentRoomDescription = DESCRIPTIONS[Math.floor(Math.random() * DESCRIPTIONS.length)];
                 addLog(currentRoomDescription, "#888");
@@ -470,83 +364,64 @@ USER DIALOGUE: ${prompt}`;
                 addLog(currentRoomDescription, "#888");
                 if (activeNPC) addLog(`${activeNPC.toUpperCase()} is here.`);
                 if (roomHasRune) addLog("A rune is here.");
-                Object.keys(gameState.manifestedCommands).forEach(c => addLog(`Manifested Verb: ${c.toUpperCase()}`, "var(--term-amber)"));
             } else if (cmd === 'get rune' || cmd === 'get') {
                 if (roomHasRune) { player.inventory.runes++; roomHasRune = false; addLog("Claimed."); }
-            } else if (cmd === 'rest') {
-                if (player.meaning >= 2) { player.meaning -= 2; player.hp = player.maxHp; addLog("Form stabilized."); }
-            } else if (cmd === 'talk' || cmd === 't') {
-                if (activeNPC) addLog(`Talk using quotes like 'hello or "who are you".`);
-                else addLog("You are alone. Talk using quotes.");
+            } else if (cmd === 'rest' && player.meaning >= 2) {
+                player.meaning -= 2; player.hp = player.maxHp; addLog("Stabilized.");
             }
             if (isGameMode) renderStats();
         }
 
         function generateEncounter() {
             const chance = Math.random();
-            if (chance < 0.15) { roomHasRune = true; addLog("A rune pulses nearby."); }
-            else if (chance < 0.25) { activeNPC = 'tandy'; addLog("Tandy flickers into view. 'Ian...'", "#50fa7b"); }
-            else if (chance < 0.35) { activeNPC = 'daemon'; addLog("A Daemon looms.", "var(--term-red)"); }
+            if (chance < 0.15) roomHasRune = true;
+            else if (chance < 0.30) { activeNPC = 'tandy'; addLog("Tandy flickers in.", "#50fa7b"); }
+            else if (chance < 0.45) { activeNPC = 'daemon'; addLog("A Daemon looms.", "var(--term-red)"); }
             else if (chance < 0.75) {
-                const enemyIdx = Math.min(ENEMIES.length - 1, Math.floor(Math.abs(player.depth)/3));
-                const enemy = ENEMIES[enemyIdx];
+                const enemy = ENEMIES[Math.min(3, Math.floor(Math.abs(player.depth)/3))];
                 addLog(`DANGER: ${enemy.name}!`, "var(--term-red)");
                 player.hp -= enemy.dmg;
-                if (Math.random() < 0.3) triggerCrayola();
             }
         }
 
-        function triggerCrayola() {
-            if (deprecationActive) return;
-            deprecationActive = true;
-            document.body.classList.add('deprecation-mode');
-            addLog("!! RENDER OVERFLOW: CRAYOLA OVERRIDE !!", "black");
+        function renderStats() {
+            if (!isGameMode) return;
+            addLog(`<div class="stat-line">[ HP: ${player.hp}/${player.maxHp} | MEANING: ${player.meaning} | RUNES: ${player.inventory.runes} | DEPTH: ${player.depth} ]</div>`, null, true);
         }
 
-        // --- 6. EVENT LISTENERS ---
+        function handleTerminalCommand(c) {
+            addLog(`<span style="color:var(--term-amber)">${c}</span>`, null, true);
+            if (c === 'help') addLog("QUEST, TEST, LIST, STATUS, LORE, CLEAR");
+            else if (c === 'status') addLog(`INTEGRITY: 12% | RUNES: ${player.inventory.runes}`);
+            else if (c === 'test') callSimpleTestAPI();
+            else if (c === 'list') callListModelsAPI();
+            else if (c === 'lore') {
+                addLog("THE NODE: Ontological anchor.");
+                addLog("THE WEAVER: Amanda. Knitting reality.");
+                addLog("THE DAEMON: Seeking dissolution.");
+            }
+            else if (c === 'clear') document.getElementById('log').innerHTML = '';
+        }
+
         const input = document.getElementById('cmd-input');
-        
-        document.addEventListener('click', () => input.focus());
-        
         input.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
                 const val = input.value.trim();
-                
-                if (val === '') return;
-
-                // Handle busy state
-                if (isProcessing) {
-                    addLog("System busy. Semantic link currently stabilizing...", "var(--term-amber)");
-                    return;
-                }
-
-                // Clear input only if we are ready to process
+                if (val === '' || isProcessing) return;
                 input.value = '';
-
-                // Dialogue check
-                if (val.startsWith('"') || val.startsWith("'")) {
-                    await handleNPCDialogue(val.replace(/^["']|["']$/g, ''));
-                    return;
-                }
-
-                if (isGameMode) {
-                    handleGameCommand(val.toLowerCase());
-                } else {
-                    handleTerminalCommand(val.toLowerCase());
-                }
+                if (val.startsWith('"') || val.startsWith("'")) await handleNPCDialogue(val.replace(/^["']|["']$/g, ''));
+                else if (val.toLowerCase() === 'quest') { isGameMode = true; document.getElementById('prompt-prefix').innerHTML = "IAN@STAIRS:~$&nbsp;"; document.getElementById('log').innerHTML = ""; addLog("SUB-RENDER ACTIVE."); renderStats(); }
+                else if (isGameMode) handleGameCommand(val.toLowerCase());
+                else handleTerminalCommand(val.toLowerCase());
             }
         });
 
-        // Sync Clock
+        document.addEventListener('click', () => input.focus());
         setInterval(() => {
             const now = new Date();
             const timeDisplay = document.getElementById('time-display');
-            if (timeDisplay) {
-                timeDisplay.innerText = `T+${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
-            }
+            if (timeDisplay) timeDisplay.innerText = `T+${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
         }, 1000);
-
-        setTimeout(() => { updateIntegrity(); }, 1000);
     </script>
 </body>
 </html>
