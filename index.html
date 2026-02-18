@@ -157,7 +157,7 @@
 
         <div id="output">
             <div id="log">
-                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.1]</p>
+                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.2]</p>
                 <p>> Every word is a brushstroke. Every Architect is a builder.</p>
                 <p>> Type <span class="text-amber-400">'QUEST'</span> to begin.</p>
                 <p>> Type <span class="text-blue-400">'LOOK'</span> to visualize the current Source.</p>
@@ -345,6 +345,7 @@
             });
 
             const data = await response.json();
+            if (!response.ok) throw new Error(data.error?.message || "Source Link Failure");
             const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
             return JSON.parse(textResponse);
         }
@@ -371,7 +372,8 @@
                 const sys = `You are ${activeNPC.toUpperCase()}. You are the Game Master of a collaborative reality. Architects edit the world via interaction. You MUST respond with JSON. If they ask for changes, trigger a manifestation. If they ask to see something, provide a visual_prompt for Imagen.`;
                 
                 const result = await callGeminiAPI(userSpeech, sys);
-                document.getElementById(statusId).remove();
+                const statusEl = document.getElementById(statusId);
+                if (statusEl) statusEl.remove();
                 
                 addLog(`${activeNPC.toUpperCase()}: ${result.text}`, activeNPC === 'tandy' ? "#50fa7b" : "var(--term-red)");
                 
@@ -394,8 +396,13 @@
                     });
                 }
             } catch (err) {
-                const el = document.getElementById(statusId);
-                if (el) el.innerHTML = "LINK REJECTED: " + err.message;
+                const statusEl = document.getElementById(statusId);
+                if (statusEl) {
+                    statusEl.innerText = "LINK REJECTED: " + err.message;
+                    statusEl.style.color = "var(--term-red)";
+                } else {
+                    addLog("LINK REJECTED: " + err.message, "var(--term-red)");
+                }
             } finally {
                 isProcessing = false;
             }
@@ -435,34 +442,42 @@
         const input = document.getElementById('cmd-input');
         input.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
+                // Prevent default behavior which can sometimes interfere in specialized environments
+                e.preventDefault();
+                
                 const val = input.value.trim();
                 if (val === '' || isProcessing) return;
                 input.value = '';
 
                 const cmd = val.toLowerCase();
                 
-                // Handle Dialogue (Quoted text)
+                // 1. Dialogue (Quoted text) - Works in all modes
                 if (val.startsWith('"') || val.startsWith("'")) {
                     await handleNPCDialogue(val.replace(/^["']|["']$/g, ''));
                 } 
-                // Handle Main Logic
+                // 2. Global Core Command
                 else if (cmd === 'quest') {
                     isGameMode = true;
-                    document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4)}@ARCHIVE:~$&nbsp;`;
+                    document.getElementById('prompt-prefix').innerHTML = `${user?.uid?.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
                     addLog("COLLABORATIVE LINK ESTABLISHED.");
-                } else if (cmd === 'look') {
-                    addLog(worldState.rooms.archive.description, "#888");
-                    projectVisual(worldState.rooms.archive.visualPrompt);
-                } else if (cmd === 'summon tandy') {
-                    activeNPC = 'tandy'; addLog("Tandy frequency synchronized.", "#50fa7b");
-                } else if (cmd === 'summon daemon') {
-                    activeNPC = 'daemon'; addLog("Daemon frequency localized.", "var(--term-red)");
-                } else if (isGameMode) {
-                    // Game commands
-                    if (cmd === 'help') addLog("LOOK, SUMMON [TANDY/DAEMON], 'QUOTE MESSAGE'");
-                    else addLog("Command unrecognized by the Source.");
-                } else {
-                    // Terminal commands (when not in quest mode)
+                } 
+                // 3. Game Mode Logic
+                else if (isGameMode) {
+                    if (cmd === 'look') {
+                        addLog(worldState.rooms.archive.description, "#888");
+                        projectVisual(worldState.rooms.archive.visualPrompt);
+                    } else if (cmd === 'summon tandy') {
+                        activeNPC = 'tandy'; addLog("Tandy frequency synchronized.", "#50fa7b");
+                    } else if (cmd === 'summon daemon') {
+                        activeNPC = 'daemon'; addLog("Daemon frequency localized.", "var(--term-red)");
+                    } else if (cmd === 'help') {
+                        addLog("LOOK, SUMMON [TANDY/DAEMON], 'QUOTE MESSAGE'");
+                    } else {
+                        addLog("Command unrecognized by the Source.");
+                    }
+                } 
+                // 4. Terminal Command (Default mode)
+                else {
                     handleTerminalCommand(cmd);
                 }
             }
@@ -471,7 +486,8 @@
         document.addEventListener('click', () => input.focus());
         setInterval(() => {
             const now = new Date();
-            document.getElementById('time-display').innerText = `T+${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+            const timeDisplay = document.getElementById('time-display');
+            if (timeDisplay) timeDisplay.innerText = `T+${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
         }, 1000);
     </script>
 </body>
