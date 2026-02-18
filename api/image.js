@@ -1,5 +1,5 @@
 /**
- * Vercel Serverless Function: Image Proxy (Native Gemini 2.0 Edition)
+ * Vercel Serverless Function: Image Proxy (Imagen Predict Edition)
  * Path: /api/image.js
  */
 
@@ -26,15 +26,13 @@ export default async function handler(req, res) {
   }
 
   // Exponential Backoff Fetch Helper
-  async function fetchWithRetry(url, options, retries = 5, backoff = 1000) {
+  async function fetchWithRetry(url, options, retries = 3, backoff = 2000) {
     try {
       const response = await fetch(url, options);
       const data = await response.json();
 
-      // If rate limited or quota exceeded, retry unless we are out of attempts
       if (response.status === 429 && retries > 0) {
-        const delay = backoff;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, backoff));
         return fetchWithRetry(url, options, retries - 1, backoff * 2);
       }
       return { response, data };
@@ -57,54 +55,51 @@ export default async function handler(req, res) {
       promptText = incomingPayload.contents[0].parts[0].text;
     }
 
-    // We'll try the experimental model first, then the stable one
-    const modelsToTry = [
-      "gemini-2.0-flash-exp-image-generation",
-      "gemini-2.0-flash"
-    ];
+    /**
+     * IMAGEN PREDICT STRATEGY
+     * We use the specific image-generation model identifier found in your list.
+     * This requires the :predict endpoint.
+     */
+    const model = "gemini-2.0-flash-exp-image-generation";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
 
-    let lastError = null;
+    const { response, data } = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instances: [{ prompt: promptText }],
+        parameters: { sampleCount: 1 }
+      })
+    });
 
-    for (const model of modelsToTry) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const geminiPayload = {
-        contents: [{
-          parts: [{ text: `Generate an image based on this description: ${promptText}` }]
-        }],
-        generationConfig: {
-          responseModalities: ["TEXT", "IMAGE"]
-        }
-      };
-
-      const { response, data } = await fetchWithRetry(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiPayload)
-      });
-
-      if (response.ok) {
-        const parts = data.candidates?.[0]?.content?.parts || [];
-        const imagePart = parts.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image/'));
-        const base64Data = imagePart?.inlineData?.data;
-
-        if (base64Data) {
-          return res.status(200).json({
-            predictions: [{ bytesBase64Encoded: base64Data }]
-          });
-        }
+    if (!response.ok) {
+      // Check for billing errors specifically to help debug the AI Studio issue
+      if (data.error?.message?.includes("billed users")) {
+        return res.status(403).json({
+          error: "BILLING_REQUIRED",
+          message: "The Source requires a Pay-As-You-Go plan in AI Studio to project visuals.",
+          details: data
+        });
       }
 
-      lastError = data;
-      // If it's a 404, we move to the next model immediately. 
-      // If it's a 429/403, we try the next model too.
+      return res.status(response.status).json({
+        error: data.error?.message || "Source Error",
+        details: data
+      });
     }
 
-    // If we reach here, all attempts failed
-    const isQuota = lastError?.error?.status === "RESOURCE_EXHAUSTED";
-    return res.status(isQuota ? 429 : 500).json({
-      error: isQuota ? "Source Quota Exceeded" : "Generation Failed",
-      message: lastError?.error?.message || "All models failed to respond.",
-      details: lastError
+    // Extraction for Imagen-style response
+    const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
+
+    if (!base64Data) {
+      return res.status(500).json({ 
+        error: "The Source returned success but no binary image data.",
+        details: data 
+      });
+    }
+
+    return res.status(200).json({
+      predictions: [{ bytesBase64Encoded: base64Data }]
     });
 
   } catch (error) {
