@@ -25,10 +25,10 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     /**
      * MODEL PIVOT: 
-     * We use gemini-2.0-flash-exp because the experimental track is currently
-     * the most reliable for 'IMAGE' modality generation via the v1beta API.
+     * Based on your diagnostic LIST, the specific identifier for 
+     * image generation is "gemini-2.0-flash-exp-image-generation".
      */
-    const model = "gemini-2.0-flash-exp";
+    const model = "gemini-2.0-flash-exp-image-generation";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     try {
