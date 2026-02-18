@@ -157,7 +157,7 @@
 
         <div id="output">
             <div id="log">
-                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.0]</p>
+                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.1]</p>
                 <p>> Every word is a brushstroke. Every Architect is a builder.</p>
                 <p>> Type <span class="text-amber-400">'QUEST'</span> to begin.</p>
                 <p>> Type <span class="text-blue-400">'LOOK'</span> to visualize the current Source.</p>
@@ -177,7 +177,7 @@
 
         // --- 1. CONFIGURATION ---
         const localFirebaseConfig = {
-            apiKey: "", // Handled by environment
+            apiKey: "", 
             authDomain: "",
             projectId: "",
             storageBucket: "",
@@ -185,7 +185,7 @@
             appId: ""
         };
 
-        const apiKey = ""; // Gemini API Key handled by environment
+        const apiKey = ""; 
         let firebaseConfig;
         try {
             firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : localFirebaseConfig;
@@ -394,10 +394,42 @@
                     });
                 }
             } catch (err) {
-                addLog("LINK REJECTED: " + err.message, "var(--term-red)");
+                const el = document.getElementById(statusId);
+                if (el) el.innerHTML = "LINK REJECTED: " + err.message;
             } finally {
                 isProcessing = false;
             }
+        }
+
+        async function callSimpleTestAPI() {
+            const startTime = Date.now();
+            addLog("Pinging Source Proxy...", "var(--term-amber)");
+            try {
+                const response = await fetch(API_PATH, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "SUCCESS" }] }] })
+                });
+                const data = await response.json();
+                const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                if (!response.ok) throw new Error(data.error?.message || "Link Rejected");
+                addLog(`SOURCE REPLY (${totalTime}s): ${data.candidates?.[0]?.content?.parts?.[0]?.text}`, "#50fa7b");
+            } catch (err) {
+                addLog(`LINK FAILURE: ${err.message}`, "var(--term-red)");
+            }
+        }
+
+        function handleTerminalCommand(c) {
+            addLog(`<span style="color:var(--term-amber)">${c}</span>`, null, true);
+            if (c === 'help') addLog("QUEST, TEST, LORE, CLEAR");
+            else if (c === 'test') callSimpleTestAPI();
+            else if (c === 'clear') document.getElementById('log').innerHTML = '';
+            else if (c === 'lore') {
+                addLog("THE NODE: Ontological anchor.");
+                addLog("THE WEAVER: Amanda. Knitting reality.");
+                addLog("THE DAEMON: Seeking dissolution.");
+            }
+            else addLog("Command unrecognized. Type 'HELP'.");
         }
 
         const input = document.getElementById('cmd-input');
@@ -408,9 +440,13 @@
                 input.value = '';
 
                 const cmd = val.toLowerCase();
+                
+                // Handle Dialogue (Quoted text)
                 if (val.startsWith('"') || val.startsWith("'")) {
                     await handleNPCDialogue(val.replace(/^["']|["']$/g, ''));
-                } else if (cmd === 'quest') {
+                } 
+                // Handle Main Logic
+                else if (cmd === 'quest') {
                     isGameMode = true;
                     document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4)}@ARCHIVE:~$&nbsp;`;
                     addLog("COLLABORATIVE LINK ESTABLISHED.");
@@ -421,10 +457,13 @@
                     activeNPC = 'tandy'; addLog("Tandy frequency synchronized.", "#50fa7b");
                 } else if (cmd === 'summon daemon') {
                     activeNPC = 'daemon'; addLog("Daemon frequency localized.", "var(--term-red)");
-                } else if (cmd === 'help') {
-                    addLog("QUEST, LOOK, SUMMON [TANDY/DAEMON], 'QUOTE MESSAGE'");
+                } else if (isGameMode) {
+                    // Game commands
+                    if (cmd === 'help') addLog("LOOK, SUMMON [TANDY/DAEMON], 'QUOTE MESSAGE'");
+                    else addLog("Command unrecognized by the Source.");
                 } else {
-                    addLog("Command unrecognized by the Source.");
+                    // Terminal commands (when not in quest mode)
+                    handleTerminalCommand(cmd);
                 }
             }
         });
