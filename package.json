@@ -1,19 +1,5 @@
 {
-  "name": "terraagnostum",
+  "name": "terra-agnostum",
   "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/MTyson/terraagnostum/issues"
-  },
-  "homepage": "https://github.com/MTyson/terraagnostum#readme",
-  "description": ""
+  "dependencies": {}
 }
