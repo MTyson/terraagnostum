@@ -1,17 +1,8 @@
 {
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs18.x"
-    }
-  },
   "rewrites": [
     {
-      "source": "/api/image",
-      "destination": "/api/image.js"
-    },
-    {
-      "source": "/api/generate",
-      "destination": "/api/generate.js"
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
     }
   ]
 }
