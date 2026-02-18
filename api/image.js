@@ -25,70 +25,86 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Exponential Backoff Fetch Helper
+  async function fetchWithRetry(url, options, retries = 5, backoff = 1000) {
+    try {
+      const response = await fetch(url, options);
+      const data = await response.json();
+
+      // If rate limited or quota exceeded, retry unless we are out of attempts
+      if (response.status === 429 && retries > 0) {
+        const delay = backoff;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchWithRetry(url, options, retries - 1, backoff * 2);
+      }
+      return { response, data };
+    } catch (error) {
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        return fetchWithRetry(url, options, retries - 1, backoff * 2);
+      }
+      throw error;
+    }
+  }
+
   try {
     const incomingPayload = req.body;
     let promptText = "A lofi glitch terminal art piece.";
     
-    // Extract prompt from whatever format the frontend sends
     if (incomingPayload.instances?.[0]?.prompt) {
       promptText = incomingPayload.instances[0].prompt;
     } else if (incomingPayload.contents?.[0]?.parts?.[0]?.text) {
       promptText = incomingPayload.contents[0].parts[0].text;
     }
 
-    /**
-     * GEMINI 2.0 NATIVE IMAGE GENERATION
-     * Model: gemini-2.0-flash-exp-image-generation (from your LIST)
-     * Endpoint: generateContent
-     * Requirement: responseModalities must include BOTH ["TEXT", "IMAGE"]
-     */
-    const model = "gemini-2.0-flash-exp-image-generation";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    // We'll try the experimental model first, then the stable one
+    const modelsToTry = [
+      "gemini-2.0-flash-exp-image-generation",
+      "gemini-2.0-flash"
+    ];
 
-    const geminiPayload = {
-      contents: [{
-        parts: [{ text: `Generate an image based on this description: ${promptText}` }]
-      }],
-      generationConfig: {
-        // Critical: Using both TEXT and IMAGE often bypasses the "modality not supported" error
-        responseModalities: ["TEXT", "IMAGE"]
+    let lastError = null;
+
+    for (const model of modelsToTry) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const geminiPayload = {
+        contents: [{
+          parts: [{ text: `Generate an image based on this description: ${promptText}` }]
+        }],
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"]
+        }
+      };
+
+      const { response, data } = await fetchWithRetry(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(geminiPayload)
+      });
+
+      if (response.ok) {
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const imagePart = parts.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image/'));
+        const base64Data = imagePart?.inlineData?.data;
+
+        if (base64Data) {
+          return res.status(200).json({
+            predictions: [{ bytesBase64Encoded: base64Data }]
+          });
+        }
       }
-    };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(geminiPayload)
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("Gemini Native Image Error:", JSON.stringify(data, null, 2));
-      return res.status(response.status).json({
-        error: data.error?.message || "Source Generation Error",
-        details: data
-      });
+      lastError = data;
+      // If it's a 404, we move to the next model immediately. 
+      // If it's a 429/403, we try the next model too.
     }
 
-    // Native generation returns parts. We look for the part with inlineData (the image).
-    const parts = data.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image/'));
-    const base64Data = imagePart?.inlineData?.data;
-
-    if (!base64Data) {
-      // If no image was generated, check if the model sent a text explanation instead (like a safety block)
-      const textPart = parts.find(p => p.text);
-      return res.status(500).json({ 
-        error: "The Source provided a response but no visual data.",
-        reason: textPart?.text || "Unknown safety or modality restriction.",
-        fullResponse: data 
-      });
-    }
-
-    // Transform back to the "predictions" format the terminal (index.html) expects
-    return res.status(200).json({
-      predictions: [{ bytesBase64Encoded: base64Data }]
+    // If we reach here, all attempts failed
+    const isQuota = lastError?.error?.status === "RESOURCE_EXHAUSTED";
+    return res.status(isQuota ? 429 : 500).json({
+      error: isQuota ? "Source Quota Exceeded" : "Generation Failed",
+      message: lastError?.error?.message || "All models failed to respond.",
+      details: lastError
     });
 
   } catch (error) {
