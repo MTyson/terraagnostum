@@ -24,75 +24,66 @@ export default async function handler(req, res) {
   // --- POST: GENERATION MODE ---
   if (req.method === 'POST') {
     /**
-     * MODEL PIVOT:
-     * We are switching to the dedicated Imagen 3.0 model.
-     * This model requires the ":predict" endpoint and an "instances" payload.
+     * TARGET MODEL: gemini-2.0-flash-exp-image-generation
+     * This model was found in your ListModels output. 
+     * It is an Imagen-based model that requires the :predict endpoint.
      */
-    const model = "imagen-3.0-generate-001";
+    const model = "gemini-2.0-flash-exp-image-generation";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
 
     try {
       const incomingPayload = req.body;
-      
       let promptText = "A lofi glitch terminal art piece.";
       
-      // Handle different possible frontend payload structures
       if (incomingPayload.instances && incomingPayload.instances[0]?.prompt) {
         promptText = incomingPayload.instances[0].prompt;
       } else if (incomingPayload.contents && incomingPayload.contents[0]?.parts[0]?.text) {
         promptText = incomingPayload.contents[0].parts[0].text;
       }
 
-      // Payload structure required for Imagen predict endpoint
+      // Minimal payload for the :predict endpoint
       const predictPayload = {
         instances: [
-          {
-            prompt: promptText
-          }
+          { prompt: promptText }
         ],
         parameters: {
-          sampleCount: 1,
-          aspectRatio: "1:1",
-          outputMimeType: "image/png"
+          sampleCount: 1
         }
       };
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(predictPayload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        console.error("Imagen API Error:", JSON.stringify(data, null, 2));
+        // Log the specific error to help distinguish between 403 (Billing) and 400 (Syntax)
         return res.status(response.status).json({
-          error: data.error?.message || "Imagen Source Error",
+          error: data.error?.message || "Source Error",
           code: data.error?.code,
           status: data.error?.status,
           detailedError: data
         });
       }
 
-      // Imagen returns data in predictions[0].bytesBase64Encoded
+      // Extract the Base64 string from the Google response
       const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
 
       if (!base64Data) {
         return res.status(500).json({ 
-          error: "No image data returned from Imagen source.",
+          error: "The Source returned a success code but no image data (Base64 string).",
           details: data 
         });
       }
 
-      // Return in the format the frontend (index.html) expects
+      // Return the JSON object containing the Base64 string to the frontend
       return res.status(200).json({
         predictions: [{ bytesBase64Encoded: base64Data }]
       });
     } catch (error) {
-      console.error("Proxy execution error:", error);
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   }
