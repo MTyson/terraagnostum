@@ -142,10 +142,10 @@
 
         <div id="output">
             <div id="log">
-                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.7]</p>
-                <p>> Every word is a brushstroke. Every Architect is a builder.</p>
+                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.8]</p>
                 <p>> Type <span class="text-amber-400">'QUEST'</span> to begin Architect mode.</p>
-                <p>> Type <span class="text-blue-400">'LOOK'</span> to pulse the visual buffer.</p>
+                <p>> Type <span class="text-blue-400">'TEST'</span> to verify Source connectivity.</p>
+                <p>> Type <span class="text-blue-400">'LIST'</span> to query available models.</p>
             </div>
         </div>
 
@@ -156,29 +156,24 @@
     </div>
 
     <script type="module">
-        // Use CDN imports for raw HTML compatibility
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
 
-        // --- 1. CONFIGURATION (HARDCODED FOR RAW HTML) ---
         const firebaseConfig = {
             apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
             authDomain: "terra-agnostum.firebaseapp.com",
             projectId: "terra-agnostum",
             storageBucket: "terra-agnostum.firebasestorage.app",
             messagingSenderId: "809154092201",
-            appId: "1:809154092201:web:95aaddd47c6ce021cf1db8",
-            measurementId: "G-WHKGMMH4PW"
+            appId: "1:809154092201:web:95aaddd47c6ce021cf1db8"
         };
 
         const appId = 'terra-agnostum-shared';
         const API_GENERATE = "/api/generate";
         const API_IMAGE = "/api/image";
 
-        // --- 2. INITIALIZATION ---
-        let app, auth, db, analytics;
+        let app, auth, db;
         let isSyncEnabled = false;
 
         try {
@@ -186,16 +181,12 @@
             auth = getAuth(app);
             db = getFirestore(app);
             isSyncEnabled = true;
-            try { analytics = getAnalytics(app); } catch(e) {}
-            
             document.getElementById('sync-status').innerText = "SYNC: READY";
             document.getElementById('sync-status').style.color = "var(--term-amber)";
         } catch (e) {
-            console.error("Firebase Init Error", e);
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        // --- 3. STATE ---
         let worldState = { 
             archive: { 
                 description: "The Primary Archive. Stone walls etched with flickering code.", 
@@ -206,7 +197,6 @@
         let localPlayer = { hp: 20, currentRoom: "archive" };
         let user = null;
 
-        // --- 4. AUTH & SYNC ---
         if (isSyncEnabled) {
             onAuthStateChanged(auth, (u) => {
                 user = u;
@@ -215,15 +205,12 @@
                     setupWorldListener();
                 }
             });
-            signInAnonymously(auth).catch(e => {
-                addLog("AUTH ERROR: Enable Anonymous Auth in Firebase Console.", "var(--term-red)");
-            });
+            signInAnonymously(auth);
         }
 
         function setupWorldListener() {
             if (!db) return;
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
-            
             onSnapshot(roomRef, (snap) => {
                 if (snap.exists()) {
                     worldState.archive = snap.data();
@@ -232,17 +219,13 @@
                 } else {
                     setDoc(roomRef, { ...worldState.archive, lastUpdated: serverTimestamp() });
                 }
-            }, (err) => {
-                addLog("SYNC ERROR: Verify Firestore Rules.", "var(--term-red)");
             });
         }
 
-        // --- 5. VISUAL PROJECTION ---
         async function projectVisual(prompt) {
             const loader = document.getElementById('visual-loading');
             const buffer = document.getElementById('visual-buffer');
             const img = document.getElementById('visual-image');
-            
             buffer.style.display = 'block';
             loader.classList.remove('hidden');
             img.style.display = 'none';
@@ -251,7 +234,7 @@
                 const res = await fetch(API_IMAGE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ instances: [{ prompt: `Cyberpunk lofi glitch art: ${prompt}` }] })
+                    body: JSON.stringify({ instances: [{ prompt: `Lofi glitch terminal art: ${prompt}` }] })
                 });
                 const data = await res.json();
                 if (data.predictions?.[0]) {
@@ -263,7 +246,31 @@
             finally { loader.classList.add('hidden'); }
         }
 
-        // --- 6. LOGGING ---
+        async function listModels() {
+            addLog("Querying Source for available models...", "var(--term-amber)");
+            try {
+                const res = await fetch(API_IMAGE);
+                const data = await res.json();
+                if (data.models) {
+                    addLog("AVAILABLE MODELS:");
+                    data.models.slice(0, 10).forEach(m => addLog(` - ${m.name.split('/').pop()}`, "#888"));
+                }
+            } catch (e) { addLog("FAILED TO LIST MODELS.", "var(--term-red)"); }
+        }
+
+        async function callSimpleTestAPI() {
+            addLog("Pinging Source Proxy...", "var(--term-amber)");
+            try {
+                const res = await fetch(API_GENERATE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "Respond with 'Source Link Operational'." }] }] })
+                });
+                const data = await res.json();
+                addLog(`SOURCE REPLY: ${data.candidates?.[0]?.content?.parts?.[0]?.text || "No reply."}`, "#50fa7b");
+            } catch (err) { addLog("LINK FAILURE", "var(--term-red)"); }
+        }
+
         function addLog(text, color = 'var(--term-green)') {
             const log = document.getElementById('log');
             const p = document.createElement('div');
@@ -271,28 +278,26 @@
             p.className = 'mb-1';
             p.innerHTML = `> ${text}`;
             log.appendChild(p);
-            const output = document.getElementById('output');
-            output.scrollTop = output.scrollHeight;
+            document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
         }
 
-        // --- 7. AI ---
         async function callGemini(userInput, systemPrompt) {
-            const response = await fetch(API_GENERATE, {
+            const res = await fetch(API_GENERATE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ role: "user", parts: [{ text: `ROOM: ${JSON.stringify(worldState.archive)}. INPUT: ${userInput}` }] }],
+                    contents: [{ role: "user", parts: [{ text: userInput }] }],
                     systemInstruction: { parts: [{ text: systemPrompt }] },
                     generationConfig: { responseMimeType: "application/json" }
                 })
             });
-            const data = await response.json();
+            const data = await res.json();
             return JSON.parse(data.candidates[0].content.parts[0].text);
         }
 
-        // --- 8. INPUT ---
         let activeNPC = null;
         let isProcessing = false;
+        let isGameMode = false;
         const input = document.getElementById('cmd-input');
 
         input.addEventListener('keydown', async (e) => {
@@ -301,14 +306,14 @@
                 const val = input.value.trim();
                 input.value = '';
                 if (!val || isProcessing) return;
+                const cmd = val.toLowerCase();
 
                 if (val.startsWith('"') || val.startsWith("'")) {
                     if (!activeNPC) { addLog("The Archive is silent."); return; }
                     isProcessing = true;
                     addLog(`<span class="italic text-amber-500">PULSING SOURCE...</span>`);
                     try {
-                        const sys = `You are ${activeNPC.toUpperCase()}. GM persona. Respond JSON {text, manifestation: {action, visual_prompt}}.`;
-                        const res = await callGemini(val, sys);
+                        const res = await callGemini(val, `You are ${activeNPC.toUpperCase()}. GM. Respond JSON {text, manifestation: {action, visual_prompt}}.`);
                         addLog(`${activeNPC.toUpperCase()}: ${res.text}`, activeNPC === 'tandy' ? "#50fa7b" : "#ff3e3e");
                         if (res.manifestation?.visual_prompt) projectVisual(res.manifestation.visual_prompt);
                         if (isSyncEnabled && user) {
@@ -317,15 +322,22 @@
                         }
                     } catch (err) { addLog("LINK ERROR", "var(--term-red)"); }
                     finally { isProcessing = false; }
-                } else if (val.toLowerCase() === 'quest') {
+                } else if (cmd === 'quest') {
+                    isGameMode = true;
+                    document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
                     addLog("ARCHITECT MODE ACTIVE.");
-                    document.getElementById('prompt-prefix').innerText = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
-                } else if (val.toLowerCase() === 'look') {
+                } else if (cmd === 'test') {
+                    await callSimpleTestAPI();
+                } else if (cmd === 'list') {
+                    await listModels();
+                } else if (cmd === 'look') {
                     addLog(worldState.archive.description, "#888");
                     projectVisual(worldState.archive.visualPrompt);
-                } else if (val.toLowerCase().startsWith('summon')) {
-                    activeNPC = val.split(' ')[1]?.toLowerCase();
-                    if (activeNPC) addLog(`${activeNPC.toUpperCase()} frequency found.`);
+                } else if (cmd === 'down') {
+                    addLog("You descend deeper into the Archive's sub-structures.");
+                } else if (cmd.startsWith('summon')) {
+                    activeNPC = cmd.split(' ')[1];
+                    addLog(`${activeNPC?.toUpperCase()} frequency found.`);
                 } else {
                     addLog("Command unrecognized.");
                 }
