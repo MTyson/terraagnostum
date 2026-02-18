@@ -23,15 +23,31 @@ export default async function handler(req, res) {
 
   // --- POST: GENERATION MODE (For the LOOK command) ---
   if (req.method === 'POST') {
-    const model = "gemini-2.0-flash";
+    /**
+     * MODEL PIVOT: 
+     * We use gemini-2.0-flash-exp because the experimental track is currently
+     * the most reliable for 'IMAGE' modality generation via the v1beta API.
+     */
+    const model = "gemini-2.0-flash-exp";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     try {
       const incomingPayload = req.body;
-      const promptText = incomingPayload.instances?.[0]?.prompt || "A lofi glitch terminal art piece.";
+      
+      let promptText = "A lofi glitch terminal art piece.";
+      if (incomingPayload.instances && incomingPayload.instances[0] && incomingPayload.instances[0].prompt) {
+        promptText = incomingPayload.instances[0].prompt;
+      } else if (incomingPayload.contents) {
+        promptText = incomingPayload.contents[0].parts[0].text;
+      }
 
       const geminiPayload = {
-        contents: [{ parts: [{ text: promptText }] }],
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: promptText }]
+          }
+        ],
         generationConfig: {
           responseModalities: ["IMAGE"]
         }
@@ -39,31 +55,38 @@ export default async function handler(req, res) {
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(geminiPayload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        console.error("Gemini API Error Detail:", JSON.stringify(data, null, 2));
         return res.status(response.status).json(data);
       }
 
-      const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      const candidates = data.candidates || [];
+      const imagePart = candidates[0]?.content?.parts?.find(p => p.inlineData);
       const base64Data = imagePart?.inlineData?.data;
 
       if (!base64Data) {
-        return res.status(500).json({ error: "No image data returned from source." });
+        return res.status(500).json({ 
+          error: "No image data returned from source.",
+          details: data 
+        });
       }
 
       return res.status(200).json({
         predictions: [{ bytesBase64Encoded: base64Data }]
       });
     } catch (error) {
+      console.error("Proxy execution error:", error);
       return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
 
-  // If method is neither GET nor POST
   return res.status(405).json({ error: 'Method not allowed' });
 }
