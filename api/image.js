@@ -1,9 +1,8 @@
 /**
  * Vercel Serverless Function: Image Proxy (Gemini 2.0 Native Edition)
  * Path: /api/image.js
- * * This version respects the "Native Image Generation" specs for Gemini 2.0:
- * - Uses :generateContent endpoint
- * - Uses responseModalities: ["IMAGE"]
+ * * This version respects the "Native Image Generation" specs for Gemini 2.0
+ * with added exponential backoff to handle quota (429) errors.
  */
 
 export default async function handler(req, res) {
@@ -28,11 +27,24 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Helper for exponential backoff retries on 429 errors
+  async function fetchWithRetry(url, options, retries = 3, backoff = 2000) {
+    const response = await fetch(url, options);
+    const data = await response.json();
+
+    if (response.status === 429 && retries > 0) {
+      // If we get a 429, wait and try again
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+    }
+    return { response, data };
+  }
+
   try {
     const incomingPayload = req.body;
     let promptText = "A lofi glitch terminal art piece.";
     
-    // Support both 'instances' (legacy) and 'contents' (standard) formats
+    // Support both 'instances' and 'contents' formats
     if (incomingPayload.instances?.[0]?.prompt) {
       promptText = incomingPayload.instances[0].prompt;
     } else if (incomingPayload.contents?.[0]?.parts?.[0]?.text) {
@@ -43,32 +55,25 @@ export default async function handler(req, res) {
      * NATIVE IMAGE GENERATION SPECS:
      * Model: gemini-2.0-flash-exp-image-generation
      * Endpoint: :generateContent
-     * Config: responseModalities: ["IMAGE"]
+     * Modality: ["IMAGE"]
      */
     const model = "gemini-2.0-flash-exp-image-generation";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const geminiPayload = {
-      contents: [
-        {
-          parts: [
-            { text: promptText }
-          ]
-        }
-      ],
+      contents: [{
+        parts: [{ text: promptText }]
+      }],
       generationConfig: {
-        // As per Google Dev Blog: 'IMAGE' is the required modality
         responseModalities: ["IMAGE"]
       }
     };
 
-    const response = await fetch(url, {
+    const { response, data } = await fetchWithRetry(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(geminiPayload)
     });
-
-    const data = await response.json();
 
     if (!response.ok) {
       console.error("Native Gen Error:", JSON.stringify(data, null, 2));
