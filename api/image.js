@@ -3,6 +3,9 @@
  * Path: /api/image.js
  * * This proxy handles requests to the Imagen 4.0 model.
  * It expects a JSON body with an "instances" array.
+ * * NOTE: If you see "Imagen API is only accessible to billed users",
+ * you must enable billing on your Google Cloud project or use a 
+ * Gemini model that supports image generation as a modality instead.
  */
 
 export default async function handler(req, res) {
@@ -21,11 +24,8 @@ export default async function handler(req, res) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
 
   try {
-    // Ensure we are sending a valid instances structure
     const payload = req.body;
     
-    // If for some reason the frontend sends just a prompt string, wrap it.
-    // Our index.html sends { instances: [...] }, so this is just a safety check.
     if (!payload.instances) {
       return res.status(400).json({ error: 'Payload must contain an "instances" array.' });
     }
@@ -41,10 +41,18 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      // Log the specific error from Google to Vercel logs for easier debugging
+      // Log the specific error from Google for debugging
       console.error("Imagen API Error Detail:", JSON.stringify(data, null, 2));
       
-      // Pass the specific error back to the frontend
+      // Handle the specific "Billed Users" restriction
+      if (data.error?.message?.includes("billed users")) {
+        return res.status(403).json({
+          error: "IMAGEN_BILLING_REQUIRED",
+          message: "The Source requires a paid Google Cloud account to project visuals.",
+          details: data.error.message
+        });
+      }
+
       return res.status(response.status).json({
         error: data.error?.message || 'Imagen Source rejected the request.',
         details: data
