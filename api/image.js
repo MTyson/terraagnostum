@@ -24,17 +24,16 @@ export default async function handler(req, res) {
   // --- POST: GENERATION MODE ---
   if (req.method === 'POST') {
     /**
-     * MODEL PIVOT: 
-     * "gemini-2.0-flash-exp-image-generation" is an Imagen-style model.
-     * It requires the ":predict" endpoint, NOT ":generateContent".
+     * MODEL PIVOT:
+     * We are using gemini-2.0-flash with generateContent.
+     * This model supports the "IMAGE" modality in generationConfig.
      */
-    const model = "gemini-2.0-flash-exp-image-generation";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
+    const model = "gemini-2.0-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     try {
       const incomingPayload = req.body;
       
-      // Extract prompt from the "instances" format sent by the frontend
       let promptText = "A lofi glitch terminal art piece.";
       if (incomingPayload.instances && incomingPayload.instances[0]?.prompt) {
         promptText = incomingPayload.instances[0].prompt;
@@ -42,16 +41,15 @@ export default async function handler(req, res) {
         promptText = incomingPayload.contents[0].parts[0].text;
       }
 
-      /**
-       * PREDICT PAYLOAD:
-       * This model expects "instances" containing the prompt.
-       */
-      const predictPayload = {
-        instances: [
-          { prompt: promptText }
+      const geminiPayload = {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: promptText }]
+          }
         ],
-        parameters: {
-          sampleCount: 1
+        generationConfig: {
+          responseModalities: ["IMAGE"]
         }
       };
 
@@ -60,36 +58,40 @@ export default async function handler(req, res) {
         headers: { 
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(predictPayload)
+        body: JSON.stringify(geminiPayload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        console.error("Imagen Predict API Error:", JSON.stringify(data, null, 2));
-        return res.status(response.status).json(data);
+        // Detailed error logging to help identify the exact mismatch
+        console.error("Source API Error:", JSON.stringify(data, null, 2));
+        return res.status(response.status).json({
+          error: data.error?.message || "Source Error",
+          code: data.error?.code,
+          status: data.error?.status,
+          detailedError: data // Returns the full object for terminal inspection
+        });
       }
 
-      /**
-       * PREDICT RESPONSE:
-       * The output is usually at predictions[0].bytesBase64Encoded.
-       */
-      const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
+      const candidates = data.candidates || [];
+      const imagePart = candidates[0]?.content?.parts?.find(p => p.inlineData);
+      const base64Data = imagePart?.inlineData?.data;
 
       if (!base64Data) {
         return res.status(500).json({ 
           error: "No image data returned from source.",
+          reason: candidates[0]?.finishReason || "UNKNOWN",
           details: data 
         });
       }
 
-      // Return in the format the frontend expects
       return res.status(200).json({
         predictions: [{ bytesBase64Encoded: base64Data }]
       });
     } catch (error) {
       console.error("Proxy execution error:", error);
-      return res.status(500).json({ error: 'Internal Server Error' });
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
   }
 
