@@ -326,6 +326,16 @@
                     isGameMode = true;
                     document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
                     addLog("ARCHITECT MODE ACTIVE.");
+                } else if (cmd === 'help') {
+                    addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
+                    addLog("  <span class='text-blue-400'>HELP</span>    - Display this manual");
+                    addLog("  <span class='text-blue-400'>LOOK</span>    - Visualize your surroundings");
+                    addLog("  <span class='text-blue-400'>DOWN</span>    - Descend deeper into the substructures");
+                    addLog("  <span class='text-blue-400'>SUMMON</span>  - Tune to an NPC frequency (e.g., 'SUMMON TANDY')");
+                    addLog("  <span class='text-blue-400'>QUEST</span>   - Begin Architect mode");
+                    addLog("  <span class='text-blue-400'>TEST</span>    - Verify Source connectivity");
+                    addLog("  <span class='text-blue-400'>LIST</span>    - Query available Source models");
+                    addLog("  <span class='text-amber-400'>\"[TEXT]\"</span> - Speak to an active NPC using quotes");
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
                 } else if (cmd === 'list') {
