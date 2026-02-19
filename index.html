@@ -444,6 +444,9 @@
                 if (!val || isProcessing) return;
                 const cmd = val.toLowerCase();
 
+                // Echo the user's input directly into the terminal log
+                addLog(val, "#ffffff");
+
                 if (cmd === 'quest') {
                     isGameMode = true;
                     document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
@@ -456,7 +459,7 @@
                     addLog("  <span class='text-blue-400'>TEST</span>    - Verify Source connectivity");
                     addLog("  <span class='text-blue-400'>LIST</span>    - Query available Source models");
                     addLog("  <span class='text-amber-400'>[ANY]</span>   - The System interprets all natural language intent.");
-                    addLog("             <span class='text-gray-500'>(e.g., 'go to the spare room', 'create a character', 'view my cards')</span>");
+                    addLog("             <span class='text-gray-500'>(e.g., 'go to the spare room', 'create a character named Jax', 'view my cards')</span>");
                     return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
@@ -496,7 +499,9 @@
                     3. Movement: Set "new_room" to the exact room key (e.g., 'kitchen') if the player moves.
                     4. Body Mechanics: Set "new_posture" or "new_facing" if the player changes physical orientation.
                     5. Visuals: Set "trigger_visual" with a description if the player looks at the environment significantly.
-                    6. Character Creation: ONLY ALLOWED IN THE 'spare_room'. If the user is in the 'spare_room' and expresses intent to create a character, look in the mirror to find themselves, or build an avatar, fill out the "trigger_character_creation" object.
+                    6. Character Creation: ONLY ALLOWED IN THE 'spare_room'. If the user expresses intent to create a character or look in the mirror:
+                       - If they DO NOT specify a name, ask them for a name in the narrative and do NOT set "trigger_character_creation".
+                       - If they DO specify a name (e.g., "I am Jack" or "create a character named Bob"), fill out the "trigger_character_creation" object using their chosen name.
                     7. View Characters: If the user wants to see their existing characters, cards, or avatars, set "trigger_view_characters": true.
                     
                     Respond STRICTLY in JSON:
