@@ -144,10 +144,8 @@
         <div id="output">
             <div id="log">
                 <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.8]</p>
-                <p>> Type <span class="text-amber-400">'QUEST'</span> to begin Architect mode.</p>
-                <p>> Type <span class="text-blue-400">'TEST'</span> to verify Source connectivity.</p>
-                <p>> Type <span class="text-blue-400">'LIST'</span> to query available models.</p>
-                <p>> Type <span class="text-blue-400">'HELP'</span> for a list of valid inputs.</p>
+                <p>> The Overarching Mind is Online.</p>
+                <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
             </div>
         </div>
 
@@ -191,7 +189,7 @@
 
         let worldState = { 
             archive: { 
-                description: "The Primary Archive. Stone walls etched with flickering code.", 
+                description: "The Primary Archive. Stone walls etched with flickering code. A ladder leads down into the darkness.", 
                 visualPrompt: "A dark high-tech dungeon archive, green glowing terminal symbols on damp stone walls.",
                 manifestations: [] 
             } 
@@ -310,82 +308,97 @@
                 if (!val || isProcessing) return;
                 const cmd = val.toLowerCase();
 
-                // 1. DIALOGUE SYSTEM (Talking to NPCs)
-                if (val.startsWith('"') || val.startsWith("'")) {
-                    if (!activeNPC) { addLog("The Archive is silent."); return; }
-                    isProcessing = true;
-                    addLog(`<span class="italic text-amber-500">PULSING SOURCE...</span>`);
-                    try {
-                        const res = await callGemini(val, `You are ${activeNPC.toUpperCase()}. A resident of the world. Respond JSON {text, manifestation: {action, visual_prompt}}.`);
-                        addLog(`${activeNPC.toUpperCase()}: ${res.text}`, activeNPC === 'tandy' ? "#50fa7b" : "#ff3e3e");
-                        if (res.manifestation?.visual_prompt) projectVisual(res.manifestation.visual_prompt);
-                        
-                        if (isSyncEnabled && user) {
-                            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
-                            await updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: `Said to ${activeNPC}: ${val}\nResponse: ${res.text}`, timestamp: Date.now() }) });
-                        }
-                    } catch (err) { addLog("LINK ERROR", "var(--term-red)"); }
-                    finally { isProcessing = false; }
-                
-                // 2. ACTION SYSTEM (The Overarching GM Mind)
-                } else if (cmd.startsWith('action ') || cmd.startsWith('do ')) {
-                    const userAction = val.substring(val.indexOf(' ') + 1);
-                    isProcessing = true;
-                    addLog(`<span class="italic" style="color: var(--gm-purple)">SYSTEM EVALUATING ACTION...</span>`);
-                    try {
-                        const currentDesc = worldState[localPlayer.currentRoom]?.description || "An undefined void.";
-                        const sysPrompt = `You are the Game Master (The Source) of Terra Agnostum. 
-                        Current Room: ${currentDesc}. 
-                        Player HP: ${localPlayer.hp}. 
-                        Describe the outcome of the player's action narratively. Be concise. 
-                        Respond strictly in JSON: {"narrative": "description of what happens", "manifestation": {"visual_prompt": "optional visual description of the outcome if a significant visual change occurs, otherwise null"}}`;
-                        
-                        const res = await callGemini(`Player action: ${userAction}`, sysPrompt);
-                        
-                        // Output the GM's response in a distinct purple color
-                        addLog(`[SYSTEM]: ${res.narrative}`, "var(--gm-purple)");
-                        
-                        if (res.manifestation?.visual_prompt) {
-                            projectVisual(res.manifestation.visual_prompt);
-                        }
-                        
-                        if (isSyncEnabled && user) {
-                            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
-                            await updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: `Action: ${userAction}\nOutcome: ${res.narrative}`, timestamp: Date.now() }) });
-                        }
-                    } catch (err) { 
-                        addLog("SYSTEM EVALUATION FAILED.", "var(--term-red)"); 
-                    }
-                    finally { isProcessing = false; }
-                
-                // 3. HARDCODED COMMANDS
-                } else if (cmd === 'quest') {
+                // 1. HARDCODED SYSTEM COMMANDS
+                // These run locally to save API calls and ensure system stability
+                if (cmd === 'quest') {
                     isGameMode = true;
                     document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
                     addLog("ARCHITECT MODE ACTIVE.");
+                    return;
                 } else if (cmd === 'help') {
                     addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
                     addLog("  <span class='text-blue-400'>HELP</span>    - Display this manual");
-                    addLog("  <span class='text-blue-400'>LOOK</span>    - Visualize your surroundings");
-                    addLog("  <span class='text-blue-400'>DOWN</span>    - Descend deeper into the substructures");
-                    addLog("  <span class='text-blue-400'>ACTION</span>  - Perform an action in the world (e.g., 'ACTION examine walls')");
-                    addLog("  <span class='text-blue-400'>SUMMON</span>  - Tune to an NPC frequency (e.g., 'SUMMON TANDY')");
                     addLog("  <span class='text-blue-400'>QUEST</span>   - Begin Architect mode");
-                    addLog("  <span class='text-amber-400'>\"[TEXT]\"</span> - Speak to an active NPC using quotes");
+                    addLog("  <span class='text-blue-400'>TEST</span>    - Verify Source connectivity");
+                    addLog("  <span class='text-blue-400'>LIST</span>    - Query available Source models");
+                    addLog("  <span class='text-amber-400'>[ANY]</span>   - The System interprets all natural language intent.");
+                    addLog("             <span class='text-gray-500'>(e.g., 'look around', 'summon Tandy', 'examine walls', '\"hello\"')</span>");
+                    return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
+                    return;
                 } else if (cmd === 'list') {
                     await listModels();
-                } else if (cmd === 'look') {
-                    addLog(worldState.archive.description, "#888");
-                    projectVisual(worldState.archive.visualPrompt);
-                } else if (cmd === 'down') {
-                    addLog("You descend deeper into the Archive's sub-structures.");
-                } else if (cmd.startsWith('summon')) {
-                    activeNPC = cmd.split(' ')[1];
-                    addLog(`${activeNPC?.toUpperCase()} frequency found.`);
-                } else {
-                    addLog("Command unrecognized. Type <span class='text-blue-400'>HELP</span> for options.");
+                    return;
+                }
+
+                // 2. THE UNIVERSAL GM INTENT ENGINE
+                // Everything else gets routed to the Game Master
+                isProcessing = true;
+                addLog(`<span class="italic" style="color: var(--gm-purple)">EVALUATING INTENT...</span>`);
+                
+                try {
+                    const currentDesc = worldState[localPlayer.currentRoom]?.description || "An undefined void.";
+                    const baseVisual = worldState[localPlayer.currentRoom]?.visualPrompt || "Darkness.";
+                    
+                    const sysPrompt = `You are the overarching Game Master (The Source) of Terra Agnostum, a text-based terminal reality.
+                    Your job is to interpret ALL user input, enforce game guardrails, and dictate the narrative outcome.
+                    
+                    Context:
+                    - Current Room: ${currentDesc}
+                    - Base Visual: ${baseVisual}
+                    - Active NPC in focus: ${activeNPC || "None"}
+                    - Player HP: ${localPlayer.hp}
+                    
+                    Rules:
+                    1. Natural Language Routing: Users can type anything (actions, dialog, movement, looking). You determine what happens.
+                    2. Dialog: If the user speaks (using quotes) and an NPC is active, respond as that NPC.
+                    3. Summoning: If the user tries to summon or tune to an NPC, acknowledge it and set the "set_npc" field.
+                    4. Looking/Visuals: If the user looks around or does an action that reveals something visually significant, provide a vivid description in "trigger_visual".
+                    5. Movement: If the user tries to leave the room (e.g., go down), describe the attempt.
+                    
+                    Respond STRICTLY in JSON:
+                    {
+                      "speaker": "Who is talking (e.g., 'SYSTEM', 'NARRATOR', or NPC Name)",
+                      "narrative": "The text to display to the user",
+                      "color": "Hex color or CSS var (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #50fa7b for NPCs, #ffb000 for warnings)",
+                      "trigger_visual": "A detailed visual prompt string if the environment should be drawn/updated, otherwise null",
+                      "set_npc": "Name of NPC to make active if summoning/talking to someone new, or null"
+                    }`;
+                    
+                    const res = await callGemini(`User Input: ${val}`, sysPrompt);
+                    
+                    // Apply State Changes defined by the GM
+                    if (res.set_npc) {
+                        activeNPC = res.set_npc;
+                        addLog(`[FREQUENCY TUNED: ${activeNPC.toUpperCase()}]`, "var(--crayola-blue)");
+                    }
+                    
+                    // Print Narrative
+                    const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
+                    addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
+                    
+                    // Trigger Visuals if the GM deemed it necessary
+                    if (res.trigger_visual) {
+                        projectVisual(res.trigger_visual);
+                    }
+                    
+                    // Sync to Firestore Shared Reality
+                    if (isSyncEnabled && user) {
+                        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
+                        await updateDoc(roomRef, { 
+                            manifestations: arrayUnion({ 
+                                author: user.uid, 
+                                text: `Input: ${val}\n${speakerPrefix}: ${res.narrative}`, 
+                                timestamp: Date.now() 
+                            }) 
+                        });
+                    }
+                } catch (err) { 
+                    console.error("GM Error:", err);
+                    addLog("SYSTEM EVALUATION FAILED.", "var(--term-red)"); 
+                } finally { 
+                    isProcessing = false; 
                 }
             }
         });
