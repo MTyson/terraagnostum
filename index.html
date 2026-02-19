@@ -228,7 +228,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -304,11 +304,32 @@
         let hasInitialized = false;
 
         if (isSyncEnabled) {
+            // Check if user is returning from a registration email link
+            if (isSignInWithEmailLink(auth, window.location.href)) {
+                let email = window.localStorage.getItem('emailForSignIn');
+                if (!email) {
+                    email = window.prompt('Please provide your email for confirmation');
+                }
+                signInWithEmailLink(auth, email, window.location.href)
+                    .then((result) => {
+                        window.localStorage.removeItem('emailForSignIn');
+                        addLog(`[SYSTEM]: Identity confirmed. Welcome to the Technate, Architect.`, "var(--crayola-blue)");
+                    })
+                    .catch((error) => {
+                        addLog(`[SYSTEM ERROR]: Registration link invalid or expired.`, "var(--term-red)");
+                    });
+            }
+
             onAuthStateChanged(auth, (u) => {
                 user = u;
                 if (user && !hasInitialized) {
                     hasInitialized = true;
-                    addLog(`ARCHITECT LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
+                    
+                    // Update Terminal Prefix based on Auth Status
+                    const userType = user.isAnonymous ? "GUEST" : "ARCHITECT";
+                    document.getElementById('prompt-prefix').innerHTML = `${userType}@ROOT:~$&nbsp;`;
+
+                    addLog(`${userType} LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
                     setupWorldListener();
                     
                     // Initial Landing Sequence
@@ -319,7 +340,11 @@
                     }, 800);
                 }
             });
-            signInAnonymously(auth);
+
+            // Fallback to anonymous auth if not already signed in and not processing a link
+            if (!auth.currentUser && !isSignInWithEmailLink(auth, window.location.href)) {
+                signInAnonymously(auth);
+            }
         }
 
         // We keep the listener to sync manifestations, but the map itself is hardcoded above for now
@@ -458,23 +483,53 @@
 
                 if (cmd === 'quest') {
                     isGameMode = true;
-                    document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
                     addLog("ARCHITECT MODE ACTIVE.");
                     return;
                 } else if (cmd === 'help') {
                     addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
-                    addLog("  <span class='text-blue-400'>HELP</span>    - Display this manual");
-                    addLog("  <span class='text-blue-400'>QUEST</span>   - Begin Architect mode");
-                    addLog("  <span class='text-blue-400'>TEST</span>    - Verify Source connectivity");
-                    addLog("  <span class='text-blue-400'>LIST</span>    - Query available Source models");
-                    addLog("  <span class='text-amber-400'>[ANY]</span>   - The System interprets all natural language intent.");
-                    addLog("             <span class='text-gray-500'>(e.g., 'go to the spare room', 'create a character named Jax', 'view my cards')</span>");
+                    addLog("  <span class='text-blue-400'>HELP</span>      - Display this manual");
+                    addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity (e.g., 'REGISTER email@domain.com')");
+                    addLog("  <span class='text-blue-400'>QUEST</span>     - Begin Architect mode");
+                    addLog("  <span class='text-blue-400'>TEST</span>      - Verify Source connectivity");
+                    addLog("  <span class='text-blue-400'>LIST</span>      - Query available Source models");
+                    addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets all natural language intent.");
+                    addLog("               <span class='text-gray-500'>(e.g., 'go to the spare room', 'create a character named Jax')</span>");
                     return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
                     return;
                 } else if (cmd === 'list') {
                     await listModels();
+                    return;
+                } else if (cmd.startsWith('join ') || cmd.startsWith('register ')) {
+                    const parts = val.split(' ');
+                    if (parts.length < 2) {
+                        addLog("[SYSTEM]: Please provide an email address (e.g., 'REGISTER name@domain.com').", "var(--term-amber)");
+                        return;
+                    }
+                    const email = parts[1];
+                    // Basic email validation
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        addLog("[SYSTEM]: Invalid email format detected.", "var(--term-red)");
+                        return;
+                    }
+
+                    addLog(`[SYSTEM]: Initiating secure registration protocol for ${email}...`, "var(--crayola-blue)");
+                    
+                    const actionCodeSettings = {
+                        url: window.location.href, // Redirects back to the terminal
+                        handleCodeInApp: true
+                    };
+
+                    sendSignInLinkToEmail(auth, email, actionCodeSettings)
+                        .then(() => {
+                            window.localStorage.setItem('emailForSignIn', email);
+                            addLog(`[SYSTEM]: Registration link sent. Check your inbox to confirm identity and save state.`, "var(--term-green)");
+                        })
+                        .catch((error) => {
+                            console.error("Auth Error:", error);
+                            addLog(`[SYSTEM ERROR]: Failed to send link. Ensure domain is authorized in Firebase Settings.`, "var(--term-red)");
+                        });
                     return;
                 }
 
