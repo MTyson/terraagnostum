@@ -128,7 +128,8 @@
 
     <div class="terminal-container">
         <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
-            <span>Node: Seattle_Archive_23</span>
+            <span>Node: <span id="room-display">MAIN_ROOM</span></span>
+            <span id="player-status" class="text-amber-500">POS: STND | DIR: N</span>
             <span id="sync-status">SYNC: INITIALIZING</span>
             <span id="time-display">T+00:00:00</span>
         </div>
@@ -143,8 +144,9 @@
 
         <div id="output">
             <div id="log">
-                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.8]</p>
+                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.9]</p>
                 <p>> The Overarching Mind is Online.</p>
+                <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                 <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
             </div>
         </div>
@@ -187,14 +189,47 @@
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        let worldState = { 
-            archive: { 
-                description: "The Primary Archive. Stone walls etched with flickering code. A ladder leads down into the darkness.", 
-                visualPrompt: "A dark high-tech dungeon archive, green glowing terminal symbols on damp stone walls.",
-                manifestations: [] 
-            } 
+        // The Static Apartment Map
+        const apartmentMap = {
+            "main_room": {
+                name: "Main Room (Lore Room)",
+                description: "A dimly lit central living area. A large, flickering computer console dominates the space, humming with latent power.",
+                visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture."
+            },
+            "closet": {
+                name: "Schrödinger's Closet",
+                description: "A heavily reinforced closet door. It hums with quantum uncertainty. It is currently sealed shut.",
+                visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges."
+            },
+            "kitchen": {
+                name: "Small Kitchen",
+                description: "A cramped kitchenette with a dusty window looking out into an endless, foggy void.",
+                visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds."
+            },
+            "spare_room": {
+                name: "Spare Room (Character Room)",
+                description: "An empty room with mirrors covering the walls. A place to reflect and build oneself.",
+                visualPrompt: "An empty room with walls entirely made of mirrors, reflecting a lonely terminal interface in the center."
+            },
+            "bedroom": {
+                name: "Bedroom & Bathroom",
+                description: "A simple sleeping quarters with an attached, sterile bathroom.",
+                visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom."
+            },
+            "hallway": {
+                name: "Hallway",
+                description: "A narrow corridor connecting the apartment. The front door leading 'outside' is heavily deadbolted.",
+                visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door with multiple deadbolts, glowing red 'LOCKED' signs."
+            }
         };
-        let localPlayer = { hp: 20, currentRoom: "archive" };
+
+        let localPlayer = { 
+            hp: 20, 
+            currentRoom: "main_room",
+            posture: "standing", // standing, sitting, laying
+            facing: "north"      // north, south, east, west
+        };
+        
         let user = null;
 
         if (isSyncEnabled) {
@@ -208,16 +243,13 @@
             signInAnonymously(auth);
         }
 
+        // We keep the listener to sync manifestations, but the map itself is hardcoded above for now
         function setupWorldListener() {
             if (!db) return;
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
             onSnapshot(roomRef, (snap) => {
-                if (snap.exists()) {
-                    worldState.archive = snap.data();
-                    document.getElementById('sync-status').innerText = "SYNC: LIVE";
-                    document.getElementById('sync-status').style.color = "var(--term-green)";
-                } else {
-                    setDoc(roomRef, { ...worldState.archive, lastUpdated: serverTimestamp() });
+                if (!snap.exists()) {
+                    setDoc(roomRef, { created: serverTimestamp(), manifestations: [] });
                 }
             });
         }
@@ -281,6 +313,13 @@
             document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
         }
 
+        function updateStatusUI() {
+            const posShort = localPlayer.posture === 'standing' ? 'STND' : (localPlayer.posture === 'sitting' ? 'SIT' : 'LAY');
+            const dirShort = localPlayer.facing.charAt(0).toUpperCase();
+            document.getElementById('player-status').innerText = `POS: ${posShort} | DIR: ${dirShort}`;
+            document.getElementById('room-display').innerText = localPlayer.currentRoom.toUpperCase();
+        }
+
         async function callGemini(userInput, systemPrompt) {
             const res = await fetch(API_GENERATE, {
                 method: 'POST',
@@ -308,8 +347,6 @@
                 if (!val || isProcessing) return;
                 const cmd = val.toLowerCase();
 
-                // 1. HARDCODED SYSTEM COMMANDS
-                // These run locally to save API calls and ensure system stability
                 if (cmd === 'quest') {
                     isGameMode = true;
                     document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
@@ -322,7 +359,7 @@
                     addLog("  <span class='text-blue-400'>TEST</span>    - Verify Source connectivity");
                     addLog("  <span class='text-blue-400'>LIST</span>    - Query available Source models");
                     addLog("  <span class='text-amber-400'>[ANY]</span>   - The System interprets all natural language intent.");
-                    addLog("             <span class='text-gray-500'>(e.g., 'look around', 'summon Tandy', 'examine walls', '\"hello\"')</span>");
+                    addLog("             <span class='text-gray-500'>(e.g., 'go to the kitchen', 'sit down', 'face south', 'look out the window')</span>");
                     return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
@@ -333,37 +370,48 @@
                 }
 
                 // 2. THE UNIVERSAL GM INTENT ENGINE
-                // Everything else gets routed to the Game Master
                 isProcessing = true;
                 addLog(`<span class="italic" style="color: var(--gm-purple)">EVALUATING INTENT...</span>`);
                 
                 try {
-                    const currentDesc = worldState[localPlayer.currentRoom]?.description || "An undefined void.";
-                    const baseVisual = worldState[localPlayer.currentRoom]?.visualPrompt || "Darkness.";
+                    const currentRoomData = apartmentMap[localPlayer.currentRoom];
                     
                     const sysPrompt = `You are the overarching Game Master (The Source) of Terra Agnostum, a text-based terminal reality.
-                    Your job is to interpret ALL user input, enforce game guardrails, and dictate the narrative outcome.
                     
-                    Context:
-                    - Current Room: ${currentDesc}
-                    - Base Visual: ${baseVisual}
+                    Player Context:
+                    - Current Location: ${currentRoomData.name}
+                    - Room Description: ${currentRoomData.description}
+                    - Room Base Visual: ${currentRoomData.visualPrompt}
+                    - Player Posture: ${localPlayer.posture} (standing, sitting, laying)
+                    - Player Facing: ${localPlayer.facing} (north, south, east, west)
                     - Active NPC in focus: ${activeNPC || "None"}
                     - Player HP: ${localPlayer.hp}
                     
-                    Rules:
-                    1. Natural Language Routing: Users can type anything (actions, dialog, movement, looking). You determine what happens.
-                    2. Dialog: If the user speaks (using quotes) and an NPC is active, respond as that NPC.
-                    3. Summoning: If the user tries to summon or tune to an NPC, acknowledge it and set the "set_npc" field.
-                    4. Looking/Visuals: If the user looks around or does an action that reveals something visually significant, provide a vivid description in "trigger_visual".
-                    5. Movement: If the user tries to leave the room (e.g., go down), describe the attempt.
+                    World Map (The Apartment):
+                    - main_room: Center of the apartment, has the console.
+                    - kitchen: Small, has a window.
+                    - spare_room: Character room with mirrors.
+                    - bedroom: Attached to a bathroom.
+                    - hallway: Connects everything, contains front door.
+                    - closet: Schrödinger's Closet.
+
+                    Rules & Guardrails:
+                    1. Interpretation: Interpret user input to determine if they are talking, moving, looking, or changing posture/facing direction.
+                    2. Lock Enforcement: Schrödinger's Closet cannot be opened or entered. The outside door in the hallway cannot be opened. The player cannot go outside. If they try, narrative should explain they are locked.
+                    3. Movement: If the player moves to a new room, update "new_room" with the exact key (e.g., 'kitchen').
+                    4. Body Mechanics: If the player changes posture (e.g., "sit down") or facing (e.g., "turn around", "face north"), update "new_posture" or "new_facing". Note: It's hard to walk to a new room if sitting or laying down.
+                    5. Visuals: If the player looks at something significant, provide a prompt in "trigger_visual" combining the room's Base Visual with what they are looking at.
                     
                     Respond STRICTLY in JSON:
                     {
                       "speaker": "Who is talking (e.g., 'SYSTEM', 'NARRATOR', or NPC Name)",
-                      "narrative": "The text to display to the user",
-                      "color": "Hex color or CSS var (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #50fa7b for NPCs, #ffb000 for warnings)",
-                      "trigger_visual": "A detailed visual prompt string if the environment should be drawn/updated, otherwise null",
-                      "set_npc": "Name of NPC to make active if summoning/talking to someone new, or null"
+                      "narrative": "The text to display to the user describing the outcome.",
+                      "color": "Hex color or CSS var (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings)",
+                      "trigger_visual": "A detailed visual prompt string if a visual is needed, otherwise null",
+                      "set_npc": "Name of NPC to make active, or null",
+                      "new_room": "The room key if the player successfully moved, otherwise null",
+                      "new_posture": "The new posture if changed ('standing', 'sitting', 'laying'), otherwise null",
+                      "new_facing": "The new facing direction if changed ('north', 'south', 'east', 'west'), otherwise null"
                     }`;
                     
                     const res = await callGemini(`User Input: ${val}`, sysPrompt);
@@ -373,23 +421,39 @@
                         activeNPC = res.set_npc;
                         addLog(`[FREQUENCY TUNED: ${activeNPC.toUpperCase()}]`, "var(--crayola-blue)");
                     }
+
+                    let stateChanged = false;
+                    if (res.new_room && apartmentMap[res.new_room] && res.new_room !== localPlayer.currentRoom) {
+                        localPlayer.currentRoom = res.new_room;
+                        stateChanged = true;
+                    }
+                    if (res.new_posture && res.new_posture !== localPlayer.posture) {
+                        localPlayer.posture = res.new_posture;
+                        stateChanged = true;
+                    }
+                    if (res.new_facing && res.new_facing !== localPlayer.facing) {
+                        localPlayer.facing = res.new_facing;
+                        stateChanged = true;
+                    }
+
+                    if (stateChanged) updateStatusUI();
                     
                     // Print Narrative
                     const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
                     addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
                     
-                    // Trigger Visuals if the GM deemed it necessary
+                    // Trigger Visuals
                     if (res.trigger_visual) {
                         projectVisual(res.trigger_visual);
                     }
                     
-                    // Sync to Firestore Shared Reality
+                    // Sync to Firestore Shared Reality (Just the logs for now)
                     if (isSyncEnabled && user) {
-                        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
+                        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
                         await updateDoc(roomRef, { 
                             manifestations: arrayUnion({ 
                                 author: user.uid, 
-                                text: `Input: ${val}\n${speakerPrefix}: ${res.narrative}`, 
+                                text: `[${localPlayer.currentRoom}] Input: ${val} | ${speakerPrefix}: ${res.narrative}`, 
                                 timestamp: Date.now() 
                             }) 
                         });
