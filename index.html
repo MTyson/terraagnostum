@@ -12,6 +12,7 @@
             --term-red: #ff3e3e;
             --term-bg: #050505;
             --crayola-blue: #3b82f6;
+            --gm-purple: #a855f7;
         }
 
         @keyframes flicker {
@@ -146,6 +147,7 @@
                 <p>> Type <span class="text-amber-400">'QUEST'</span> to begin Architect mode.</p>
                 <p>> Type <span class="text-blue-400">'TEST'</span> to verify Source connectivity.</p>
                 <p>> Type <span class="text-blue-400">'LIST'</span> to query available models.</p>
+                <p>> Type <span class="text-blue-400">'HELP'</span> for a list of valid inputs.</p>
             </div>
         </div>
 
@@ -308,20 +310,55 @@
                 if (!val || isProcessing) return;
                 const cmd = val.toLowerCase();
 
+                // 1. DIALOGUE SYSTEM (Talking to NPCs)
                 if (val.startsWith('"') || val.startsWith("'")) {
                     if (!activeNPC) { addLog("The Archive is silent."); return; }
                     isProcessing = true;
                     addLog(`<span class="italic text-amber-500">PULSING SOURCE...</span>`);
                     try {
-                        const res = await callGemini(val, `You are ${activeNPC.toUpperCase()}. GM. Respond JSON {text, manifestation: {action, visual_prompt}}.`);
+                        const res = await callGemini(val, `You are ${activeNPC.toUpperCase()}. A resident of the world. Respond JSON {text, manifestation: {action, visual_prompt}}.`);
                         addLog(`${activeNPC.toUpperCase()}: ${res.text}`, activeNPC === 'tandy' ? "#50fa7b" : "#ff3e3e");
                         if (res.manifestation?.visual_prompt) projectVisual(res.manifestation.visual_prompt);
+                        
                         if (isSyncEnabled && user) {
                             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
-                            await updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: res.text, timestamp: Date.now() }) });
+                            await updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: `Said to ${activeNPC}: ${val}\nResponse: ${res.text}`, timestamp: Date.now() }) });
                         }
                     } catch (err) { addLog("LINK ERROR", "var(--term-red)"); }
                     finally { isProcessing = false; }
+                
+                // 2. ACTION SYSTEM (The Overarching GM Mind)
+                } else if (cmd.startsWith('action ') || cmd.startsWith('do ')) {
+                    const userAction = val.substring(val.indexOf(' ') + 1);
+                    isProcessing = true;
+                    addLog(`<span class="italic" style="color: var(--gm-purple)">SYSTEM EVALUATING ACTION...</span>`);
+                    try {
+                        const currentDesc = worldState[localPlayer.currentRoom]?.description || "An undefined void.";
+                        const sysPrompt = `You are the Game Master (The Source) of Terra Agnostum. 
+                        Current Room: ${currentDesc}. 
+                        Player HP: ${localPlayer.hp}. 
+                        Describe the outcome of the player's action narratively. Be concise. 
+                        Respond strictly in JSON: {"narrative": "description of what happens", "manifestation": {"visual_prompt": "optional visual description of the outcome if a significant visual change occurs, otherwise null"}}`;
+                        
+                        const res = await callGemini(`Player action: ${userAction}`, sysPrompt);
+                        
+                        // Output the GM's response in a distinct purple color
+                        addLog(`[SYSTEM]: ${res.narrative}`, "var(--gm-purple)");
+                        
+                        if (res.manifestation?.visual_prompt) {
+                            projectVisual(res.manifestation.visual_prompt);
+                        }
+                        
+                        if (isSyncEnabled && user) {
+                            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive');
+                            await updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: `Action: ${userAction}\nOutcome: ${res.narrative}`, timestamp: Date.now() }) });
+                        }
+                    } catch (err) { 
+                        addLog("SYSTEM EVALUATION FAILED.", "var(--term-red)"); 
+                    }
+                    finally { isProcessing = false; }
+                
+                // 3. HARDCODED COMMANDS
                 } else if (cmd === 'quest') {
                     isGameMode = true;
                     document.getElementById('prompt-prefix').innerHTML = `${user?.uid.substring(0,4) || 'ARCH'}@ARCHIVE:~$&nbsp;`;
@@ -331,10 +368,9 @@
                     addLog("  <span class='text-blue-400'>HELP</span>    - Display this manual");
                     addLog("  <span class='text-blue-400'>LOOK</span>    - Visualize your surroundings");
                     addLog("  <span class='text-blue-400'>DOWN</span>    - Descend deeper into the substructures");
+                    addLog("  <span class='text-blue-400'>ACTION</span>  - Perform an action in the world (e.g., 'ACTION examine walls')");
                     addLog("  <span class='text-blue-400'>SUMMON</span>  - Tune to an NPC frequency (e.g., 'SUMMON TANDY')");
                     addLog("  <span class='text-blue-400'>QUEST</span>   - Begin Architect mode");
-                    addLog("  <span class='text-blue-400'>TEST</span>    - Verify Source connectivity");
-                    addLog("  <span class='text-blue-400'>LIST</span>    - Query available Source models");
                     addLog("  <span class='text-amber-400'>\"[TEXT]\"</span> - Speak to an active NPC using quotes");
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
@@ -349,7 +385,7 @@
                     activeNPC = cmd.split(' ')[1];
                     addLog(`${activeNPC?.toUpperCase()} frequency found.`);
                 } else {
-                    addLog("Command unrecognized.");
+                    addLog("Command unrecognized. Type <span class='text-blue-400'>HELP</span> for options.");
                 }
             }
         });
