@@ -301,13 +301,22 @@
         
         let localCharacters = []; // Stores characters created during this session
         let user = null;
+        let hasInitialized = false;
 
         if (isSyncEnabled) {
             onAuthStateChanged(auth, (u) => {
                 user = u;
-                if (user) {
+                if (user && !hasInitialized) {
+                    hasInitialized = true;
                     addLog(`ARCHITECT LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
                     setupWorldListener();
+                    
+                    // Initial Landing Sequence
+                    setTimeout(() => {
+                        const startRoom = apartmentMap[localPlayer.currentRoom];
+                        addLog(`[NARRATOR]: ${startRoom.description}`, "#888");
+                        projectVisual(startRoom.visualPrompt);
+                    }, 800);
                 }
             });
             signInAnonymously(auth);
