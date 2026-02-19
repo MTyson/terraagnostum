@@ -122,6 +122,75 @@
             60% { content: '...'; }
             80%, 100% { content: ''; }
         }
+
+        /* Character Card Styles */
+        .char-card {
+            border: 1px solid var(--term-amber);
+            border-radius: 6px;
+            background: rgba(20, 20, 20, 0.8);
+            width: 280px;
+            display: inline-block;
+            margin: 10px 10px 10px 0;
+            padding: 12px;
+            text-align: left;
+            box-shadow: 0 0 10px rgba(255, 176, 0, 0.1);
+            vertical-align: top;
+        }
+        .char-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+        }
+        .char-card-title {
+            font-weight: bold;
+            color: var(--term-green);
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+        .char-card-archetype {
+            color: var(--term-amber);
+            font-size: 0.7em;
+            text-transform: uppercase;
+        }
+        .char-card-img-container {
+            width: 100%;
+            height: 180px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+        .char-card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.8;
+            filter: grayscale(20%) contrast(120%);
+        }
+        .char-card-desc {
+            font-size: 0.75em;
+            margin-bottom: 8px;
+            color: #aaa;
+            line-height: 1.3;
+            height: 40px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .char-card-stats {
+            background: #000;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            color: var(--crayola-blue);
+            display: flex;
+            justify-content: space-around;
+            border: 1px solid #222;
+        }
     </style>
 </head>
 <body class="crt">
@@ -230,6 +299,7 @@
             facing: "north"      // north, south, east, west
         };
         
+        let localCharacters = []; // Stores characters created during this session
         let user = null;
 
         if (isSyncEnabled) {
@@ -276,6 +346,33 @@
                 }
             } catch (e) { addLog("VISUAL BUFFER ERROR", "var(--term-red)"); }
             finally { loader.classList.add('hidden'); }
+        }
+
+        function renderCharacterCard(charData, imgSrc) {
+            const log = document.getElementById('log');
+            const wrapper = document.createElement('div');
+            
+            wrapper.innerHTML = `
+                <div class="char-card">
+                    <div class="char-card-header">
+                        <span class="char-card-title">${charData.name}</span>
+                        <span class="char-card-archetype">${charData.archetype}</span>
+                    </div>
+                    <div class="char-card-img-container">
+                        ${imgSrc ? `<img class="char-card-img" src="${imgSrc}" alt="${charData.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[IMAGE UNAVAILABLE]</div>`}
+                    </div>
+                    <div class="char-card-desc">
+                        ${charData.visual_prompt}
+                    </div>
+                    <div class="char-card-stats">
+                        <span>STR: ${charData.stats.STR || 10}</span>
+                        <span>DEX: ${charData.stats.DEX || 10}</span>
+                        <span>INT: ${charData.stats.INT || 10}</span>
+                    </div>
+                </div>
+            `;
+            log.appendChild(wrapper);
+            document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
         }
 
         async function listModels() {
@@ -359,7 +456,7 @@
                     addLog("  <span class='text-blue-400'>TEST</span>    - Verify Source connectivity");
                     addLog("  <span class='text-blue-400'>LIST</span>    - Query available Source models");
                     addLog("  <span class='text-amber-400'>[ANY]</span>   - The System interprets all natural language intent.");
-                    addLog("             <span class='text-gray-500'>(e.g., 'go to the kitchen', 'sit down', 'face south', 'look out the window')</span>");
+                    addLog("             <span class='text-gray-500'>(e.g., 'go to the spare room', 'create a character', 'view my cards')</span>");
                     return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
@@ -379,39 +476,41 @@
                     const sysPrompt = `You are the overarching Game Master (The Source) of Terra Agnostum, a text-based terminal reality.
                     
                     Player Context:
-                    - Current Location: ${currentRoomData.name}
+                    - Current Location: ${currentRoomData.name} (Key: ${localPlayer.currentRoom})
                     - Room Description: ${currentRoomData.description}
-                    - Room Base Visual: ${currentRoomData.visualPrompt}
                     - Player Posture: ${localPlayer.posture} (standing, sitting, laying)
                     - Player Facing: ${localPlayer.facing} (north, south, east, west)
                     - Active NPC in focus: ${activeNPC || "None"}
-                    - Player HP: ${localPlayer.hp}
                     
                     World Map (The Apartment):
                     - main_room: Center of the apartment, has the console.
                     - kitchen: Small, has a window.
-                    - spare_room: Character room with mirrors.
+                    - spare_room: Character room with mirrors. (Crucial for character creation).
                     - bedroom: Attached to a bathroom.
                     - hallway: Connects everything, contains front door.
                     - closet: Schrödinger's Closet.
 
                     Rules & Guardrails:
-                    1. Interpretation: Interpret user input to determine if they are talking, moving, looking, or changing posture/facing direction.
-                    2. Lock Enforcement: Schrödinger's Closet cannot be opened or entered. The outside door in the hallway cannot be opened. The player cannot go outside. If they try, narrative should explain they are locked.
-                    3. Movement: If the player moves to a new room, update "new_room" with the exact key (e.g., 'kitchen').
-                    4. Body Mechanics: If the player changes posture (e.g., "sit down") or facing (e.g., "turn around", "face north"), update "new_posture" or "new_facing". Note: It's hard to walk to a new room if sitting or laying down.
-                    5. Visuals: If the player looks at something significant, provide a prompt in "trigger_visual" combining the room's Base Visual with what they are looking at.
+                    1. Interpretation: Interpret user input for talking, moving, looking, or changing posture.
+                    2. Lock Enforcement: Schrödinger's Closet and the Outside Door are locked. Do not let the player enter them.
+                    3. Movement: Set "new_room" to the exact room key (e.g., 'kitchen') if the player moves.
+                    4. Body Mechanics: Set "new_posture" or "new_facing" if the player changes physical orientation.
+                    5. Visuals: Set "trigger_visual" with a description if the player looks at the environment significantly.
+                    6. Character Creation: ONLY ALLOWED IN THE 'spare_room'. If the user is in the 'spare_room' and expresses intent to create a character, look in the mirror to find themselves, or build an avatar, fill out the "trigger_character_creation" object.
+                    7. View Characters: If the user wants to see their existing characters, cards, or avatars, set "trigger_view_characters": true.
                     
                     Respond STRICTLY in JSON:
                     {
-                      "speaker": "Who is talking (e.g., 'SYSTEM', 'NARRATOR', or NPC Name)",
+                      "speaker": "Who is talking (e.g., 'SYSTEM', 'NARRATOR')",
                       "narrative": "The text to display to the user describing the outcome.",
-                      "color": "Hex color or CSS var (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings)",
+                      "color": "Hex color (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings)",
                       "trigger_visual": "A detailed visual prompt string if a visual is needed, otherwise null",
                       "set_npc": "Name of NPC to make active, or null",
-                      "new_room": "The room key if the player successfully moved, otherwise null",
-                      "new_posture": "The new posture if changed ('standing', 'sitting', 'laying'), otherwise null",
-                      "new_facing": "The new facing direction if changed ('north', 'south', 'east', 'west'), otherwise null"
+                      "new_room": "The room key if moved, otherwise null",
+                      "new_posture": "New posture if changed, otherwise null",
+                      "new_facing": "New facing if changed, otherwise null",
+                      "trigger_view_characters": false,
+                      "trigger_character_creation": null // OR an object: {"name": "...", "archetype": "...", "visual_prompt": "...", "stats": {"STR": 10, "DEX": 10, "INT": 10}}
                     }`;
                     
                     const res = await callGemini(`User Input: ${val}`, sysPrompt);
@@ -442,8 +541,44 @@
                     const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
                     addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
                     
-                    // Trigger Visuals
-                    if (res.trigger_visual) {
+                    // Handle Character Creation Magic (MTG Card logic)
+                    if (res.trigger_character_creation) {
+                        const charData = res.trigger_character_creation;
+                        addLog(`[SYSTEM]: Extracting genetic imprint for [${charData.name}]...`, "var(--gm-purple)");
+                        
+                        let cardImageSrc = "";
+                        try {
+                            // Specifically requesting a portrait/card style image from the Source
+                            const imgRes = await fetch(API_IMAGE, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ instances: [{ prompt: `Highly detailed character portrait, Magic the Gathering card art style, cyberpunk aesthetic: ${charData.visual_prompt}` }] })
+                            });
+                            const imgData = await imgRes.json();
+                            if (imgData.predictions?.[0]) {
+                                cardImageSrc = `data:image/png;base64,${imgData.predictions[0].bytesBase64Encoded}`;
+                            }
+                        } catch (e) {
+                            console.error("Card Image Error", e);
+                        }
+                        
+                        renderCharacterCard(charData, cardImageSrc);
+                        localCharacters.push({ ...charData, image: cardImageSrc });
+                        addLog(`[SYSTEM]: Character Card Registered to Local Memory.`, "var(--term-green)");
+                    }
+
+                    // Handle Viewing existing characters
+                    if (res.trigger_view_characters) {
+                        if (localCharacters.length === 0) {
+                            addLog("[SYSTEM]: No manifestations found. Look into the mirrors of the Spare Room to create one.", "var(--term-amber)");
+                        } else {
+                            addLog(`[SYSTEM]: Retrieving ${localCharacters.length} active manifestations...`, "var(--crayola-blue)");
+                            localCharacters.forEach(c => renderCharacterCard(c, c.image));
+                        }
+                    }
+
+                    // Trigger Environment Visuals
+                    if (res.trigger_visual && !res.trigger_character_creation) {
                         projectVisual(res.trigger_visual);
                     }
                     
