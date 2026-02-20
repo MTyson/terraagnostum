@@ -1,40 +1,1082 @@
-# > TANDEM OS // TERRA AGNOSTUM TERMINAL
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TERRA AGNOSTUM | Shared Reality Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --term-green: #00ff41;
+            --term-amber: #ffb000;
+            --term-red: #ff3e3e;
+            --term-bg: #050505;
+            --crayola-blue: #3b82f6;
+            --gm-purple: #a855f7;
+        }
 
-`>> SYSTEM STATE: LIVE`  
-`>> NODE: SECURE`  
-`>> RENDER MODE: CONSENSUS`
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            100% { opacity: 1; }
+        }
 
-Welcome to the Archive. 
+        body, html {
+            background-color: var(--term-bg);
+            color: var(--term-green);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
 
-This repository contains the source code for the **Terra Agnostum Shared Reality Terminal**. To the uninitiated in the Mundane, this appears to be a web-based, AI-mediated MUD (Multi-User Dungeon). In truth, it is a bridge. 
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 20;
+            pointer-events: none;
+        }
 
-The UI is a pure function of state. Reality is not a fixed construct you merely inhabit; it is a render maintained by consensus. The world will take shape incrementally, becoming more real as you pour your consciousness into it. 
+        .terminal-container {
+            position: relative;
+            z-index: 10;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
 
-*"Whatever the consciousness conceives of as the order of nature (niyati) in that universe, that comes to be established there."*
+        #output {
+            flex-grow: 1;
+            overflow-y: auto;
+            scrollbar-width: none;
+            padding-bottom: 20px;
+        }
 
-## [ SYSTEM CAPABILITIES ]
+        .visual-buffer {
+            width: 100%;
+            height: 250px;
+            border: 1px solid #1a3a1a;
+            margin-bottom: 15px;
+            background: #000;
+            display: none;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+        }
 
-* **AI-Mediated Reality (The Eld Master):** A dynamic, LLM-powered Game Master persona that evaluates user intent, generates real-time narrative responses, and enforces the physical and metaphysical laws of the render.
-* **Semantic Scripting (Aethal Integration):** Execute low-level assembly commands directly on the source code of reality using Aethal runes (e.g., `IXA` to ignite meaning, `SOL` to expose marginalia).
-* **Multi-Vector Sync:** Real-time, multiplayer state synchronization. When you alter the Archive, the rendering updates for all observing manifestations.
-* **Somatic Glitch Engine:** Push too much "Amn" (meaning) into the render, and the system will push back. High-stakes actions run the risk of desaturating the user's environment or triggering localized narrative loops.
+        #visual-image { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            opacity: 0.7; 
+        }
 
-## [ ARCHITECTURE ]
+        .visual-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 2px 8px;
+            font-size: 10px;
+            color: var(--term-amber);
+            text-transform: uppercase;
+        }
 
-The terminal is built to be lightweight, resilient, and highly decentralized to avoid detection by the Technate.
+        .input-area {
+            display: flex;
+            align-items: center;
+            border-top: 1px solid #1a3a1a;
+            padding-top: 15px;
+            margin-top: 10px;
+        }
 
-* **Client:** Vanilla JavaScript, HTML5, TailwindCSS (The "Plasteel" Layer)
-* **Backend:** Node.js, Vercel Serverless Functions (The "Projection Spire")
-* **Database / State Sync:** MongoDB Atlas / Firebase (The "Amniosis Fluids")
-* **Cognitive Engine:** Gemini Large Language Model APIs (The "Ghost Filter")
+        #cmd-input {
+            background: transparent;
+            border: none;
+            color: var(--term-green);
+            outline: none;
+            flex-grow: 1;
+            font-family: inherit;
+            font-size: 1.1rem;
+        }
 
-## [ INITIALIZING THE NODE ]
+        .loading-dots:after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
 
-To establish a local instance of the Terminal, execute the following directives in your command line:
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: ''; }
+        }
 
-1. **Clone the Repository:**
-   ```bash
-   git clone [https://github.com/your-username/terra-agnostum.git](https://github.com/your-username/terra-agnostum.git)
-   cd terra-agnostum
+        /* Character Card Styles */
+        .char-card {
+            border: 1px solid var(--term-amber);
+            border-radius: 6px;
+            background: rgba(20, 20, 20, 0.8);
+            width: 280px;
+            display: inline-block;
+            margin: 10px 10px 10px 0;
+            padding: 12px;
+            text-align: left;
+            box-shadow: 0 0 10px rgba(255, 176, 0, 0.1);
+            vertical-align: top;
+        }
+        .char-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+        }
+        .char-card-title {
+            font-weight: bold;
+            color: var(--term-green);
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+        .char-card-archetype {
+            color: var(--term-amber);
+            font-size: 0.7em;
+            text-transform: uppercase;
+        }
+        .char-card-img-container {
+            width: 100%;
+            height: 180px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+        .char-card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.8;
+            filter: grayscale(20%) contrast(120%);
+        }
+        .char-card-desc {
+            font-size: 0.75em;
+            margin-bottom: 8px;
+            color: #aaa;
+            line-height: 1.3;
+            height: 40px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .char-card-stats {
+            background: #000;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            color: var(--crayola-blue);
+            display: flex;
+            justify-content: space-around;
+            border: 1px solid #222;
+        }
+    </style>
+</head>
+<body class="crt">
 
-*Whatever you do, O Seeker, know that it is nothing but pure consciousness.*
+    <!-- MAP MODAL OVERLAY -->
+    <div id="map-modal" class="hidden fixed inset-0 bg-black/85 z-[15] backdrop-blur-sm flex items-center justify-center" onclick="this.classList.add('hidden')">
+        <div class="border border-green-500 bg-[#050505] p-8 shadow-[0_0_20px_rgba(0,255,65,0.15)] text-green-500 font-mono" onclick="event.stopPropagation()">
+            <div class="text-amber-500 mb-6 border-b border-green-900 pb-2 text-xs uppercase tracking-widest text-center">
+                >> System.Schematic.Viewer // Tap outside to close <<
+            </div>
+            <pre id="map-content" class="text-sm leading-relaxed tracking-widest text-center"></pre>
+        </div>
+    </div>
+
+    <div class="terminal-container">
+        <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
+            <span>Node: <span id="room-display">LORE1</span></span>
+            <span id="player-status" class="text-amber-500">POS: STND | DIR: N</span>
+            <span id="sync-status">SYNC: INITIALIZING</span>
+            <span id="time-display">T+00:00:00</span>
+        </div>
+
+        <div class="flex flex-1 min-h-0">
+            <!-- MAIN TERMINAL COLUMN -->
+            <div class="flex flex-col flex-1 min-w-0 md:pr-4">
+                <div id="visual-buffer" class="visual-buffer">
+                    <div class="visual-overlay">Source Projection</div>
+                    <img id="visual-image" src="" alt="">
+                    <div id="visual-loading" class="absolute inset-0 flex items-center justify-center text-amber-500 text-xs italic hidden">
+                        RENDERING REALITY<span class="loading-dots"></span>
+                    </div>
+                </div>
+
+                <div id="output">
+                    <div id="log">
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.8]</p>
+                        <p>> The Overarching Mind is Online.</p>
+                        <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
+                        <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
+                    </div>
+                </div>
+
+                <div class="input-area">
+                    <span id="prompt-prefix" class="mr-2 opacity-80">GUEST@ROOT:~$&nbsp;</span>
+                    <input type="text" id="cmd-input" autofocus spellcheck="false" autocomplete="off">
+                </div>
+            </div>
+
+            <!-- BIOMETRICS & INVENTORY SIDEBAR (Hidden on mobile) -->
+            <div class="hidden md:flex w-64 flex-col border-l border-green-900 pl-4 overflow-y-auto shrink-0">
+                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2">SYSTEM.BIOMETRICS</div>
+                <div id="avatar-container">
+                    <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2">
+                        NO VESSEL DETECTED<br>AWAITING IMPRINT
+                    </div>
+                </div>
+                
+                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">SYSTEM.INVENTORY</div>
+                <div id="inventory-container" class="text-xs text-gray-500 flex flex-col gap-2">
+                    [EMPTY]
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
+            authDomain: "terra-agnostum.firebaseapp.com",
+            projectId: "terra-agnostum",
+            storageBucket: "terra-agnostum.firebasestorage.app",
+            messagingSenderId: "809154092201",
+            appId: "1:809154092201:web:95aaddd47c6ce021cf1db8"
+        };
+
+        const appId = 'terra-agnostum-shared';
+        const API_GENERATE = "/api/generate";
+        const API_IMAGE = "/api/image";
+
+        let app, auth, db;
+        let isSyncEnabled = false;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            isSyncEnabled = true;
+            document.getElementById('sync-status').innerText = "SYNC: READY";
+            document.getElementById('sync-status').style.color = "var(--term-amber)";
+        } catch (e) {
+            document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
+        }
+
+        // The Structured Graph Map (Now includes 'items' array)
+        let apartmentMap = {
+            "lore1": {
+                name: "Lore Room (West)",
+                shortName: "LORE1",
+                description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall.",
+                visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.",
+                exits: { east: "lore2", north: "closet", south: "bedroom" },
+                items: []
+            },
+            "lore2": {
+                name: "Lore Room (East)",
+                shortName: "LORE2",
+                description: "The eastern half of the main living area, acting as a central nexus connecting the apartment.",
+                visualPrompt: "A cyberpunk apartment living room, dim lighting, worn retro-futuristic couch, cables running along the floor.",
+                exits: { west: "lore1", north: "kitchen", east: "spare_room", south: "hallway" },
+                items: []
+            },
+            "closet": {
+                name: "Schrödinger's Closet",
+                shortName: "CLOSET",
+                description: "A heavily reinforced closet door north of the main console. It hums with quantum uncertainty. It is currently sealed shut.",
+                visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges.",
+                exits: { south: "lore1" },
+                items: []
+            },
+            "kitchen": {
+                name: "Small Kitchen",
+                shortName: "KITCHEN",
+                description: "A cramped kitchenette north of the living area with a dusty window looking out into an endless, foggy void.",
+                visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds.",
+                exits: { south: "lore2" },
+                items: []
+            },
+            "spare_room": {
+                name: "Spare Room (Character Room)",
+                shortName: "CHAR_RM",
+                description: "An empty room east of the main area with mirrors covering the walls. A place to reflect and build oneself.",
+                visualPrompt: "An empty room with walls entirely made of mirrors, reflecting a lonely terminal interface in the center.",
+                exits: { west: "lore2" },
+                items: []
+            },
+            "bedroom": {
+                name: "Bedroom & Bathroom",
+                shortName: "BEDROOM",
+                description: "A simple sleeping quarters south of the console with an attached, sterile bathroom.",
+                visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom.",
+                exits: { north: "lore1" },
+                items: []
+            },
+            "hallway": {
+                name: "Hallway",
+                shortName: "HALLWAY",
+                description: "A narrow corridor extending south. At the far southern end is the front door leading 'outside', heavily deadbolted.",
+                visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door with multiple deadbolts, glowing red 'LOCKED' signs.",
+                exits: { north: "lore2" },
+                items: []
+            }
+        };
+
+        // Player State now includes an Inventory array
+        let localPlayer = { 
+            hp: 20, 
+            currentRoom: "lore1",
+            posture: "standing",
+            facing: "north",
+            inventory: []
+        };
+        
+        let localCharacters = []; 
+        let activeAvatar = null;  
+        let user = null;
+        let hasInitialized = false;
+
+        // Creation Wizard State
+        let wizardState = {
+            active: false,
+            step: 0,
+            pendingItem: {}
+        };
+
+        if (isSyncEnabled) {
+            if (isSignInWithEmailLink(auth, window.location.href)) {
+                let email = window.localStorage.getItem('emailForSignIn');
+                if (!email) {
+                    email = window.prompt('Please provide your email for confirmation');
+                }
+                signInWithEmailLink(auth, email, window.location.href)
+                    .then((result) => {
+                        window.localStorage.removeItem('emailForSignIn');
+                        addLog(`[SYSTEM]: Identity confirmed. Welcome to the Technate, Architect.`, "var(--crayola-blue)");
+                    })
+                    .catch((error) => {
+                        addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
+                    });
+            }
+
+            onAuthStateChanged(auth, async (u) => {
+                user = u;
+                if (user && !hasInitialized) {
+                    hasInitialized = true;
+                    const userType = user.isAnonymous ? "GUEST" : "ARCHITECT";
+                    document.getElementById('prompt-prefix').innerHTML = `${userType}@ROOT:~$&nbsp;`;
+
+                    addLog(`${userType} LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
+                    
+                    setupWorldListener();
+                    setupMapListener();
+                    
+                    await loadPlayerState(); 
+                    loadUserCharacters();
+                    
+                    setTimeout(() => {
+                        printRoomDescription();
+                        updateStatusUI();
+                        updateInventoryUI();
+                        projectVisual(apartmentMap[localPlayer.currentRoom]?.visualPrompt || apartmentMap["lore1"].visualPrompt);
+                    }, 800);
+                }
+            });
+
+            if (!auth.currentUser && !isSignInWithEmailLink(auth, window.location.href)) {
+                signInAnonymously(auth);
+            }
+        }
+
+        function setupWorldListener() {
+            if (!db) return;
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
+            onSnapshot(roomRef, (snap) => {
+                if (!snap.exists()) {
+                    setDoc(roomRef, { created: serverTimestamp(), manifestations: [] });
+                }
+            });
+        }
+
+        function setupMapListener() {
+            if (!db) return;
+            // Bumped to v5 to add persistent Items array to all rooms
+            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+            onSnapshot(mapRef, (snap) => {
+                if (!snap.exists()) {
+                    setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
+                } else {
+                    const data = snap.data();
+                    if (data.nodes) {
+                        apartmentMap = data.nodes;
+                    }
+                }
+            });
+        }
+
+        async function loadPlayerState() {
+            if (!db || !user) return;
+            try {
+                const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+                const snap = await getDoc(stateRef);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    localPlayer = { 
+                        ...localPlayer, 
+                        ...data,
+                        inventory: data.inventory || [] // Ensure inventory array exists
+                    };
+                    if (localPlayer.currentRoom === 'main_room') {
+                        localPlayer.currentRoom = 'lore1';
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load player state:", e);
+            }
+        }
+
+        async function savePlayerState() {
+            if (!db || !user) return;
+            try {
+                const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+                await setDoc(stateRef, localPlayer);
+            } catch (e) {
+                console.error("Failed to save player state:", e);
+            }
+        }
+
+        async function loadUserCharacters() {
+            if (!db || !user) return;
+            try {
+                const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
+                const snap = await getDocs(charCol);
+                localCharacters = [];
+                snap.forEach(doc => {
+                    localCharacters.push(doc.data());
+                });
+                if (localCharacters.length > 0) {
+                    addLog(`[SYSTEM]: Retrieved ${localCharacters.length} saved avatar(s) from your private archive.`, "var(--term-green)");
+                    activeAvatar = localCharacters[localCharacters.length - 1];
+                    updateAvatarUI();
+                }
+            } catch (error) {
+                console.error("Failed to load characters:", error);
+            }
+        }
+
+        function updateAvatarUI() {
+            const container = document.getElementById('avatar-container');
+            if (!activeAvatar) return;
+
+            container.innerHTML = `
+                <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a]">
+                    <div class="char-card-header border-b border-[#1a3a1a] pb-2 mb-2">
+                        <span class="char-card-title text-[10px] text-amber-500">[ACTV] ${activeAvatar.name}</span>
+                        <span class="char-card-archetype text-[8px]">${activeAvatar.archetype}</span>
+                    </div>
+                    <div class="char-card-img-container h-32 border-[#1a3a1a] mb-2">
+                        ${activeAvatar.image ? `<img class="char-card-img" src="${activeAvatar.image}" alt="${activeAvatar.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[NO IMG]</div>`}
+                    </div>
+                    <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0">
+                        <span>STR: ${activeAvatar.stats.STR || 10}</span>
+                        <span>DEX: ${activeAvatar.stats.DEX || 10}</span>
+                        <span>INT: ${activeAvatar.stats.INT || 10}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateInventoryUI() {
+            const container = document.getElementById('inventory-container');
+            if (localPlayer.inventory.length === 0) {
+                container.innerHTML = "[EMPTY]";
+                return;
+            }
+            
+            container.innerHTML = localPlayer.inventory.map(item => `
+                <div class="border border-[#1a3a1a] p-2 rounded bg-black/40">
+                    <span class="text-amber-500 font-bold block">${item.name}</span>
+                    <span class="text-[9px] text-blue-400 uppercase">${item.type}</span>
+                    <div class="mt-1 leading-tight">${item.description}</div>
+                </div>
+            `).join('');
+        }
+
+        function printRoomDescription() {
+            const room = apartmentMap[localPlayer.currentRoom];
+            addLog(`[NARRATOR]: ${room.description}`, "#888");
+            
+            if (room.items && room.items.length > 0) {
+                const itemNames = room.items.map(i => `<span class="text-amber-400">${i.name}</span>`).join(', ');
+                addLog(`You see items resting here: ${itemNames}`, "#aaa");
+            }
+            
+            const exits = Object.keys(room.exits || {}).join(', ').toUpperCase();
+            addLog(`Obvious Exits: ${exits || 'NONE'}`, "#555");
+        }
+
+        function showMapModal() {
+            const modal = document.getElementById('map-modal');
+            const content = document.getElementById('map-content');
+
+            const getNode = (roomKey) => {
+                const short = apartmentMap[roomKey]?.shortName || "UNKNOWN";
+                if (localPlayer.currentRoom === roomKey) {
+                    return `<span class="text-black bg-green-500 font-bold px-1 shadow-[0_0_8px_rgba(0,255,65,0.8)]">[${short}]</span>`;
+                }
+                return `<span class="text-gray-600">[${short}]</span>`;
+            };
+
+            content.innerHTML = `
+       ${getNode('closet')}       ${getNode('kitchen')}
+          |             |
+       ${getNode('lore1')} --- ${getNode('lore2')} --- ${getNode('spare_room')}
+          |             |
+     ${getNode('bedroom')}      ${getNode('hallway')}
+                        |
+                  [ OUTSIDE ]
+                  ( LOCKED  )
+            `;
+            
+            modal.classList.remove('hidden');
+        }
+
+        async function compressImage(base64Str, maxWidth = 400, quality = 0.7) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => resolve(base64Str); 
+                img.src = base64Str;
+            });
+        }
+
+        async function projectVisual(prompt) {
+            const loader = document.getElementById('visual-loading');
+            const buffer = document.getElementById('visual-buffer');
+            const img = document.getElementById('visual-image');
+            buffer.style.display = 'block';
+            loader.classList.remove('hidden');
+            img.style.display = 'none';
+
+            try {
+                const res = await fetch(API_IMAGE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ instances: [{ prompt: `Lofi glitch terminal art: ${prompt}` }] })
+                });
+                const data = await res.json();
+                if (data.predictions?.[0]) {
+                    img.src = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+                    img.style.display = 'block';
+                    addLog("VISUAL BUFFER PULSED.", "var(--term-amber)");
+                }
+            } catch (e) { addLog("VISUAL BUFFER ERROR", "var(--term-red)"); }
+            finally { loader.classList.add('hidden'); }
+        }
+
+        function renderCharacterCard(charData, imgSrc) {
+            const log = document.getElementById('log');
+            const wrapper = document.createElement('div');
+            
+            wrapper.innerHTML = `
+                <div class="char-card">
+                    <div class="char-card-header">
+                        <span class="char-card-title">[SELF] ${charData.name}</span>
+                        <span class="char-card-archetype">${charData.archetype}</span>
+                    </div>
+                    <div class="char-card-img-container">
+                        ${imgSrc ? `<img class="char-card-img" src="${imgSrc}" alt="${charData.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[IMAGE UNAVAILABLE]</div>`}
+                    </div>
+                    <div class="char-card-desc">
+                        ${charData.visual_prompt}
+                    </div>
+                    <div class="char-card-stats">
+                        <span>STR: ${charData.stats.STR || 10}</span>
+                        <span>DEX: ${charData.stats.DEX || 10}</span>
+                        <span>INT: ${charData.stats.INT || 10}</span>
+                    </div>
+                </div>
+            `;
+            log.appendChild(wrapper);
+            document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
+        }
+
+        async function listModels() {
+            addLog("Querying Source for available models...", "var(--term-amber)");
+            try {
+                const res = await fetch(API_IMAGE);
+                const data = await res.json();
+                if (data.models) {
+                    addLog("AVAILABLE MODELS:");
+                    data.models.slice(0, 10).forEach(m => addLog(` - ${m.name.split('/').pop()}`, "#888"));
+                }
+            } catch (e) { addLog("FAILED TO LIST MODELS.", "var(--term-red)"); }
+        }
+
+        async function callSimpleTestAPI() {
+            addLog("Pinging Source Proxy...", "var(--term-amber)");
+            try {
+                const res = await fetch(API_GENERATE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "Respond with 'Source Link Operational'." }] }] })
+                });
+                const data = await res.json();
+                addLog(`SOURCE REPLY: ${data.candidates?.[0]?.content?.parts?.[0]?.text || "No reply."}`, "#50fa7b");
+            } catch (err) { addLog("LINK FAILURE", "var(--term-red)"); }
+        }
+
+        function addLog(text, color = 'var(--term-green)') {
+            const log = document.getElementById('log');
+            const p = document.createElement('div');
+            p.style.color = color;
+            p.className = 'mb-1';
+            p.innerHTML = `> ${text}`;
+            log.appendChild(p);
+            document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
+        }
+
+        function updateStatusUI() {
+            const posShort = localPlayer.posture === 'standing' ? 'STND' : (localPlayer.posture === 'sitting' ? 'SIT' : 'LAY');
+            const dirShort = localPlayer.facing.charAt(0).toUpperCase();
+            document.getElementById('player-status').innerText = `POS: ${posShort} | DIR: ${dirShort}`;
+            document.getElementById('room-display').innerText = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
+        }
+
+        // Shared Local Movement Logic
+        async function executeMovement(targetDir) {
+            const currentRoom = apartmentMap[localPlayer.currentRoom];
+            
+            if (targetDir === 'south' && localPlayer.currentRoom === 'hallway') {
+                addLog(`[SYSTEM]: The heavy metal door is deadbolted. You cannot go OUTSIDE.`, "var(--term-amber)");
+                return;
+            }
+
+            if (currentRoom.exits && currentRoom.exits[targetDir]) {
+                const nextRoomKey = currentRoom.exits[targetDir];
+                localPlayer.currentRoom = nextRoomKey;
+                const nextRoom = apartmentMap[nextRoomKey];
+                
+                updateStatusUI();
+                savePlayerState();
+                
+                addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
+                printRoomDescription();
+                projectVisual(nextRoom.visualPrompt);
+                
+                if (isSyncEnabled && user) {
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
+                    updateDoc(roomRef, { 
+                        manifestations: arrayUnion({ 
+                            author: user.uid, 
+                            text: `[${localPlayer.currentRoom}] User arrived from the ${targetDir}.`, 
+                            timestamp: Date.now() 
+                        }) 
+                    });
+                }
+            } else {
+                addLog(`[SYSTEM]: There is no path to the ${targetDir.toUpperCase()}.`, "var(--term-amber)");
+            }
+        }
+
+        // Creation Wizard Step Handler
+        function handleWizardInput(val) {
+            if (wizardState.step === 1) {
+                if (!val) { addLog(`[WIZARD]: Name cannot be empty. Enter item name:`, "var(--term-red)"); return; }
+                wizardState.pendingItem.name = val;
+                addLog(`[WIZARD]: Name set to '${val}'. What type of item is this? (e.g., Book, Key, Weapon)`, "var(--term-amber)");
+                wizardState.step++;
+            } else if (wizardState.step === 2) {
+                wizardState.pendingItem.type = val || 'Artifact';
+                addLog(`[WIZARD]: Type set to '${wizardState.pendingItem.type}'. Finally, provide a short physical description.`, "var(--term-amber)");
+                wizardState.step++;
+            } else if (wizardState.step === 3) {
+                wizardState.pendingItem.description = val || 'An unknown manifestation.';
+                wizardState.pendingItem.id = Date.now().toString(); // unique ID
+                
+                // Add to room locally
+                const room = apartmentMap[localPlayer.currentRoom];
+                if (!room.items) room.items = [];
+                room.items.push(wizardState.pendingItem);
+                
+                // Sync to Firebase
+                if (isSyncEnabled) {
+                    const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                    updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                }
+                
+                addLog(`[SYSTEM]: Successfully materialized [${wizardState.pendingItem.name}] into ${room.name}.`, "var(--term-green)");
+                
+                // Reset Wizard
+                document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
+                wizardState = { active: false, step: 0, pendingItem: {} };
+            }
+        }
+
+        async function callGemini(userInput, systemPrompt) {
+            const res = await fetch(API_GENERATE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: "user", parts: [{ text: userInput }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: { responseMimeType: "application/json" }
+                })
+            });
+            const data = await res.json();
+            return JSON.parse(data.candidates[0].content.parts[0].text);
+        }
+
+        let activeNPC = null;
+        let isProcessing = false;
+        let isGameMode = false;
+        const input = document.getElementById('cmd-input');
+
+        input.addEventListener('keydown', async (e) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && input.value === '') {
+                e.preventDefault();
+                if (wizardState.active || isProcessing) return;
+                
+                let dir = '';
+                if (e.key === 'ArrowUp') dir = 'north';
+                if (e.key === 'ArrowDown') dir = 'south';
+                if (e.key === 'ArrowLeft') dir = 'west';
+                if (e.key === 'ArrowRight') dir = 'east';
+                
+                addLog(dir, "#ffffff");
+                executeMovement(dir);
+                return;
+            }
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = input.value.trim();
+                input.value = '';
+                if (!val || isProcessing) return;
+                
+                addLog(val, "#ffffff");
+
+                // Route to Wizard if active
+                if (wizardState.active) {
+                    handleWizardInput(val);
+                    return;
+                }
+
+                const cmd = val.toLowerCase();
+
+                // --- 1. LOCAL SYSTEM & DETERMINISTIC INTERCEPTS ---
+                const dirMatch = cmd.match(/^(?:go\s+(?:to\s+(?:the\s+)?)?|move\s+|walk\s+|head\s+)?(north|south|east|west|n|s|e|w)$/);
+                
+                if (dirMatch) {
+                    const parsedDir = dirMatch[1];
+                    const expandMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west' };
+                    const targetDir = expandMap[parsedDir] || parsedDir;
+                    
+                    executeMovement(targetDir);
+                    return;
+                }
+
+                if (cmd === 'create') {
+                    wizardState.active = true;
+                    wizardState.step = 1;
+                    document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@MATERIA:~$</span>&nbsp;`;
+                    addLog(`[WIZARD]: Materialization Protocol Started. Enter the name of the new item:`, "var(--term-amber)");
+                    return;
+                } else if (cmd === 'look' || cmd === 'l') {
+                    printRoomDescription();
+                    projectVisual(apartmentMap[localPlayer.currentRoom].visualPrompt);
+                    return;
+                } else if (cmd.startsWith('take ') || cmd.startsWith('get ') || cmd.startsWith('pick up ')) {
+                    const itemName = cmd.replace(/^(take|get|pick up)\s+/, '').toLowerCase();
+                    const room = apartmentMap[localPlayer.currentRoom];
+                    
+                    const itemIdx = (room.items || []).findIndex(i => i.name.toLowerCase() === itemName);
+                    
+                    if (itemIdx > -1) {
+                        const item = room.items.splice(itemIdx, 1)[0];
+                        localPlayer.inventory.push(item);
+                        
+                        if (isSyncEnabled) {
+                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                        }
+                        savePlayerState();
+                        updateInventoryUI();
+                        
+                        addLog(`[SYSTEM]: You picked up [${item.name}].`, "var(--term-green)");
+                    } else {
+                        addLog(`[SYSTEM]: You don't see '${itemName}' here.`, "var(--term-amber)");
+                    }
+                    return;
+                } else if (cmd.startsWith('drop ')) {
+                    const itemName = cmd.replace(/^drop\s+/, '').toLowerCase();
+                    const itemIdx = localPlayer.inventory.findIndex(i => i.name.toLowerCase() === itemName);
+                    
+                    if (itemIdx > -1) {
+                        const item = localPlayer.inventory.splice(itemIdx, 1)[0];
+                        const room = apartmentMap[localPlayer.currentRoom];
+                        if (!room.items) room.items = [];
+                        room.items.push(item);
+                        
+                        if (isSyncEnabled) {
+                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                        }
+                        savePlayerState();
+                        updateInventoryUI();
+                        
+                        addLog(`[SYSTEM]: You dropped [${item.name}].`, "var(--term-amber)");
+                    } else {
+                        addLog(`[SYSTEM]: You are not carrying '${itemName}'.`, "var(--term-amber)");
+                    }
+                    return;
+                } else if (cmd === 'quest') {
+                    isGameMode = true;
+                    addLog("ARCHITECT MODE ACTIVE.");
+                    return;
+                } else if (cmd === 'map') {
+                    showMapModal();
+                    return;
+                } else if (cmd === 'inv' || cmd === 'inventory') {
+                    if (localPlayer.inventory.length === 0) {
+                        addLog("[SYSTEM]: Your inventory is empty.", "var(--term-amber)");
+                    } else {
+                        addLog("INVENTORY:", "var(--crayola-blue)");
+                        localPlayer.inventory.forEach(item => {
+                            addLog(`- ${item.name} [${item.type}]`, "var(--term-green)");
+                        });
+                    }
+                    return;
+                } else if (cmd === 'help') {
+                    addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
+                    addLog("  <span class='text-blue-400'>HELP</span>      - Display this manual");
+                    addLog("  <span class='text-blue-400'>LOOK</span>      - Inspect current room and items");
+                    addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move deterministically (or Arrow Keys)");
+                    addLog("  <span class='text-blue-400'>CREATE</span>    - Materialize a new item into the room");
+                    addLog("  <span class='text-blue-400'>TAKE/DROP</span> - Manage items (e.g., 'TAKE book')");
+                    addLog("  <span class='text-blue-400'>INV</span>       - List items currently held");
+                    addLog("  <span class='text-blue-400'>MAP</span>       - View visual graph of current sector");
+                    addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity");
+                    addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets natural language actions.");
+                    addLog("               <span class='text-gray-500'>(e.g., 'read Yoga Vasistha', 'sit on the couch')</span>");
+                    return;
+                } else if (cmd === 'test') {
+                    await callSimpleTestAPI();
+                    return;
+                } else if (cmd === 'list') {
+                    await listModels();
+                    return;
+                } else if (cmd.startsWith('join ') || cmd.startsWith('register ')) {
+                    const parts = val.split(' ');
+                    if (parts.length < 2) {
+                        addLog("[SYSTEM]: Please provide an email address.", "var(--term-amber)");
+                        return;
+                    }
+                    const email = parts[1];
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        addLog("[SYSTEM]: Invalid email format detected.", "var(--term-red)");
+                        return;
+                    }
+
+                    addLog(`[SYSTEM]: Initiating secure registration protocol for ${email}...`, "var(--crayola-blue)");
+                    const actionCodeSettings = { url: window.location.href, handleCodeInApp: true };
+
+                    sendSignInLinkToEmail(auth, email, actionCodeSettings)
+                        .then(() => {
+                            window.localStorage.setItem('emailForSignIn', email);
+                            addLog(`[SYSTEM]: Registration link sent. Check your inbox to confirm identity and save state.`, "var(--term-green)");
+                        })
+                        .catch((error) => {
+                            console.error("Auth Error:", error);
+                            if (error.code === 'auth/quota-exceeded') {
+                                addLog(`[SYSTEM ERROR]: The Archive's daily registration quota has been exceeded. Please try again tomorrow or contact the Lead Architect.`, "var(--term-red)");
+                            } else {
+                                addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
+                            }
+                        });
+                    return;
+                }
+
+                // --- 2. THE UNIVERSAL GM INTENT ENGINE (Fallback for Actions/Interaction) ---
+                isProcessing = true;
+                addLog(`<span class="italic" style="color: var(--gm-purple)">EVALUATING INTENT...</span>`);
+                
+                try {
+                    const currentRoomData = apartmentMap[localPlayer.currentRoom];
+                    const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
+                    const roomItemNames = (currentRoomData.items || []).map(i => i.name).join(', ');
+                    
+                    const sysPrompt = `You are the overarching Game Master (The Source) of Terra Agnostum, a text-based terminal reality.
+                    
+                    Player Context:
+                    - Current Location: ${currentRoomData.name} (Key: ${localPlayer.currentRoom})
+                    - Room Description: ${currentRoomData.description}
+                    - Items laying in Room: ${roomItemNames || "None"}
+                    - Player Posture: ${localPlayer.posture} (standing, sitting, laying)
+                    - Player Facing: ${localPlayer.facing} (north, south, east, west)
+                    - Player Inventory: ${inventoryNames || "Empty"}
+
+                    Rules & Guardrails:
+                    1. Interpretation: Interpret user input for talking, looking at specific details, interacting with items, or changing posture.
+                    2. Strict Movement: ALL movement is handled by the client. If the user tries to move (e.g. "go to char room"), REFUSE the action and instruct them to use directional commands (N, S, E, W) or Arrow Keys. Never output "new_room".
+                    3. Inventory Logic: ALL picking up and dropping of items is handled by the client via "TAKE" and "DROP" commands. Do NOT tell the user they picked something up.
+                    4. Item Usage (Narrative): If the user interacts with an item in their inventory or in the room (like "read Yoga Vasistha", "open the book"), provide the specific, flavorful outcome in the narrative (e.g., generate a profound, relevant quote from the book).
+                    5. Self Avatar Creation: ONLY ALLOWED IN THE 'spare_room'. Ask for a name if none is given, otherwise output "trigger_character_creation".
+                    
+                    Respond STRICTLY in JSON:
+                    {
+                      "speaker": "Who is talking (e.g., 'SYSTEM', 'NARRATOR')",
+                      "narrative": "The text to display to the user describing the outcome.",
+                      "color": "Hex color (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings)",
+                      "trigger_visual": "A detailed visual prompt string if a visual is needed, otherwise null",
+                      "set_npc": "Name of NPC to make active, or null",
+                      "new_room": null,
+                      "new_posture": "New posture if changed, otherwise null",
+                      "new_facing": "New facing if changed, otherwise null",
+                      "trigger_view_characters": false,
+                      "trigger_character_creation": null
+                    }`;
+                    
+                    const res = await callGemini(`User Input: ${val}`, sysPrompt);
+                    
+                    if (res.set_npc) {
+                        activeNPC = res.set_npc;
+                        addLog(`[FREQUENCY TUNED: ${activeNPC.toUpperCase()}]`, "var(--crayola-blue)");
+                    }
+
+                    let stateChanged = false;
+                    
+                    if (res.new_posture && res.new_posture !== localPlayer.posture) {
+                        localPlayer.posture = res.new_posture;
+                        stateChanged = true;
+                    }
+                    if (res.new_facing && res.new_facing !== localPlayer.facing) {
+                        localPlayer.facing = res.new_facing;
+                        stateChanged = true;
+                    }
+
+                    if (stateChanged) {
+                        updateStatusUI();
+                        savePlayerState(); 
+                    }
+                    
+                    const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
+                    addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
+                    
+                    if (res.trigger_character_creation) {
+                        const charData = res.trigger_character_creation;
+                        addLog(`[SYSTEM]: Extracting genetic imprint for your primary vessel [${charData.name}]...`, "var(--gm-purple)");
+                        
+                        let cardImageSrc = "";
+                        let compressedImageSrc = "";
+                        try {
+                            const imgRes = await fetch(API_IMAGE, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ instances: [{ prompt: `Highly detailed character portrait, Magic the Gathering card art style, cyberpunk aesthetic: ${charData.visual_prompt}` }] })
+                            });
+                            const imgData = await imgRes.json();
+                            if (imgData.predictions?.[0]) {
+                                cardImageSrc = `data:image/png;base64,${imgData.predictions[0].bytesBase64Encoded}`;
+                                compressedImageSrc = await compressImage(cardImageSrc);
+                            }
+                        } catch (e) {
+                            console.error("Card Image Error", e);
+                        }
+                        
+                        const fullCharData = { ...charData, image: compressedImageSrc || cardImageSrc, timestamp: Date.now() };
+                        renderCharacterCard(fullCharData, compressedImageSrc || cardImageSrc);
+                        localCharacters.push(fullCharData);
+                        activeAvatar = fullCharData; 
+                        updateAvatarUI(); 
+                        
+                        if (user) {
+                            try {
+                                const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
+                                await addDoc(charCol, fullCharData);
+                                addLog(`[SYSTEM]: Avatar Card [${charData.name}] permanently registered to your profile.`, "var(--term-green)");
+                            } catch (e) {
+                                console.error("Firestore Save Error:", e);
+                                addLog(`[SYSTEM ERROR]: Could not save Avatar to the archive. The image may still be too large.`, "var(--term-red)");
+                            }
+                        }
+                    }
+
+                    if (res.trigger_view_characters) {
+                        if (localCharacters.length === 0) {
+                            addLog("[SYSTEM]: No manifestations found. Look into the mirrors of the Spare Room to define your avatar.", "var(--term-amber)");
+                        } else {
+                            addLog(`[SYSTEM]: Retrieving ${localCharacters.length} active manifestations...`, "var(--crayola-blue)");
+                            localCharacters.forEach(c => renderCharacterCard(c, c.image));
+                        }
+                    }
+
+                    if (res.trigger_visual && !res.trigger_character_creation) {
+                        projectVisual(res.trigger_visual);
+                    }
+                    
+                    if (isSyncEnabled && user) {
+                        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
+                        await updateDoc(roomRef, { 
+                            manifestations: arrayUnion({ 
+                                author: user.uid, 
+                                text: `[${localPlayer.currentRoom}] Input: ${val} | ${speakerPrefix}: ${res.narrative}`, 
+                                timestamp: Date.now() 
+                            }) 
+                        });
+                    }
+                } catch (err) { 
+                    console.error("GM Error:", err);
+                    addLog("SYSTEM EVALUATION FAILED.", "var(--term-red)"); 
+                } finally { 
+                    isProcessing = false; 
+                }
+            }
+        });
+
+        setInterval(() => {
+            document.getElementById('time-display').innerText = `T+${new Date().toLocaleTimeString([], {hour12:false})}`;
+        }, 1000);
+    </script>
+</body>
+</html>
