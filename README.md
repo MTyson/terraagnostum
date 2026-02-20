@@ -1,5 +1,7 @@
 # > TANDEM OS // TERRA AGNOSTUM TERMINAL  // AGM (Artificial Game Master)
 
+<img width="1174" height="925" alt="unnamed" src="https://github.com/user-attachments/assets/333163ec-23a2-4e92-9262-3e06ebb0deb5" />
+
 `>> SYSTEM STATE: LIVE`  
 `>> NODE: SECURE`  
 `>> RENDER MODE: CONSENSUS`
