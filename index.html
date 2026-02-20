@@ -225,7 +225,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.4]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.5]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -282,56 +282,56 @@
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        // The Structured Graph Map (Nodes & Edges) - Updated Layout
+        // The Structured Graph Map (Nodes & Edges) - Now with explicit directional Exits
         let apartmentMap = {
             "lore1": {
                 name: "Lore Room (West)",
                 shortName: "LORE1",
                 description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall.",
                 visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.",
-                exits: ["lore2", "closet", "bedroom"]
+                exits: { east: "lore2", north: "closet", south: "bedroom" }
             },
             "lore2": {
                 name: "Lore Room (East)",
                 shortName: "LORE2",
                 description: "The eastern half of the main living area, acting as a central nexus connecting the apartment.",
                 visualPrompt: "A cyberpunk apartment living room, dim lighting, worn retro-futuristic couch, cables running along the floor.",
-                exits: ["lore1", "kitchen", "spare_room", "hallway"]
+                exits: { west: "lore1", north: "kitchen", east: "spare_room", south: "hallway" }
             },
             "closet": {
                 name: "Schrödinger's Closet",
                 shortName: "CLOSET",
                 description: "A heavily reinforced closet door north of the main console. It hums with quantum uncertainty. It is currently sealed shut.",
                 visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges.",
-                exits: ["lore1"]
+                exits: { south: "lore1" }
             },
             "kitchen": {
                 name: "Small Kitchen",
                 shortName: "KITCHEN",
                 description: "A cramped kitchenette north of the living area with a dusty window looking out into an endless, foggy void.",
                 visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds.",
-                exits: ["lore2"]
+                exits: { south: "lore2" }
             },
             "spare_room": {
                 name: "Spare Room (Character Room)",
                 shortName: "CHAR_RM",
                 description: "An empty room east of the main area with mirrors covering the walls. A place to reflect and build oneself.",
                 visualPrompt: "An empty room with walls entirely made of mirrors, reflecting a lonely terminal interface in the center.",
-                exits: ["lore2"]
+                exits: { west: "lore2" }
             },
             "bedroom": {
                 name: "Bedroom & Bathroom",
                 shortName: "BEDROOM",
                 description: "A simple sleeping quarters south of the console with an attached, sterile bathroom.",
                 visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom.",
-                exits: ["lore1"]
+                exits: { north: "lore1" }
             },
             "hallway": {
                 name: "Hallway",
                 shortName: "HALLWAY",
                 description: "A narrow corridor extending south. At the far southern end is the front door leading 'outside', heavily deadbolted.",
                 visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door with multiple deadbolts, glowing red 'LOCKED' signs.",
-                exits: ["lore2"]
+                exits: { north: "lore2" }
             }
         };
 
@@ -404,7 +404,8 @@
 
         function setupMapListener() {
             if (!db) return;
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v2');
+            // Bumped to v3 to force database override for new directional 'exits' schema
+            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v3');
             onSnapshot(mapRef, (snap) => {
                 if (!snap.exists()) {
                     setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
@@ -424,7 +425,6 @@
                 const snap = await getDoc(stateRef);
                 if (snap.exists()) {
                     localPlayer = { ...localPlayer, ...snap.data() };
-                    // Safely migrate users from old map version
                     if (localPlayer.currentRoom === 'main_room') {
                         localPlayer.currentRoom = 'lore1';
                     }
@@ -498,7 +498,6 @@
                 return `<span class="text-gray-600">[${short}]</span>`;
             };
 
-            // Redrawn ASCII layout for the new Lore 1 / Lore 2 setup
             content.innerHTML = `
        ${getNode('closet')}       ${getNode('kitchen')}
           |             |
@@ -659,6 +658,51 @@
 
                 addLog(val, "#ffffff");
 
+                // --- 1. LOCAL SYSTEM & DETERMINISTIC MOVEMENT INTERCEPT ---
+                
+                // Parse deterministic movement mapping (MUD-style)
+                const rawCmd = cmd.replace("go ", "").replace("move ", "").replace("walk ", "").replace("head ", "");
+                const dirMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west', 'north': 'north', 'south': 'south', 'east': 'east', 'west': 'west' };
+                
+                if (dirMap[rawCmd]) {
+                    const targetDir = dirMap[rawCmd];
+                    const currentRoom = apartmentMap[localPlayer.currentRoom];
+                    
+                    // Enforce physical constraints/locks locally
+                    if (targetDir === 'south' && localPlayer.currentRoom === 'hallway') {
+                        addLog(`[SYSTEM]: The heavy metal door is deadbolted. You cannot go OUTSIDE.`, "var(--term-amber)");
+                        return;
+                    }
+
+                    if (currentRoom.exits && currentRoom.exits[targetDir]) {
+                        const nextRoomKey = currentRoom.exits[targetDir];
+                        localPlayer.currentRoom = nextRoomKey;
+                        const nextRoom = apartmentMap[nextRoomKey];
+                        
+                        updateStatusUI();
+                        savePlayerState();
+                        
+                        addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
+                        addLog(`[NARRATOR]: ${nextRoom.description}`, "#888");
+                        projectVisual(nextRoom.visualPrompt);
+                        
+                        // Log movement to shared reality
+                        if (isSyncEnabled && user) {
+                            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
+                            updateDoc(roomRef, { 
+                                manifestations: arrayUnion({ 
+                                    author: user.uid, 
+                                    text: `[${localPlayer.currentRoom}] User arrived from the ${targetDir}.`, 
+                                    timestamp: Date.now() 
+                                }) 
+                            });
+                        }
+                    } else {
+                        addLog(`[SYSTEM]: There is no path to the ${targetDir.toUpperCase()}.`, "var(--term-amber)");
+                    }
+                    return;
+                }
+
                 if (cmd === 'quest') {
                     isGameMode = true;
                     addLog("ARCHITECT MODE ACTIVE.");
@@ -669,13 +713,10 @@
                 } else if (cmd === 'help') {
                     addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
                     addLog("  <span class='text-blue-400'>HELP</span>      - Display this manual");
+                    addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move between rooms deterministically");
                     addLog("  <span class='text-blue-400'>MAP</span>       - View visual graph of current sector");
                     addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity (e.g., 'REGISTER email@domain.com')");
-                    addLog("  <span class='text-blue-400'>QUEST</span>     - Begin Architect mode");
-                    addLog("  <span class='text-blue-400'>TEST</span>      - Verify Source connectivity");
-                    addLog("  <span class='text-blue-400'>LIST</span>      - Query available Source models");
-                    addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets all natural language intent.");
-                    addLog("               <span class='text-gray-500'>(e.g., 'go to the spare room', 'look in the mirror to create my avatar')</span>");
+                    addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets all other natural language intent.");
                     return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
@@ -713,12 +754,12 @@
                                 addLog(`[SYSTEM ERROR]: The Archive's daily registration quota has been exceeded. Please try again tomorrow or contact the Lead Architect.`, "var(--term-red)");
                             } else {
                                 addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
-                                addLog(`[SYSTEM]: Ensure your current URL is added to Firebase Console -> Authentication -> Settings -> Authorized domains.`, "var(--term-amber)");
                             }
                         });
                     return;
                 }
 
+                // --- 2. THE UNIVERSAL GM INTENT ENGINE (Fallback for Actions/Creation) ---
                 isProcessing = true;
                 addLog(`<span class="italic" style="color: var(--gm-purple)">EVALUATING INTENT...</span>`);
                 
@@ -735,18 +776,18 @@
                     - Active NPC in focus: ${activeNPC || "None"}
                     
                     World Map Graph (The Apartment):
-                    - lore1: Connects to 'lore2', 'closet', 'bedroom'. Contains the console.
-                    - lore2: Connects to 'lore1', 'kitchen', 'spare_room', 'hallway'.
-                    - kitchen: Connects to 'lore2'.
-                    - spare_room: Connects to 'lore2'. (Self avatar creation room).
-                    - hallway: Connects to 'lore2'. Contains locked front door at south end.
-                    - bedroom: Connects to 'lore1'.
-                    - closet: Connects to 'lore1'. (Locked).
+                    - lore1: Exits -> east to 'lore2', north to 'closet', south to 'bedroom'. Contains the console.
+                    - lore2: Exits -> west to 'lore1', north to 'kitchen', east to 'spare_room', south to 'hallway'.
+                    - kitchen: Exits -> south to 'lore2'.
+                    - spare_room: Exits -> west to 'lore2'. (Self avatar creation room).
+                    - hallway: Exits -> north to 'lore2'. Contains locked front door at south end.
+                    - bedroom: Exits -> north to 'lore1'.
+                    - closet: Exits -> south to 'lore1'. (Locked).
 
                     Rules & Guardrails:
-                    1. Interpretation: Interpret user input for talking, moving, looking, or changing posture.
+                    1. Interpretation: Interpret user input for talking, complex movement (e.g. "jump out the window"), looking, or changing posture.
                     2. Lock Enforcement: Schrödinger's Closet and the Outside Door are locked. Do not let the player enter them.
-                    3. Movement: Set "new_room" to the exact room key (e.g., 'kitchen') ONLY IF the player attempts to move to a CONNECTED room based on the graph above. If they try to move to an unconnected room, deny the action in the narrative.
+                    3. Movement: Set "new_room" to the exact room key (e.g., 'kitchen') ONLY IF the player attempts to move to a CONNECTED room based on the graph above via natural language. If they try to move to an unconnected room, deny the action in the narrative.
                     4. Body Mechanics: Set "new_posture" or "new_facing" if the player changes physical orientation.
                     5. Visuals: Set "trigger_visual" with a description if the player looks at the environment significantly.
                     6. Self Avatar Creation (PRIMARY IDENTITY): ONLY ALLOWED IN THE 'spare_room'. This establishes the user's permanent primary vessel/avatar in the world (NOT an NPC). If the user expresses intent to define themselves, create their avatar, or look in the mirror to see themselves:
@@ -777,9 +818,13 @@
 
                     let stateChanged = false;
                     // Strict Graph Movement validation client side just in case GM hallucinates
-                    if (res.new_room && apartmentMap[res.new_room] && apartmentMap[localPlayer.currentRoom].exits.includes(res.new_room)) {
-                        localPlayer.currentRoom = res.new_room;
-                        stateChanged = true;
+                    if (res.new_room && apartmentMap[res.new_room]) {
+                        // Validate the move is actually connected to the current room
+                        const validExits = Object.values(apartmentMap[localPlayer.currentRoom].exits || {});
+                        if (validExits.includes(res.new_room)) {
+                            localPlayer.currentRoom = res.new_room;
+                            stateChanged = true;
+                        }
                     }
                     if (res.new_posture && res.new_posture !== localPlayer.posture) {
                         localPlayer.posture = res.new_posture;
