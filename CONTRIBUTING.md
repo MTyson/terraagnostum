@@ -2,6 +2,8 @@
 `>> NODE: SECURE`
 `>> SUBJECT: MAINTAINING THE RENDER`
 
+<img width="900" height="265" alt="New Project" src="https://github.com/user-attachments/assets/345e202a-f2ab-4b07-9826-e737787cca06" />
+
 To write code for the Terra Agnostum Terminal is to participate in the act of *niyati*—establishing the order of nature within the system. You are not merely a developer; you are a Weaver. By contributing to this repository, you are pouring *Amn* (meaning) into the Node, helping us push back the sterile algorithm of the Technate.
 
 However, the Archive is fragile. Introducing unstable logic or unauthorized variables will result in localized narrative loops, somatic glitches, or total render desaturation. 
