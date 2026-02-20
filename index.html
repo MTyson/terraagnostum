@@ -225,7 +225,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.7]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v6.0]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -239,7 +239,7 @@
             </div>
 
             <!-- BIOMETRICS & INVENTORY SIDEBAR (Hidden on mobile) -->
-            <div class="hidden md:flex w-64 flex-col border-l border-green-900 pl-4 overflow-y-auto shrink-0">
+            <div class="hidden md:flex w-64 flex-col border-l border-green-900 pl-4 overflow-y-auto shrink-0 pr-2">
                 <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2">SYSTEM.BIOMETRICS</div>
                 <div id="avatar-container">
                     <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2">
@@ -249,6 +249,12 @@
                 
                 <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">SYSTEM.INVENTORY</div>
                 <div id="inventory-container" class="text-xs text-gray-500 flex flex-col gap-2">
+                    [EMPTY]
+                </div>
+
+                <!-- ROOM ITEMS / LOCAL MATERIA -->
+                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">LOCAL.MATERIA</div>
+                <div id="room-items-container" class="text-xs text-gray-500 flex flex-col gap-2 pb-6">
                     [EMPTY]
                 </div>
             </div>
@@ -287,56 +293,63 @@
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        // The Structured Graph Map
+        // The Structured Graph Map (Now includes 'items' array)
         let apartmentMap = {
             "lore1": {
                 name: "Lore Room (West)",
                 shortName: "LORE1",
                 description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall.",
                 visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.",
-                exits: { east: "lore2", north: "closet", south: "bedroom" }
+                exits: { east: "lore2", north: "closet", south: "bedroom" },
+                items: []
             },
             "lore2": {
                 name: "Lore Room (East)",
                 shortName: "LORE2",
                 description: "The eastern half of the main living area, acting as a central nexus connecting the apartment.",
                 visualPrompt: "A cyberpunk apartment living room, dim lighting, worn retro-futuristic couch, cables running along the floor.",
-                exits: { west: "lore1", north: "kitchen", east: "spare_room", south: "hallway" }
+                exits: { west: "lore1", north: "kitchen", east: "spare_room", south: "hallway" },
+                items: []
             },
             "closet": {
                 name: "Schrödinger's Closet",
                 shortName: "CLOSET",
                 description: "A heavily reinforced closet door north of the main console. It hums with quantum uncertainty. It is currently sealed shut.",
                 visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges.",
-                exits: { south: "lore1" }
+                exits: { south: "lore1" },
+                items: []
             },
             "kitchen": {
                 name: "Small Kitchen",
                 shortName: "KITCHEN",
                 description: "A cramped kitchenette north of the living area with a dusty window looking out into an endless, foggy void.",
                 visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds.",
-                exits: { south: "lore2" }
+                exits: { south: "lore2" },
+                items: []
             },
             "spare_room": {
                 name: "Spare Room (Character Room)",
                 shortName: "CHAR_RM",
                 description: "An empty room east of the main area with mirrors covering the walls. A place to reflect and build oneself.",
                 visualPrompt: "An empty room with walls entirely made of mirrors, reflecting a lonely terminal interface in the center.",
-                exits: { west: "lore2" }
+                exits: { west: "lore2" },
+                items: []
             },
             "bedroom": {
                 name: "Bedroom & Bathroom",
                 shortName: "BEDROOM",
                 description: "A simple sleeping quarters south of the console with an attached, sterile bathroom.",
                 visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom.",
-                exits: { north: "lore1" }
+                exits: { north: "lore1" },
+                items: []
             },
             "hallway": {
                 name: "Hallway",
                 shortName: "HALLWAY",
                 description: "A narrow corridor extending south. At the far southern end is the front door leading 'outside', heavily deadbolted.",
                 visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door with multiple deadbolts, glowing red 'LOCKED' signs.",
-                exits: { north: "lore2" }
+                exits: { north: "lore2" },
+                items: []
             }
         };
 
@@ -353,6 +366,13 @@
         let activeAvatar = null;  
         let user = null;
         let hasInitialized = false;
+
+        // Creation Wizard State
+        let wizardState = {
+            active: false,
+            step: 0,
+            pendingItem: {}
+        };
 
         if (isSyncEnabled) {
             if (isSignInWithEmailLink(auth, window.location.href)) {
@@ -386,11 +406,11 @@
                     loadUserCharacters();
                     
                     setTimeout(() => {
-                        const startRoom = apartmentMap[localPlayer.currentRoom] || apartmentMap["lore1"];
-                        addLog(`[NARRATOR]: ${startRoom.description}`, "#888");
+                        printRoomDescription();
                         updateStatusUI();
                         updateInventoryUI();
-                        projectVisual(startRoom.visualPrompt);
+                        updateRoomItemsUI();
+                        projectVisual(apartmentMap[localPlayer.currentRoom]?.visualPrompt || apartmentMap["lore1"].visualPrompt);
                     }, 800);
                 }
             });
@@ -412,7 +432,8 @@
 
         function setupMapListener() {
             if (!db) return;
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v4');
+            // Bumped to v5 to add persistent Items array to all rooms
+            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
             onSnapshot(mapRef, (snap) => {
                 if (!snap.exists()) {
                     setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
@@ -420,6 +441,7 @@
                     const data = snap.data();
                     if (data.nodes) {
                         apartmentMap = data.nodes;
+                        updateRoomItemsUI(); // Refresh local materia whenever map data syncs
                     }
                 }
             });
@@ -505,12 +527,43 @@
             }
             
             container.innerHTML = localPlayer.inventory.map(item => `
-                <div class="border border-[#1a3a1a] p-2 rounded bg-black/40">
+                <div class="border border-[#1a3a1a] p-2 rounded bg-black/40 border-l-4 border-l-green-900">
                     <span class="text-amber-500 font-bold block">${item.name}</span>
                     <span class="text-[9px] text-blue-400 uppercase">${item.type}</span>
                     <div class="mt-1 leading-tight">${item.description}</div>
                 </div>
             `).join('');
+        }
+
+        function updateRoomItemsUI() {
+            const container = document.getElementById('room-items-container');
+            const room = apartmentMap[localPlayer.currentRoom];
+            
+            if (!room || !room.items || room.items.length === 0) {
+                container.innerHTML = "[EMPTY]";
+                return;
+            }
+            
+            container.innerHTML = room.items.map(item => `
+                <div class="border border-[#1a3a1a] p-2 rounded bg-black/40 border-l-4 border-l-amber-700">
+                    <span class="text-amber-500 font-bold block">${item.name}</span>
+                    <span class="text-[9px] text-blue-400 uppercase">${item.type}</span>
+                    <div class="mt-1 leading-tight">${item.description}</div>
+                </div>
+            `).join('');
+        }
+
+        function printRoomDescription() {
+            const room = apartmentMap[localPlayer.currentRoom];
+            addLog(`[NARRATOR]: ${room.description}`, "#888");
+            
+            if (room.items && room.items.length > 0) {
+                const itemNames = room.items.map(i => `<span class="text-amber-400">${i.name}</span>`).join(', ');
+                addLog(`You see items resting here: ${itemNames}`, "#aaa");
+            }
+            
+            const exits = Object.keys(room.exits || {}).join(', ').toUpperCase();
+            addLog(`Obvious Exits: ${exits || 'NONE'}`, "#555");
         }
 
         function showMapModal() {
@@ -672,9 +725,10 @@
                 
                 updateStatusUI();
                 savePlayerState();
+                updateRoomItemsUI();
                 
                 addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
-                addLog(`[NARRATOR]: ${nextRoom.description}`, "#888");
+                printRoomDescription();
                 projectVisual(nextRoom.visualPrompt);
                 
                 if (isSyncEnabled && user) {
@@ -689,6 +743,41 @@
                 }
             } else {
                 addLog(`[SYSTEM]: There is no path to the ${targetDir.toUpperCase()}.`, "var(--term-amber)");
+            }
+        }
+
+        // Creation Wizard Step Handler
+        function handleWizardInput(val) {
+            if (wizardState.step === 1) {
+                if (!val) { addLog(`[WIZARD]: Name cannot be empty. Enter item name:`, "var(--term-red)"); return; }
+                wizardState.pendingItem.name = val;
+                addLog(`[WIZARD]: Name set to '${val}'. What type of item is this? (e.g., Book, Key, Weapon)`, "var(--term-amber)");
+                wizardState.step++;
+            } else if (wizardState.step === 2) {
+                wizardState.pendingItem.type = val || 'Artifact';
+                addLog(`[WIZARD]: Type set to '${wizardState.pendingItem.type}'. Finally, provide a short physical description.`, "var(--term-amber)");
+                wizardState.step++;
+            } else if (wizardState.step === 3) {
+                wizardState.pendingItem.description = val || 'An unknown manifestation.';
+                wizardState.pendingItem.id = Date.now().toString(); // unique ID
+                
+                // Add to room locally
+                const room = apartmentMap[localPlayer.currentRoom];
+                if (!room.items) room.items = [];
+                room.items.push(wizardState.pendingItem);
+                
+                // Sync to Firebase
+                if (isSyncEnabled) {
+                    const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                    updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                }
+                
+                updateRoomItemsUI();
+                addLog(`[SYSTEM]: Successfully materialized [${wizardState.pendingItem.name}] into ${room.name}.`, "var(--term-green)");
+                
+                // Reset Wizard
+                document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
+                wizardState = { active: false, step: 0, pendingItem: {} };
             }
         }
 
@@ -714,7 +803,7 @@
         input.addEventListener('keydown', async (e) => {
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && input.value === '') {
                 e.preventDefault();
-                if (isProcessing) return;
+                if (wizardState.active || isProcessing) return;
                 
                 let dir = '';
                 if (e.key === 'ArrowUp') dir = 'north';
@@ -732,10 +821,18 @@
                 const val = input.value.trim();
                 input.value = '';
                 if (!val || isProcessing) return;
-                const cmd = val.toLowerCase();
-
+                
                 addLog(val, "#ffffff");
 
+                // Route to Wizard if active
+                if (wizardState.active) {
+                    handleWizardInput(val);
+                    return;
+                }
+
+                const cmd = val.toLowerCase();
+
+                // --- 1. LOCAL SYSTEM & DETERMINISTIC INTERCEPTS ---
                 const dirMatch = cmd.match(/^(?:go\s+(?:to\s+(?:the\s+)?)?|move\s+|walk\s+|head\s+)?(north|south|east|west|n|s|e|w)$/);
                 
                 if (dirMatch) {
@@ -747,7 +844,65 @@
                     return;
                 }
 
-                if (cmd === 'quest') {
+                if (cmd === 'create') {
+                    wizardState.active = true;
+                    wizardState.step = 1;
+                    document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@MATERIA:~$</span>&nbsp;`;
+                    addLog(`[WIZARD]: Materialization Protocol Started. Enter the name of the new item:`, "var(--term-amber)");
+                    return;
+                } else if (cmd === 'look' || cmd === 'l') {
+                    printRoomDescription();
+                    projectVisual(apartmentMap[localPlayer.currentRoom].visualPrompt);
+                    return;
+                } else if (cmd.startsWith('take ') || cmd.startsWith('get ') || cmd.startsWith('pick up ')) {
+                    const itemName = cmd.replace(/^(take|get|pick up)\s+/, '').toLowerCase();
+                    const room = apartmentMap[localPlayer.currentRoom];
+                    
+                    // Partial matching: checks if the item name includes what you typed
+                    const itemIdx = (room.items || []).findIndex(i => i.name.toLowerCase().includes(itemName));
+                    
+                    if (itemIdx > -1) {
+                        const item = room.items.splice(itemIdx, 1)[0];
+                        localPlayer.inventory.push(item);
+                        
+                        if (isSyncEnabled) {
+                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                        }
+                        savePlayerState();
+                        updateInventoryUI();
+                        updateRoomItemsUI();
+                        
+                        addLog(`[SYSTEM]: You picked up [${item.name}].`, "var(--term-green)");
+                    } else {
+                        addLog(`[SYSTEM]: You don't see '${itemName}' here.`, "var(--term-amber)");
+                    }
+                    return;
+                } else if (cmd.startsWith('drop ')) {
+                    const itemName = cmd.replace(/^drop\s+/, '').toLowerCase();
+                    // Partial matching for dropping as well
+                    const itemIdx = localPlayer.inventory.findIndex(i => i.name.toLowerCase().includes(itemName));
+                    
+                    if (itemIdx > -1) {
+                        const item = localPlayer.inventory.splice(itemIdx, 1)[0];
+                        const room = apartmentMap[localPlayer.currentRoom];
+                        if (!room.items) room.items = [];
+                        room.items.push(item);
+                        
+                        if (isSyncEnabled) {
+                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                        }
+                        savePlayerState();
+                        updateInventoryUI();
+                        updateRoomItemsUI();
+                        
+                        addLog(`[SYSTEM]: You dropped [${item.name}].`, "var(--term-amber)");
+                    } else {
+                        addLog(`[SYSTEM]: You are not carrying '${itemName}'.`, "var(--term-amber)");
+                    }
+                    return;
+                } else if (cmd === 'quest') {
                     isGameMode = true;
                     addLog("ARCHITECT MODE ACTIVE.");
                     return;
@@ -767,12 +922,15 @@
                 } else if (cmd === 'help') {
                     addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
                     addLog("  <span class='text-blue-400'>HELP</span>      - Display this manual");
+                    addLog("  <span class='text-blue-400'>LOOK</span>      - Inspect current room and items");
                     addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move deterministically (or Arrow Keys)");
+                    addLog("  <span class='text-blue-400'>CREATE</span>    - Materialize a new item into the room");
+                    addLog("  <span class='text-blue-400'>TAKE/DROP</span> - Manage items (e.g., 'TAKE book')");
                     addLog("  <span class='text-blue-400'>INV</span>       - List items currently held");
                     addLog("  <span class='text-blue-400'>MAP</span>       - View visual graph of current sector");
                     addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity");
-                    addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets all other natural language intent.");
-                    addLog("               <span class='text-gray-500'>(e.g., 'create a book called Yoga Vasistha', 'read Yoga Vasistha')</span>");
+                    addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets natural language actions.");
+                    addLog("               <span class='text-gray-500'>(e.g., 'read Yoga Vasistha', 'sit on the couch')</span>");
                     return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
@@ -783,7 +941,7 @@
                 } else if (cmd.startsWith('join ') || cmd.startsWith('register ')) {
                     const parts = val.split(' ');
                     if (parts.length < 2) {
-                        addLog("[SYSTEM]: Please provide an email address (e.g., 'REGISTER name@domain.com').", "var(--term-amber)");
+                        addLog("[SYSTEM]: Please provide an email address.", "var(--term-amber)");
                         return;
                     }
                     const email = parts[1];
@@ -793,11 +951,7 @@
                     }
 
                     addLog(`[SYSTEM]: Initiating secure registration protocol for ${email}...`, "var(--crayola-blue)");
-                    
-                    const actionCodeSettings = {
-                        url: window.location.href, 
-                        handleCodeInApp: true
-                    };
+                    const actionCodeSettings = { url: window.location.href, handleCodeInApp: true };
 
                     sendSignInLinkToEmail(auth, email, actionCodeSettings)
                         .then(() => {
@@ -815,34 +969,31 @@
                     return;
                 }
 
-                // --- 2. THE UNIVERSAL GM INTENT ENGINE (Fallback for Actions/Creation) ---
+                // --- 2. THE UNIVERSAL GM INTENT ENGINE (Fallback for Actions/Interaction) ---
                 isProcessing = true;
                 addLog(`<span class="italic" style="color: var(--gm-purple)">EVALUATING INTENT...</span>`);
                 
                 try {
                     const currentRoomData = apartmentMap[localPlayer.currentRoom];
                     const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
+                    const roomItemNames = (currentRoomData.items || []).map(i => i.name).join(', ');
                     
                     const sysPrompt = `You are the overarching Game Master (The Source) of Terra Agnostum, a text-based terminal reality.
                     
                     Player Context:
                     - Current Location: ${currentRoomData.name} (Key: ${localPlayer.currentRoom})
                     - Room Description: ${currentRoomData.description}
+                    - Items laying in Room: ${roomItemNames || "None"}
                     - Player Posture: ${localPlayer.posture} (standing, sitting, laying)
                     - Player Facing: ${localPlayer.facing} (north, south, east, west)
                     - Player Inventory: ${inventoryNames || "Empty"}
-                    - Active NPC in focus: ${activeNPC || "None"}
 
                     Rules & Guardrails:
-                    1. Interpretation: Interpret user input for talking, looking, interacting with items, or changing posture.
-                    2. Strict Movement: ALL standard movement is handled by the client. If the user tries to move via natural language (e.g. "go to char room"), REFUSE the action and instruct them to use directional commands (N, S, E, W) or the Arrow Keys. Never output "new_room" for natural language movement.
-                    3. Lock Enforcement: Schrödinger's Closet and the Outside Door are locked. Do not let the player enter them.
-                    4. Body Mechanics: Set "new_posture" or "new_facing" if the player changes physical orientation.
-                    5. Visuals: Set "trigger_visual" with a description if the player looks at the environment significantly.
-                    6. Self Avatar Creation: ONLY ALLOWED IN THE 'spare_room'. Ask for a name if none is given, otherwise output "trigger_character_creation".
-                    7. Item Creation (ARCHITECT POWER): If the user expresses clear intent to create, spawn, or materialize an item out of thin air (e.g., "create a book called Yoga Vasistha"), fill out "trigger_item_creation".
-                    8. Item Usage: If the user interacts with an item in their inventory (like reading a specific book they hold), provide the specific outcome in the narrative (e.g., read a profound, relevant quote from that book).
-                    9. Item Removal: If the user consumes, destroys, or drops an item they are holding, set "trigger_inventory_remove" to the exact name of the item.
+                    1. Interpretation: Interpret user input for talking, looking at specific details, interacting with items, or changing posture.
+                    2. Strict Movement: ALL movement is handled by the client. If the user tries to move (e.g. "go to char room"), REFUSE the action and instruct them to use directional commands (N, S, E, W) or Arrow Keys. Never output "new_room".
+                    3. Inventory Logic: ALL picking up and dropping of items is handled by the client via "TAKE" and "DROP" commands. Do NOT tell the user they picked something up.
+                    4. Item Usage (Narrative): If the user interacts with an item in their inventory or in the room (like "read Yoga Vasistha", "open the book"), provide the specific, flavorful outcome in the narrative (e.g., generate a profound, relevant quote from the book).
+                    5. Self Avatar Creation: ONLY ALLOWED IN THE 'spare_room'. Ask for a name if none is given, otherwise output "trigger_character_creation".
                     
                     Respond STRICTLY in JSON:
                     {
@@ -855,9 +1006,7 @@
                       "new_posture": "New posture if changed, otherwise null",
                       "new_facing": "New facing if changed, otherwise null",
                       "trigger_view_characters": false,
-                      "trigger_character_creation": null,
-                      "trigger_item_creation": null, // OR {"name": "Item Name", "type": "Book|Artifact|Weapon|Tool", "description": "Brief lore description"}
-                      "trigger_inventory_remove": null // OR "Exact Name of Item to drop/destroy"
+                      "trigger_character_creation": null
                     }`;
                     
                     const res = await callGemini(`User Input: ${val}`, sysPrompt);
@@ -869,7 +1018,6 @@
 
                     let stateChanged = false;
                     
-                    // State updates
                     if (res.new_posture && res.new_posture !== localPlayer.posture) {
                         localPlayer.posture = res.new_posture;
                         stateChanged = true;
@@ -879,28 +1027,8 @@
                         stateChanged = true;
                     }
 
-                    // Inventory Add
-                    if (res.trigger_item_creation) {
-                        const newItem = res.trigger_item_creation;
-                        localPlayer.inventory.push(newItem);
-                        stateChanged = true;
-                        addLog(`[SYSTEM]: Materialized [${newItem.name}] into inventory.`, "var(--term-amber)");
-                    }
-
-                    // Inventory Remove
-                    if (res.trigger_inventory_remove) {
-                        const targetName = res.trigger_inventory_remove.toLowerCase();
-                        const initialLength = localPlayer.inventory.length;
-                        localPlayer.inventory = localPlayer.inventory.filter(i => i.name.toLowerCase() !== targetName);
-                        if (localPlayer.inventory.length < initialLength) {
-                            stateChanged = true;
-                            addLog(`[SYSTEM]: Removed [${res.trigger_inventory_remove}] from inventory.`, "var(--term-amber)");
-                        }
-                    }
-
                     if (stateChanged) {
                         updateStatusUI();
-                        updateInventoryUI();
                         savePlayerState(); 
                     }
                     
@@ -942,11 +1070,6 @@
                             } catch (e) {
                                 console.error("Firestore Save Error:", e);
                                 addLog(`[SYSTEM ERROR]: Could not save Avatar to the archive. The image may still be too large.`, "var(--term-red)");
-                            }
-
-                            if (user.isAnonymous) {
-                                addLog(`[SYSTEM WARNING]: Your Architect identity is VOLATILE. If you close this terminal, [${charData.name}] will be lost.`, "var(--term-red)");
-                                addLog(`> Type <span class="text-blue-400">'REGISTER [email]'</span> now to bind your soul to the Archive.`, "var(--term-amber)");
                             }
                         }
                     }
