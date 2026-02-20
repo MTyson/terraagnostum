@@ -203,26 +203,41 @@
             <span id="time-display">T+00:00:00</span>
         </div>
 
-        <div id="visual-buffer" class="visual-buffer">
-            <div class="visual-overlay">Source Projection</div>
-            <img id="visual-image" src="" alt="">
-            <div id="visual-loading" class="absolute inset-0 flex items-center justify-center text-amber-500 text-xs italic hidden">
-                RENDERING REALITY<span class="loading-dots"></span>
-            </div>
-        </div>
+        <div class="flex flex-1 min-h-0">
+            <!-- MAIN TERMINAL COLUMN -->
+            <div class="flex flex-col flex-1 min-w-0 md:pr-4">
+                <div id="visual-buffer" class="visual-buffer">
+                    <div class="visual-overlay">Source Projection</div>
+                    <img id="visual-image" src="" alt="">
+                    <div id="visual-loading" class="absolute inset-0 flex items-center justify-center text-amber-500 text-xs italic hidden">
+                        RENDERING REALITY<span class="loading-dots"></span>
+                    </div>
+                </div>
 
-        <div id="output">
-            <div id="log">
-                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.1]</p>
-                <p>> The Overarching Mind is Online.</p>
-                <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
-                <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
-            </div>
-        </div>
+                <div id="output">
+                    <div id="log">
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.1]</p>
+                        <p>> The Overarching Mind is Online.</p>
+                        <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
+                        <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
+                    </div>
+                </div>
 
-        <div class="input-area">
-            <span id="prompt-prefix" class="mr-2 opacity-80">GUEST@ROOT:~$&nbsp;</span>
-            <input type="text" id="cmd-input" autofocus spellcheck="false" autocomplete="off">
+                <div class="input-area">
+                    <span id="prompt-prefix" class="mr-2 opacity-80">GUEST@ROOT:~$&nbsp;</span>
+                    <input type="text" id="cmd-input" autofocus spellcheck="false" autocomplete="off">
+                </div>
+            </div>
+
+            <!-- BIOMETRICS / AVATAR SIDEBAR (Hidden on mobile) -->
+            <div class="hidden md:flex w-64 flex-col border-l border-green-900 pl-4 overflow-y-auto shrink-0">
+                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2">SYSTEM.BIOMETRICS</div>
+                <div id="avatar-container">
+                    <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2">
+                        NO VESSEL DETECTED<br>AWAITING IMPRINT
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -300,6 +315,7 @@
         };
         
         let localCharacters = []; // Stores characters created during this session
+        let activeAvatar = null;  // The currently loaded primary vessel
         let user = null;
         let hasInitialized = false;
 
@@ -372,10 +388,37 @@
                 });
                 if (localCharacters.length > 0) {
                     addLog(`[SYSTEM]: Retrieved ${localCharacters.length} saved avatar(s) from your private archive.`, "var(--term-green)");
+                    // Load the most recently saved character into the active slot
+                    activeAvatar = localCharacters[localCharacters.length - 1];
+                    updateAvatarUI();
                 }
             } catch (error) {
                 console.error("Failed to load characters:", error);
             }
+        }
+
+        // Update the Sidebar UI
+        function updateAvatarUI() {
+            const container = document.getElementById('avatar-container');
+            if (!activeAvatar) return;
+
+            // We reuse the MTG card classes but use Tailwind utilities to force it into the sidebar width
+            container.innerHTML = `
+                <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a]">
+                    <div class="char-card-header border-b border-[#1a3a1a] pb-2 mb-2">
+                        <span class="char-card-title text-[10px] text-amber-500">[ACTV] ${activeAvatar.name}</span>
+                        <span class="char-card-archetype text-[8px]">${activeAvatar.archetype}</span>
+                    </div>
+                    <div class="char-card-img-container h-32 border-[#1a3a1a] mb-2">
+                        ${activeAvatar.image ? `<img class="char-card-img" src="${activeAvatar.image}" alt="${activeAvatar.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[NO IMG]</div>`}
+                    </div>
+                    <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0">
+                        <span>STR: ${activeAvatar.stats.STR || 10}</span>
+                        <span>DEX: ${activeAvatar.stats.DEX || 10}</span>
+                        <span>INT: ${activeAvatar.stats.INT || 10}</span>
+                    </div>
+                </div>
+            `;
         }
 
         // Compress image before sending to Firestore to bypass 1MB limit
@@ -573,8 +616,12 @@
                         })
                         .catch((error) => {
                             console.error("Auth Error:", error);
-                            addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
-                            addLog(`[SYSTEM]: Ensure your current URL is added to Firebase Console -> Authentication -> Settings -> Authorized domains.`, "var(--term-amber)");
+                            if (error.code === 'auth/quota-exceeded') {
+                                addLog(`[SYSTEM ERROR]: The Archive's daily registration quota has been exceeded. Please try again tomorrow or contact the Lead Architect.`, "var(--term-red)");
+                            } else {
+                                addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
+                                addLog(`[SYSTEM]: Ensure your current URL is added to Firebase Console -> Authentication -> Settings -> Authorized domains.`, "var(--term-amber)");
+                            }
                         });
                     return;
                 }
@@ -683,6 +730,8 @@
                         const fullCharData = { ...charData, image: compressedImageSrc || cardImageSrc, timestamp: Date.now() };
                         renderCharacterCard(fullCharData, compressedImageSrc || cardImageSrc);
                         localCharacters.push(fullCharData);
+                        activeAvatar = fullCharData; // Set as active
+                        updateAvatarUI(); // Update the sidebar
                         
                         // Save Avatar directly to Firestore
                         if (user) {
