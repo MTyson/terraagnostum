@@ -225,7 +225,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.5]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.6]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -404,8 +404,8 @@
 
         function setupMapListener() {
             if (!db) return;
-            // Bumped to v3 to force database override for new directional 'exits' schema
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v3');
+            // Bumped to v4 to force database override to clear out any bad cached maps
+            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v4');
             onSnapshot(mapRef, (snap) => {
                 if (!snap.exists()) {
                     setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
@@ -485,7 +485,6 @@
             `;
         }
 
-        // Draws the ASCII Schematic Modal
         function showMapModal() {
             const modal = document.getElementById('map-modal');
             const content = document.getElementById('map-content');
@@ -629,6 +628,44 @@
             document.getElementById('room-display').innerText = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
         }
 
+        // Shared Local Movement Logic
+        async function executeMovement(targetDir) {
+            const currentRoom = apartmentMap[localPlayer.currentRoom];
+            
+            // Enforce physical constraints/locks locally
+            if (targetDir === 'south' && localPlayer.currentRoom === 'hallway') {
+                addLog(`[SYSTEM]: The heavy metal door is deadbolted. You cannot go OUTSIDE.`, "var(--term-amber)");
+                return;
+            }
+
+            if (currentRoom.exits && currentRoom.exits[targetDir]) {
+                const nextRoomKey = currentRoom.exits[targetDir];
+                localPlayer.currentRoom = nextRoomKey;
+                const nextRoom = apartmentMap[nextRoomKey];
+                
+                updateStatusUI();
+                savePlayerState();
+                
+                addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
+                addLog(`[NARRATOR]: ${nextRoom.description}`, "#888");
+                projectVisual(nextRoom.visualPrompt);
+                
+                // Log movement to shared reality
+                if (isSyncEnabled && user) {
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
+                    updateDoc(roomRef, { 
+                        manifestations: arrayUnion({ 
+                            author: user.uid, 
+                            text: `[${localPlayer.currentRoom}] User arrived from the ${targetDir}.`, 
+                            timestamp: Date.now() 
+                        }) 
+                    });
+                }
+            } else {
+                addLog(`[SYSTEM]: There is no path to the ${targetDir.toUpperCase()}.`, "var(--term-amber)");
+            }
+        }
+
         async function callGemini(userInput, systemPrompt) {
             const res = await fetch(API_GENERATE, {
                 method: 'POST',
@@ -649,6 +686,22 @@
         const input = document.getElementById('cmd-input');
 
         input.addEventListener('keydown', async (e) => {
+            // ARROW KEY INTERCEPT - Instantly navigate if the input box is empty
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && input.value === '') {
+                e.preventDefault();
+                if (isProcessing) return;
+                
+                let dir = '';
+                if (e.key === 'ArrowUp') dir = 'north';
+                if (e.key === 'ArrowDown') dir = 'south';
+                if (e.key === 'ArrowLeft') dir = 'west';
+                if (e.key === 'ArrowRight') dir = 'east';
+                
+                addLog(dir, "#ffffff");
+                executeMovement(dir);
+                return;
+            }
+
             if (e.key === 'Enter') {
                 e.preventDefault();
                 const val = input.value.trim();
@@ -659,47 +712,15 @@
                 addLog(val, "#ffffff");
 
                 // --- 1. LOCAL SYSTEM & DETERMINISTIC MOVEMENT INTERCEPT ---
+                // Bulletproof Regex: Catches "n", "north", "go north", "head to the west", etc.
+                const dirMatch = cmd.match(/^(?:go\s+(?:to\s+(?:the\s+)?)?|move\s+|walk\s+|head\s+)?(north|south|east|west|n|s|e|w)$/);
                 
-                // Parse deterministic movement mapping (MUD-style)
-                const rawCmd = cmd.replace("go ", "").replace("move ", "").replace("walk ", "").replace("head ", "");
-                const dirMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west', 'north': 'north', 'south': 'south', 'east': 'east', 'west': 'west' };
-                
-                if (dirMap[rawCmd]) {
-                    const targetDir = dirMap[rawCmd];
-                    const currentRoom = apartmentMap[localPlayer.currentRoom];
+                if (dirMatch) {
+                    const parsedDir = dirMatch[1];
+                    const expandMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west' };
+                    const targetDir = expandMap[parsedDir] || parsedDir;
                     
-                    // Enforce physical constraints/locks locally
-                    if (targetDir === 'south' && localPlayer.currentRoom === 'hallway') {
-                        addLog(`[SYSTEM]: The heavy metal door is deadbolted. You cannot go OUTSIDE.`, "var(--term-amber)");
-                        return;
-                    }
-
-                    if (currentRoom.exits && currentRoom.exits[targetDir]) {
-                        const nextRoomKey = currentRoom.exits[targetDir];
-                        localPlayer.currentRoom = nextRoomKey;
-                        const nextRoom = apartmentMap[nextRoomKey];
-                        
-                        updateStatusUI();
-                        savePlayerState();
-                        
-                        addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
-                        addLog(`[NARRATOR]: ${nextRoom.description}`, "#888");
-                        projectVisual(nextRoom.visualPrompt);
-                        
-                        // Log movement to shared reality
-                        if (isSyncEnabled && user) {
-                            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
-                            updateDoc(roomRef, { 
-                                manifestations: arrayUnion({ 
-                                    author: user.uid, 
-                                    text: `[${localPlayer.currentRoom}] User arrived from the ${targetDir}.`, 
-                                    timestamp: Date.now() 
-                                }) 
-                            });
-                        }
-                    } else {
-                        addLog(`[SYSTEM]: There is no path to the ${targetDir.toUpperCase()}.`, "var(--term-amber)");
-                    }
+                    executeMovement(targetDir);
                     return;
                 }
 
@@ -713,7 +734,7 @@
                 } else if (cmd === 'help') {
                     addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
                     addLog("  <span class='text-blue-400'>HELP</span>      - Display this manual");
-                    addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move between rooms deterministically");
+                    addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move between rooms deterministically (or use Arrow Keys)");
                     addLog("  <span class='text-blue-400'>MAP</span>       - View visual graph of current sector");
                     addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity (e.g., 'REGISTER email@domain.com')");
                     addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets all other natural language intent.");
@@ -774,20 +795,11 @@
                     - Player Posture: ${localPlayer.posture} (standing, sitting, laying)
                     - Player Facing: ${localPlayer.facing} (north, south, east, west)
                     - Active NPC in focus: ${activeNPC || "None"}
-                    
-                    World Map Graph (The Apartment):
-                    - lore1: Exits -> east to 'lore2', north to 'closet', south to 'bedroom'. Contains the console.
-                    - lore2: Exits -> west to 'lore1', north to 'kitchen', east to 'spare_room', south to 'hallway'.
-                    - kitchen: Exits -> south to 'lore2'.
-                    - spare_room: Exits -> west to 'lore2'. (Self avatar creation room).
-                    - hallway: Exits -> north to 'lore2'. Contains locked front door at south end.
-                    - bedroom: Exits -> north to 'lore1'.
-                    - closet: Exits -> south to 'lore1'. (Locked).
 
                     Rules & Guardrails:
-                    1. Interpretation: Interpret user input for talking, complex movement (e.g. "jump out the window"), looking, or changing posture.
-                    2. Lock Enforcement: Schrödinger's Closet and the Outside Door are locked. Do not let the player enter them.
-                    3. Movement: Set "new_room" to the exact room key (e.g., 'kitchen') ONLY IF the player attempts to move to a CONNECTED room based on the graph above via natural language. If they try to move to an unconnected room, deny the action in the narrative.
+                    1. Interpretation: Interpret user input for talking, looking, or changing posture.
+                    2. Strict Movement: ALL standard movement is handled by the client. If the user tries to move via natural language (e.g. "go to char room", "jump out window"), REFUSE the action and instruct them to use directional commands (N, S, E, W) or the Arrow Keys. Never output "new_room" for natural language movement.
+                    3. Lock Enforcement: Schrödinger's Closet and the Outside Door are locked. Do not let the player enter them.
                     4. Body Mechanics: Set "new_posture" or "new_facing" if the player changes physical orientation.
                     5. Visuals: Set "trigger_visual" with a description if the player looks at the environment significantly.
                     6. Self Avatar Creation (PRIMARY IDENTITY): ONLY ALLOWED IN THE 'spare_room'. This establishes the user's permanent primary vessel/avatar in the world (NOT an NPC). If the user expresses intent to define themselves, create their avatar, or look in the mirror to see themselves:
@@ -802,7 +814,7 @@
                       "color": "Hex color (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings)",
                       "trigger_visual": "A detailed visual prompt string if a visual is needed, otherwise null",
                       "set_npc": "Name of NPC to make active, or null",
-                      "new_room": "The room key if successfully moved, otherwise null",
+                      "new_room": null,
                       "new_posture": "New posture if changed, otherwise null",
                       "new_facing": "New facing if changed, otherwise null",
                       "trigger_view_characters": false,
@@ -817,15 +829,6 @@
                     }
 
                     let stateChanged = false;
-                    // Strict Graph Movement validation client side just in case GM hallucinates
-                    if (res.new_room && apartmentMap[res.new_room]) {
-                        // Validate the move is actually connected to the current room
-                        const validExits = Object.values(apartmentMap[localPlayer.currentRoom].exits || {});
-                        if (validExits.includes(res.new_room)) {
-                            localPlayer.currentRoom = res.new_room;
-                            stateChanged = true;
-                        }
-                    }
                     if (res.new_posture && res.new_posture !== localPlayer.posture) {
                         localPlayer.posture = res.new_posture;
                         stateChanged = true;
@@ -835,7 +838,6 @@
                         stateChanged = true;
                     }
 
-                    // Save persistence state if body or location changed!
                     if (stateChanged) {
                         updateStatusUI();
                         savePlayerState(); 
