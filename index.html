@@ -225,7 +225,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v6.0]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v6.1]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -264,7 +264,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
@@ -432,7 +432,6 @@
 
         function setupMapListener() {
             if (!db) return;
-            // Bumped to v5 to add persistent Items array to all rooms
             const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
             onSnapshot(mapRef, (snap) => {
                 if (!snap.exists()) {
@@ -761,15 +760,15 @@
                 wizardState.pendingItem.description = val || 'An unknown manifestation.';
                 wizardState.pendingItem.id = Date.now().toString(); // unique ID
                 
-                // Add to room locally
+                // Add to room locally (optimistic)
                 const room = apartmentMap[localPlayer.currentRoom];
                 if (!room.items) room.items = [];
                 room.items.push(wizardState.pendingItem);
                 
-                // Sync to Firebase
+                // Sync to Firebase ATOMICALLY
                 if (isSyncEnabled) {
                     const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
-                    updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                    updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(wizardState.pendingItem) });
                 }
                 
                 updateRoomItemsUI();
@@ -858,17 +857,22 @@
                     const itemName = cmd.replace(/^(take|get|pick up)\s+/, '').toLowerCase();
                     const room = apartmentMap[localPlayer.currentRoom];
                     
-                    // Partial matching: checks if the item name includes what you typed
                     const itemIdx = (room.items || []).findIndex(i => i.name.toLowerCase().includes(itemName));
                     
                     if (itemIdx > -1) {
-                        const item = room.items.splice(itemIdx, 1)[0];
+                        // Grab the exact object reference to safely remove it atomically
+                        const item = room.items[itemIdx];
+                        
+                        // Optimistic local update
+                        room.items.splice(itemIdx, 1);
                         localPlayer.inventory.push(item);
                         
+                        // Atomic remote update
                         if (isSyncEnabled) {
                             const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
-                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayRemove(item) });
                         }
+                        
                         savePlayerState();
                         updateInventoryUI();
                         updateRoomItemsUI();
@@ -880,19 +884,23 @@
                     return;
                 } else if (cmd.startsWith('drop ')) {
                     const itemName = cmd.replace(/^drop\s+/, '').toLowerCase();
-                    // Partial matching for dropping as well
                     const itemIdx = localPlayer.inventory.findIndex(i => i.name.toLowerCase().includes(itemName));
                     
                     if (itemIdx > -1) {
+                        // Grab exact reference
                         const item = localPlayer.inventory.splice(itemIdx, 1)[0];
                         const room = apartmentMap[localPlayer.currentRoom];
+                        
+                        // Optimistic local update
                         if (!room.items) room.items = [];
                         room.items.push(item);
                         
+                        // Atomic remote update
                         if (isSyncEnabled) {
                             const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
-                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: room.items });
+                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(item) });
                         }
+                        
                         savePlayerState();
                         updateInventoryUI();
                         updateRoomItemsUI();
