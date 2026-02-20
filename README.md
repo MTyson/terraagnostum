@@ -29,7 +29,7 @@ The terminal is built to be lightweight, resilient, and highly decentralized to 
 * **Client:** Vanilla JavaScript, HTML5, TailwindCSS (The "Plasteel" Layer)
 * **Backend:** Node.js, Vercel Serverless Functions (The "Projection Spire")
 * **Database / State Sync:** MongoDB Atlas / Firebase (The "Amniosis Fluids")
-* **Cognitive Engine:** Large Language Model APIs (The "Ghost Filter")
+* **Cognitive Engine:** Gemini Large Language Model APIs (The "Ghost Filter")
 
 ## [ INITIALIZING THE NODE ]
 
