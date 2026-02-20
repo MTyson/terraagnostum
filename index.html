@@ -213,7 +213,7 @@
 
         <div id="output">
             <div id="log">
-                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v4.9]</p>
+                <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.0]</p>
                 <p>> The Overarching Mind is Online.</p>
                 <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                 <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -229,7 +229,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
@@ -316,7 +316,7 @@
                         addLog(`[SYSTEM]: Identity confirmed. Welcome to the Technate, Architect.`, "var(--crayola-blue)");
                     })
                     .catch((error) => {
-                        addLog(`[SYSTEM ERROR]: Registration link invalid or expired.`, "var(--term-red)");
+                        addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
                     });
             }
 
@@ -330,7 +330,9 @@
                     document.getElementById('prompt-prefix').innerHTML = `${userType}@ROOT:~$&nbsp;`;
 
                     addLog(`${userType} LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
+                    
                     setupWorldListener();
+                    loadUserCharacters();
                     
                     // Initial Landing Sequence
                     setTimeout(() => {
@@ -356,6 +358,24 @@
                     setDoc(roomRef, { created: serverTimestamp(), manifestations: [] });
                 }
             });
+        }
+
+        // Fetch user's existing characters from Firestore
+        async function loadUserCharacters() {
+            if (!db || !user) return;
+            try {
+                const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
+                const snap = await getDocs(charCol);
+                localCharacters = [];
+                snap.forEach(doc => {
+                    localCharacters.push(doc.data());
+                });
+                if (localCharacters.length > 0) {
+                    addLog(`[SYSTEM]: Retrieved ${localCharacters.length} saved avatar(s) from your private archive.`, "var(--term-green)");
+                }
+            } catch (error) {
+                console.error("Failed to load characters:", error);
+            }
         }
 
         async function projectVisual(prompt) {
@@ -516,8 +536,9 @@
 
                     addLog(`[SYSTEM]: Initiating secure registration protocol for ${email}...`, "var(--crayola-blue)");
                     
+                    // Note: window.location.href works dynamically, but must be added to Firebase Authorized Domains
                     const actionCodeSettings = {
-                        url: window.location.href, // Redirects back to the terminal
+                        url: window.location.href, 
                         handleCodeInApp: true
                     };
 
@@ -528,7 +549,9 @@
                         })
                         .catch((error) => {
                             console.error("Auth Error:", error);
-                            addLog(`[SYSTEM ERROR]: Failed to send link. Ensure domain is authorized in Firebase Settings.`, "var(--term-red)");
+                            // Print the exact error so the user knows if it's a domain/config issue
+                            addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
+                            addLog(`[SYSTEM]: Ensure your current URL is added to Firebase Console -> Authentication -> Settings -> Authorized domains.`, "var(--term-amber)");
                         });
                     return;
                 }
@@ -552,7 +575,7 @@
                     World Map (The Apartment):
                     - main_room: Center of the apartment, has the console.
                     - kitchen: Small, has a window.
-                    - spare_room: Character room with mirrors. (Crucial for character creation).
+                    - spare_room: Character room with mirrors. (Crucial for self character creation).
                     - bedroom: Attached to a bathroom.
                     - hallway: Connects everything, contains front door.
                     - closet: Schrödinger's Closet.
@@ -563,9 +586,9 @@
                     3. Movement: Set "new_room" to the exact room key (e.g., 'kitchen') if the player moves.
                     4. Body Mechanics: Set "new_posture" or "new_facing" if the player changes physical orientation.
                     5. Visuals: Set "trigger_visual" with a description if the player looks at the environment significantly.
-                    6. Character Creation: ONLY ALLOWED IN THE 'spare_room'. If the user expresses intent to create a character or look in the mirror:
-                       - If they DO NOT specify a name, ask them for a name in the narrative and do NOT set "trigger_character_creation".
-                       - If they DO specify a name (e.g., "I am Jack" or "create a character named Bob"), fill out the "trigger_character_creation" object using their chosen name.
+                    6. Self Avatar Creation: ONLY ALLOWED IN THE 'spare_room'. If the user expresses intent to define themselves, create their avatar, or look in the mirror:
+                       - If they DO NOT specify their name, ask them for a name in the narrative and do NOT set "trigger_character_creation".
+                       - If they DO specify a name (e.g., "I am Jack" or "create a character named Bob"), fill out the "trigger_character_creation" object using their chosen name to establish their persona.
                     7. View Characters: If the user wants to see their existing characters, cards, or avatars, set "trigger_view_characters": true.
                     
                     Respond STRICTLY in JSON:
@@ -631,15 +654,33 @@
                             console.error("Card Image Error", e);
                         }
                         
-                        renderCharacterCard(charData, cardImageSrc);
-                        localCharacters.push({ ...charData, image: cardImageSrc });
-                        addLog(`[SYSTEM]: Character Card Registered to Local Memory.`, "var(--term-green)");
+                        const fullCharData = { ...charData, image: cardImageSrc, timestamp: Date.now() };
+                        renderCharacterCard(fullCharData, cardImageSrc);
+                        localCharacters.push(fullCharData);
+                        
+                        // Save Avatar directly to Firestore
+                        if (user) {
+                            try {
+                                const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
+                                await addDoc(charCol, fullCharData);
+                                addLog(`[SYSTEM]: Avatar Card [${charData.name}] permanently registered to your profile.`, "var(--term-green)");
+                            } catch (e) {
+                                console.error("Firestore Save Error:", e);
+                                addLog(`[SYSTEM ERROR]: Could not save Avatar to the archive.`, "var(--term-red)");
+                            }
+
+                            // Warn Guest Users
+                            if (user.isAnonymous) {
+                                addLog(`[SYSTEM WARNING]: Your Architect identity is VOLATILE. If you close this terminal, [${charData.name}] will be lost.`, "var(--term-red)");
+                                addLog(`> Type <span class="text-blue-400">'REGISTER [email]'</span> now to bind your soul to the Archive.`, "var(--term-amber)");
+                            }
+                        }
                     }
 
                     // Handle Viewing existing characters
                     if (res.trigger_view_characters) {
                         if (localCharacters.length === 0) {
-                            addLog("[SYSTEM]: No manifestations found. Look into the mirrors of the Spare Room to create one.", "var(--term-amber)");
+                            addLog("[SYSTEM]: No manifestations found. Look into the mirrors of the Spare Room to define your avatar.", "var(--term-amber)");
                         } else {
                             addLog(`[SYSTEM]: Retrieving ${localCharacters.length} active manifestations...`, "var(--crayola-blue)");
                             localCharacters.forEach(c => renderCharacterCard(c, c.image));
