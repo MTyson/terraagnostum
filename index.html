@@ -39,7 +39,6 @@
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
                         linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
             z-index: 20;
-            background-size: 100% 4px, 3px 100%;
             pointer-events: none;
         }
 
@@ -195,6 +194,16 @@
 </head>
 <body class="crt">
 
+    <!-- MAP MODAL OVERLAY (Z-index 15 puts it above text, below CRT effect) -->
+    <div id="map-modal" class="hidden fixed inset-0 bg-black/85 z-[15] backdrop-blur-sm flex items-center justify-center" onclick="this.classList.add('hidden')">
+        <div class="border border-green-500 bg-[#050505] p-8 shadow-[0_0_20px_rgba(0,255,65,0.15)] text-green-500 font-mono" onclick="event.stopPropagation()">
+            <div class="text-amber-500 mb-6 border-b border-green-900 pb-2 text-xs uppercase tracking-widest text-center">
+                >> System.Schematic.Viewer // Tap outside to close <<
+            </div>
+            <pre id="map-content" class="text-sm leading-relaxed tracking-widest text-center"></pre>
+        </div>
+    </div>
+
     <div class="terminal-container">
         <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
             <span>Node: <span id="room-display">MAIN_ROOM</span></span>
@@ -216,7 +225,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.1]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.2]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -273,37 +282,49 @@
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        // The Static Apartment Map
+        // The Structured Graph Map (Nodes & Edges)
         const apartmentMap = {
             "main_room": {
                 name: "Main Room (Lore Room)",
+                shortName: "MAIN_ROOM",
                 description: "A dimly lit central living area. A large, flickering computer console dominates the space, humming with latent power.",
-                visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture."
+                visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.",
+                exits: ["kitchen", "spare_room", "hallway"]
             },
             "closet": {
                 name: "Schrödinger's Closet",
+                shortName: "CLOSET",
                 description: "A heavily reinforced closet door. It hums with quantum uncertainty. It is currently sealed shut.",
-                visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges."
+                visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges.",
+                exits: ["hallway"]
             },
             "kitchen": {
                 name: "Small Kitchen",
+                shortName: "KITCHEN",
                 description: "A cramped kitchenette with a dusty window looking out into an endless, foggy void.",
-                visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds."
+                visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds.",
+                exits: ["main_room"]
             },
             "spare_room": {
                 name: "Spare Room (Character Room)",
+                shortName: "SPARE_ROOM",
                 description: "An empty room with mirrors covering the walls. A place to reflect and build oneself.",
-                visualPrompt: "An empty room with walls entirely made of mirrors, reflecting a lonely terminal interface in the center."
+                visualPrompt: "An empty room with walls entirely made of mirrors, reflecting a lonely terminal interface in the center.",
+                exits: ["main_room"]
             },
             "bedroom": {
                 name: "Bedroom & Bathroom",
+                shortName: "BEDROOM",
                 description: "A simple sleeping quarters with an attached, sterile bathroom.",
-                visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom."
+                visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom.",
+                exits: ["hallway"]
             },
             "hallway": {
                 name: "Hallway",
+                shortName: "HALLWAY",
                 description: "A narrow corridor connecting the apartment. The front door leading 'outside' is heavily deadbolted.",
-                visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door with multiple deadbolts, glowing red 'LOCKED' signs."
+                visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door with multiple deadbolts, glowing red 'LOCKED' signs.",
+                exits: ["main_room", "bedroom", "closet"]
             }
         };
 
@@ -314,13 +335,12 @@
             facing: "north"      // north, south, east, west
         };
         
-        let localCharacters = []; // Stores characters created during this session
-        let activeAvatar = null;  // The currently loaded primary vessel
+        let localCharacters = []; 
+        let activeAvatar = null;  
         let user = null;
         let hasInitialized = false;
 
         if (isSyncEnabled) {
-            // Check if user is returning from a registration email link
             if (isSignInWithEmailLink(auth, window.location.href)) {
                 let email = window.localStorage.getItem('emailForSignIn');
                 if (!email) {
@@ -340,8 +360,6 @@
                 user = u;
                 if (user && !hasInitialized) {
                     hasInitialized = true;
-                    
-                    // Update Terminal Prefix based on Auth Status
                     const userType = user.isAnonymous ? "GUEST" : "ARCHITECT";
                     document.getElementById('prompt-prefix').innerHTML = `${userType}@ROOT:~$&nbsp;`;
 
@@ -350,7 +368,6 @@
                     setupWorldListener();
                     loadUserCharacters();
                     
-                    // Initial Landing Sequence
                     setTimeout(() => {
                         const startRoom = apartmentMap[localPlayer.currentRoom];
                         addLog(`[NARRATOR]: ${startRoom.description}`, "#888");
@@ -359,13 +376,11 @@
                 }
             });
 
-            // Fallback to anonymous auth if not already signed in and not processing a link
             if (!auth.currentUser && !isSignInWithEmailLink(auth, window.location.href)) {
                 signInAnonymously(auth);
             }
         }
 
-        // We keep the listener to sync manifestations, but the map itself is hardcoded above for now
         function setupWorldListener() {
             if (!db) return;
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
@@ -376,7 +391,6 @@
             });
         }
 
-        // Fetch user's existing characters from Firestore
         async function loadUserCharacters() {
             if (!db || !user) return;
             try {
@@ -388,7 +402,6 @@
                 });
                 if (localCharacters.length > 0) {
                     addLog(`[SYSTEM]: Retrieved ${localCharacters.length} saved avatar(s) from your private archive.`, "var(--term-green)");
-                    // Load the most recently saved character into the active slot
                     activeAvatar = localCharacters[localCharacters.length - 1];
                     updateAvatarUI();
                 }
@@ -397,12 +410,10 @@
             }
         }
 
-        // Update the Sidebar UI
         function updateAvatarUI() {
             const container = document.getElementById('avatar-container');
             if (!activeAvatar) return;
 
-            // We reuse the MTG card classes but use Tailwind utilities to force it into the sidebar width
             container.innerHTML = `
                 <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a]">
                     <div class="char-card-header border-b border-[#1a3a1a] pb-2 mb-2">
@@ -421,7 +432,32 @@
             `;
         }
 
-        // Compress image before sending to Firestore to bypass 1MB limit
+        // Draws the ASCII Schematic Modal
+        function showMapModal() {
+            const modal = document.getElementById('map-modal');
+            const content = document.getElementById('map-content');
+
+            // Helper to style the current node brightly
+            const getNode = (roomKey) => {
+                const short = apartmentMap[roomKey].shortName;
+                if (localPlayer.currentRoom === roomKey) {
+                    return `<span class="text-black bg-green-500 font-bold px-1 shadow-[0_0_8px_rgba(0,255,65,0.8)]">[${short}]</span>`;
+                }
+                return `<span class="text-gray-600">[${short}]</span>`;
+            };
+
+            // Hardcoded structural ASCII representation of the graph
+            content.innerHTML = `
+                             ${getNode('kitchen')}
+                                 |
+              ${getNode('spare_room')} -- ${getNode('main_room')} -- ${getNode('hallway')} -- ${getNode('closet')}
+                                              |
+                                          ${getNode('bedroom')}
+            `;
+            
+            modal.classList.remove('hidden');
+        }
+
         async function compressImage(base64Str, maxWidth = 400, quality = 0.7) {
             return new Promise((resolve) => {
                 const img = new Image();
@@ -441,7 +477,7 @@
                     ctx.drawImage(img, 0, 0, width, height);
                     resolve(canvas.toDataURL('image/jpeg', quality));
                 };
-                img.onerror = () => resolve(base64Str); // Fallback to original if error
+                img.onerror = () => resolve(base64Str); 
                 img.src = base64Str;
             });
         }
@@ -566,16 +602,19 @@
                 if (!val || isProcessing) return;
                 const cmd = val.toLowerCase();
 
-                // Echo the user's input directly into the terminal log
                 addLog(val, "#ffffff");
 
                 if (cmd === 'quest') {
                     isGameMode = true;
                     addLog("ARCHITECT MODE ACTIVE.");
                     return;
+                } else if (cmd === 'map') {
+                    showMapModal();
+                    return;
                 } else if (cmd === 'help') {
                     addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
                     addLog("  <span class='text-blue-400'>HELP</span>      - Display this manual");
+                    addLog("  <span class='text-blue-400'>MAP</span>       - View visual graph of current sector");
                     addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity (e.g., 'REGISTER email@domain.com')");
                     addLog("  <span class='text-blue-400'>QUEST</span>     - Begin Architect mode");
                     addLog("  <span class='text-blue-400'>TEST</span>      - Verify Source connectivity");
@@ -596,7 +635,6 @@
                         return;
                     }
                     const email = parts[1];
-                    // Basic email validation
                     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                         addLog("[SYSTEM]: Invalid email format detected.", "var(--term-red)");
                         return;
@@ -626,7 +664,6 @@
                     return;
                 }
 
-                // 2. THE UNIVERSAL GM INTENT ENGINE
                 isProcessing = true;
                 addLog(`<span class="italic" style="color: var(--gm-purple)">EVALUATING INTENT...</span>`);
                 
@@ -642,18 +679,18 @@
                     - Player Facing: ${localPlayer.facing} (north, south, east, west)
                     - Active NPC in focus: ${activeNPC || "None"}
                     
-                    World Map (The Apartment):
-                    - main_room: Center of the apartment, has the console.
-                    - kitchen: Small, has a window.
-                    - spare_room: Character room with mirrors. (Crucial for self character creation).
-                    - bedroom: Attached to a bathroom.
-                    - hallway: Connects everything, contains front door.
-                    - closet: Schrödinger's Closet.
+                    World Map Graph (The Apartment):
+                    - main_room: Connects to 'kitchen', 'spare_room', 'hallway'.
+                    - kitchen: Connects to 'main_room'.
+                    - spare_room: Connects to 'main_room'. (Self avatar creation room).
+                    - hallway: Connects to 'main_room', 'bedroom', 'closet'. Contains locked front door.
+                    - bedroom: Connects to 'hallway'.
+                    - closet: Connects to 'hallway'. (Locked).
 
                     Rules & Guardrails:
                     1. Interpretation: Interpret user input for talking, moving, looking, or changing posture.
                     2. Lock Enforcement: Schrödinger's Closet and the Outside Door are locked. Do not let the player enter them.
-                    3. Movement: Set "new_room" to the exact room key (e.g., 'kitchen') if the player moves.
+                    3. Movement: Set "new_room" to the exact room key (e.g., 'kitchen') ONLY IF the player attempts to move to a CONNECTED room based on the graph above. If they try to move to an unconnected room, deny the action in the narrative.
                     4. Body Mechanics: Set "new_posture" or "new_facing" if the player changes physical orientation.
                     5. Visuals: Set "trigger_visual" with a description if the player looks at the environment significantly.
                     6. Self Avatar Creation (PRIMARY IDENTITY): ONLY ALLOWED IN THE 'spare_room'. This establishes the user's permanent primary vessel/avatar in the world (NOT an NPC). If the user expresses intent to define themselves, create their avatar, or look in the mirror to see themselves:
@@ -668,7 +705,7 @@
                       "color": "Hex color (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings)",
                       "trigger_visual": "A detailed visual prompt string if a visual is needed, otherwise null",
                       "set_npc": "Name of NPC to make active, or null",
-                      "new_room": "The room key if moved, otherwise null",
+                      "new_room": "The room key if successfully moved, otherwise null",
                       "new_posture": "New posture if changed, otherwise null",
                       "new_facing": "New facing if changed, otherwise null",
                       "trigger_view_characters": false,
@@ -677,14 +714,14 @@
                     
                     const res = await callGemini(`User Input: ${val}`, sysPrompt);
                     
-                    // Apply State Changes defined by the GM
                     if (res.set_npc) {
                         activeNPC = res.set_npc;
                         addLog(`[FREQUENCY TUNED: ${activeNPC.toUpperCase()}]`, "var(--crayola-blue)");
                     }
 
                     let stateChanged = false;
-                    if (res.new_room && apartmentMap[res.new_room] && res.new_room !== localPlayer.currentRoom) {
+                    // Strict Graph Movement validation client side just in case GM hallucinates
+                    if (res.new_room && apartmentMap[res.new_room] && apartmentMap[localPlayer.currentRoom].exits.includes(res.new_room)) {
                         localPlayer.currentRoom = res.new_room;
                         stateChanged = true;
                     }
@@ -699,11 +736,9 @@
 
                     if (stateChanged) updateStatusUI();
                     
-                    // Print Narrative
                     const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
                     addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
                     
-                    // Handle Character Creation Magic (MTG Card logic)
                     if (res.trigger_character_creation) {
                         const charData = res.trigger_character_creation;
                         addLog(`[SYSTEM]: Extracting genetic imprint for your primary vessel [${charData.name}]...`, "var(--gm-purple)");
@@ -711,7 +746,6 @@
                         let cardImageSrc = "";
                         let compressedImageSrc = "";
                         try {
-                            // Specifically requesting a portrait/card style image from the Source
                             const imgRes = await fetch(API_IMAGE, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -720,7 +754,6 @@
                             const imgData = await imgRes.json();
                             if (imgData.predictions?.[0]) {
                                 cardImageSrc = `data:image/png;base64,${imgData.predictions[0].bytesBase64Encoded}`;
-                                // Compress image to bypass Firestore 1MB document limit
                                 compressedImageSrc = await compressImage(cardImageSrc);
                             }
                         } catch (e) {
@@ -730,10 +763,9 @@
                         const fullCharData = { ...charData, image: compressedImageSrc || cardImageSrc, timestamp: Date.now() };
                         renderCharacterCard(fullCharData, compressedImageSrc || cardImageSrc);
                         localCharacters.push(fullCharData);
-                        activeAvatar = fullCharData; // Set as active
-                        updateAvatarUI(); // Update the sidebar
+                        activeAvatar = fullCharData; 
+                        updateAvatarUI(); 
                         
-                        // Save Avatar directly to Firestore
                         if (user) {
                             try {
                                 const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
@@ -744,7 +776,6 @@
                                 addLog(`[SYSTEM ERROR]: Could not save Avatar to the archive. The image may still be too large.`, "var(--term-red)");
                             }
 
-                            // Warn Guest Users
                             if (user.isAnonymous) {
                                 addLog(`[SYSTEM WARNING]: Your Architect identity is VOLATILE. If you close this terminal, [${charData.name}] will be lost.`, "var(--term-red)");
                                 addLog(`> Type <span class="text-blue-400">'REGISTER [email]'</span> now to bind your soul to the Archive.`, "var(--term-amber)");
@@ -752,7 +783,6 @@
                         }
                     }
 
-                    // Handle Viewing existing characters
                     if (res.trigger_view_characters) {
                         if (localCharacters.length === 0) {
                             addLog("[SYSTEM]: No manifestations found. Look into the mirrors of the Spare Room to define your avatar.", "var(--term-amber)");
@@ -762,12 +792,10 @@
                         }
                     }
 
-                    // Trigger Environment Visuals
                     if (res.trigger_visual && !res.trigger_character_creation) {
                         projectVisual(res.trigger_visual);
                     }
                     
-                    // Sync to Firestore Shared Reality (Just the logs for now)
                     if (isSyncEnabled && user) {
                         const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
                         await updateDoc(roomRef, { 
