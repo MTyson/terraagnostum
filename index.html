@@ -225,7 +225,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.6]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.7]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -238,13 +238,18 @@
                 </div>
             </div>
 
-            <!-- BIOMETRICS / AVATAR SIDEBAR (Hidden on mobile) -->
+            <!-- BIOMETRICS & INVENTORY SIDEBAR (Hidden on mobile) -->
             <div class="hidden md:flex w-64 flex-col border-l border-green-900 pl-4 overflow-y-auto shrink-0">
                 <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2">SYSTEM.BIOMETRICS</div>
                 <div id="avatar-container">
                     <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2">
                         NO VESSEL DETECTED<br>AWAITING IMPRINT
                     </div>
+                </div>
+                
+                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">SYSTEM.INVENTORY</div>
+                <div id="inventory-container" class="text-xs text-gray-500 flex flex-col gap-2">
+                    [EMPTY]
                 </div>
             </div>
         </div>
@@ -282,7 +287,7 @@
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        // The Structured Graph Map (Nodes & Edges) - Now with explicit directional Exits
+        // The Structured Graph Map
         let apartmentMap = {
             "lore1": {
                 name: "Lore Room (West)",
@@ -335,11 +340,13 @@
             }
         };
 
+        // Player State now includes an Inventory array
         let localPlayer = { 
             hp: 20, 
             currentRoom: "lore1",
-            posture: "standing", // standing, sitting, laying
-            facing: "north"      // north, south, east, west
+            posture: "standing",
+            facing: "north",
+            inventory: []
         };
         
         let localCharacters = []; 
@@ -382,6 +389,7 @@
                         const startRoom = apartmentMap[localPlayer.currentRoom] || apartmentMap["lore1"];
                         addLog(`[NARRATOR]: ${startRoom.description}`, "#888");
                         updateStatusUI();
+                        updateInventoryUI();
                         projectVisual(startRoom.visualPrompt);
                     }, 800);
                 }
@@ -404,7 +412,6 @@
 
         function setupMapListener() {
             if (!db) return;
-            // Bumped to v4 to force database override to clear out any bad cached maps
             const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v4');
             onSnapshot(mapRef, (snap) => {
                 if (!snap.exists()) {
@@ -424,7 +431,12 @@
                 const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
                 const snap = await getDoc(stateRef);
                 if (snap.exists()) {
-                    localPlayer = { ...localPlayer, ...snap.data() };
+                    const data = snap.data();
+                    localPlayer = { 
+                        ...localPlayer, 
+                        ...data,
+                        inventory: data.inventory || [] // Ensure inventory array exists
+                    };
                     if (localPlayer.currentRoom === 'main_room') {
                         localPlayer.currentRoom = 'lore1';
                     }
@@ -483,6 +495,22 @@
                     </div>
                 </div>
             `;
+        }
+
+        function updateInventoryUI() {
+            const container = document.getElementById('inventory-container');
+            if (localPlayer.inventory.length === 0) {
+                container.innerHTML = "[EMPTY]";
+                return;
+            }
+            
+            container.innerHTML = localPlayer.inventory.map(item => `
+                <div class="border border-[#1a3a1a] p-2 rounded bg-black/40">
+                    <span class="text-amber-500 font-bold block">${item.name}</span>
+                    <span class="text-[9px] text-blue-400 uppercase">${item.type}</span>
+                    <div class="mt-1 leading-tight">${item.description}</div>
+                </div>
+            `).join('');
         }
 
         function showMapModal() {
@@ -632,7 +660,6 @@
         async function executeMovement(targetDir) {
             const currentRoom = apartmentMap[localPlayer.currentRoom];
             
-            // Enforce physical constraints/locks locally
             if (targetDir === 'south' && localPlayer.currentRoom === 'hallway') {
                 addLog(`[SYSTEM]: The heavy metal door is deadbolted. You cannot go OUTSIDE.`, "var(--term-amber)");
                 return;
@@ -650,7 +677,6 @@
                 addLog(`[NARRATOR]: ${nextRoom.description}`, "#888");
                 projectVisual(nextRoom.visualPrompt);
                 
-                // Log movement to shared reality
                 if (isSyncEnabled && user) {
                     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
                     updateDoc(roomRef, { 
@@ -686,7 +712,6 @@
         const input = document.getElementById('cmd-input');
 
         input.addEventListener('keydown', async (e) => {
-            // ARROW KEY INTERCEPT - Instantly navigate if the input box is empty
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && input.value === '') {
                 e.preventDefault();
                 if (isProcessing) return;
@@ -711,8 +736,6 @@
 
                 addLog(val, "#ffffff");
 
-                // --- 1. LOCAL SYSTEM & DETERMINISTIC MOVEMENT INTERCEPT ---
-                // Bulletproof Regex: Catches "n", "north", "go north", "head to the west", etc.
                 const dirMatch = cmd.match(/^(?:go\s+(?:to\s+(?:the\s+)?)?|move\s+|walk\s+|head\s+)?(north|south|east|west|n|s|e|w)$/);
                 
                 if (dirMatch) {
@@ -731,13 +754,25 @@
                 } else if (cmd === 'map') {
                     showMapModal();
                     return;
+                } else if (cmd === 'inv' || cmd === 'inventory') {
+                    if (localPlayer.inventory.length === 0) {
+                        addLog("[SYSTEM]: Your inventory is empty.", "var(--term-amber)");
+                    } else {
+                        addLog("INVENTORY:", "var(--crayola-blue)");
+                        localPlayer.inventory.forEach(item => {
+                            addLog(`- ${item.name} [${item.type}]`, "var(--term-green)");
+                        });
+                    }
+                    return;
                 } else if (cmd === 'help') {
                     addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
                     addLog("  <span class='text-blue-400'>HELP</span>      - Display this manual");
-                    addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move between rooms deterministically (or use Arrow Keys)");
+                    addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move deterministically (or Arrow Keys)");
+                    addLog("  <span class='text-blue-400'>INV</span>       - List items currently held");
                     addLog("  <span class='text-blue-400'>MAP</span>       - View visual graph of current sector");
-                    addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity (e.g., 'REGISTER email@domain.com')");
+                    addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity");
                     addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets all other natural language intent.");
+                    addLog("               <span class='text-gray-500'>(e.g., 'create a book called Yoga Vasistha', 'read Yoga Vasistha')</span>");
                     return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
@@ -786,6 +821,7 @@
                 
                 try {
                     const currentRoomData = apartmentMap[localPlayer.currentRoom];
+                    const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
                     
                     const sysPrompt = `You are the overarching Game Master (The Source) of Terra Agnostum, a text-based terminal reality.
                     
@@ -794,18 +830,19 @@
                     - Room Description: ${currentRoomData.description}
                     - Player Posture: ${localPlayer.posture} (standing, sitting, laying)
                     - Player Facing: ${localPlayer.facing} (north, south, east, west)
+                    - Player Inventory: ${inventoryNames || "Empty"}
                     - Active NPC in focus: ${activeNPC || "None"}
 
                     Rules & Guardrails:
-                    1. Interpretation: Interpret user input for talking, looking, or changing posture.
-                    2. Strict Movement: ALL standard movement is handled by the client. If the user tries to move via natural language (e.g. "go to char room", "jump out window"), REFUSE the action and instruct them to use directional commands (N, S, E, W) or the Arrow Keys. Never output "new_room" for natural language movement.
+                    1. Interpretation: Interpret user input for talking, looking, interacting with items, or changing posture.
+                    2. Strict Movement: ALL standard movement is handled by the client. If the user tries to move via natural language (e.g. "go to char room"), REFUSE the action and instruct them to use directional commands (N, S, E, W) or the Arrow Keys. Never output "new_room" for natural language movement.
                     3. Lock Enforcement: Schrödinger's Closet and the Outside Door are locked. Do not let the player enter them.
                     4. Body Mechanics: Set "new_posture" or "new_facing" if the player changes physical orientation.
                     5. Visuals: Set "trigger_visual" with a description if the player looks at the environment significantly.
-                    6. Self Avatar Creation (PRIMARY IDENTITY): ONLY ALLOWED IN THE 'spare_room'. This establishes the user's permanent primary vessel/avatar in the world (NOT an NPC). If the user expresses intent to define themselves, create their avatar, or look in the mirror to see themselves:
-                       - If they DO NOT specify their name, ask them "What is the name of your primary vessel?" in the narrative and do NOT set "trigger_character_creation".
-                       - If they DO specify a name (e.g., "My name is Jack" or "create my character named Bob"), fill out the "trigger_character_creation" object using their chosen name. The narrative should confirm this is their true form.
-                    7. View Avatars: If the user wants to see their existing characters, cards, or avatars, set "trigger_view_characters": true.
+                    6. Self Avatar Creation: ONLY ALLOWED IN THE 'spare_room'. Ask for a name if none is given, otherwise output "trigger_character_creation".
+                    7. Item Creation (ARCHITECT POWER): If the user expresses clear intent to create, spawn, or materialize an item out of thin air (e.g., "create a book called Yoga Vasistha"), fill out "trigger_item_creation".
+                    8. Item Usage: If the user interacts with an item in their inventory (like reading a specific book they hold), provide the specific outcome in the narrative (e.g., read a profound, relevant quote from that book).
+                    9. Item Removal: If the user consumes, destroys, or drops an item they are holding, set "trigger_inventory_remove" to the exact name of the item.
                     
                     Respond STRICTLY in JSON:
                     {
@@ -818,7 +855,9 @@
                       "new_posture": "New posture if changed, otherwise null",
                       "new_facing": "New facing if changed, otherwise null",
                       "trigger_view_characters": false,
-                      "trigger_character_creation": null // OR an object: {"name": "...", "archetype": "...", "visual_prompt": "...", "stats": {"STR": 10, "DEX": 10, "INT": 10}}
+                      "trigger_character_creation": null,
+                      "trigger_item_creation": null, // OR {"name": "Item Name", "type": "Book|Artifact|Weapon|Tool", "description": "Brief lore description"}
+                      "trigger_inventory_remove": null // OR "Exact Name of Item to drop/destroy"
                     }`;
                     
                     const res = await callGemini(`User Input: ${val}`, sysPrompt);
@@ -829,6 +868,8 @@
                     }
 
                     let stateChanged = false;
+                    
+                    // State updates
                     if (res.new_posture && res.new_posture !== localPlayer.posture) {
                         localPlayer.posture = res.new_posture;
                         stateChanged = true;
@@ -838,8 +879,28 @@
                         stateChanged = true;
                     }
 
+                    // Inventory Add
+                    if (res.trigger_item_creation) {
+                        const newItem = res.trigger_item_creation;
+                        localPlayer.inventory.push(newItem);
+                        stateChanged = true;
+                        addLog(`[SYSTEM]: Materialized [${newItem.name}] into inventory.`, "var(--term-amber)");
+                    }
+
+                    // Inventory Remove
+                    if (res.trigger_inventory_remove) {
+                        const targetName = res.trigger_inventory_remove.toLowerCase();
+                        const initialLength = localPlayer.inventory.length;
+                        localPlayer.inventory = localPlayer.inventory.filter(i => i.name.toLowerCase() !== targetName);
+                        if (localPlayer.inventory.length < initialLength) {
+                            stateChanged = true;
+                            addLog(`[SYSTEM]: Removed [${res.trigger_inventory_remove}] from inventory.`, "var(--term-amber)");
+                        }
+                    }
+
                     if (stateChanged) {
                         updateStatusUI();
+                        updateInventoryUI();
                         savePlayerState(); 
                     }
                     
