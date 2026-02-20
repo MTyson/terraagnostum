@@ -194,7 +194,7 @@
 </head>
 <body class="crt">
 
-    <!-- MAP MODAL OVERLAY (Z-index 15 puts it above text, below CRT effect) -->
+    <!-- MAP MODAL OVERLAY -->
     <div id="map-modal" class="hidden fixed inset-0 bg-black/85 z-[15] backdrop-blur-sm flex items-center justify-center" onclick="this.classList.add('hidden')">
         <div class="border border-green-500 bg-[#050505] p-8 shadow-[0_0_20px_rgba(0,255,65,0.15)] text-green-500 font-mono" onclick="event.stopPropagation()">
             <div class="text-amber-500 mb-6 border-b border-green-900 pb-2 text-xs uppercase tracking-widest text-center">
@@ -206,7 +206,7 @@
 
     <div class="terminal-container">
         <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
-            <span>Node: <span id="room-display">MAIN_ROOM</span></span>
+            <span>Node: <span id="room-display">LORE1</span></span>
             <span id="player-status" class="text-amber-500">POS: STND | DIR: N</span>
             <span id="sync-status">SYNC: INITIALIZING</span>
             <span id="time-display">T+00:00:00</span>
@@ -225,7 +225,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.3]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.4]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -282,55 +282,62 @@
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        // The Structured Graph Map (Nodes & Edges) - Now a 'let' so Firebase can update it
+        // The Structured Graph Map (Nodes & Edges) - Updated Layout
         let apartmentMap = {
-            "main_room": {
-                name: "Main Room (Lore Room)",
-                shortName: "MAIN_ROOM",
-                description: "A dimly lit central living area. A large, flickering computer console dominates the space, humming with latent power.",
+            "lore1": {
+                name: "Lore Room (West)",
+                shortName: "LORE1",
+                description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall.",
                 visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.",
-                exits: ["kitchen", "spare_room", "hallway"]
+                exits: ["lore2", "closet", "bedroom"]
+            },
+            "lore2": {
+                name: "Lore Room (East)",
+                shortName: "LORE2",
+                description: "The eastern half of the main living area, acting as a central nexus connecting the apartment.",
+                visualPrompt: "A cyberpunk apartment living room, dim lighting, worn retro-futuristic couch, cables running along the floor.",
+                exits: ["lore1", "kitchen", "spare_room", "hallway"]
             },
             "closet": {
                 name: "Schrödinger's Closet",
                 shortName: "CLOSET",
-                description: "A heavily reinforced closet door. It hums with quantum uncertainty. It is currently sealed shut.",
+                description: "A heavily reinforced closet door north of the main console. It hums with quantum uncertainty. It is currently sealed shut.",
                 visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges.",
-                exits: ["hallway"]
+                exits: ["lore1"]
             },
             "kitchen": {
                 name: "Small Kitchen",
                 shortName: "KITCHEN",
-                description: "A cramped kitchenette with a dusty window looking out into an endless, foggy void.",
+                description: "A cramped kitchenette north of the living area with a dusty window looking out into an endless, foggy void.",
                 visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds.",
-                exits: ["main_room"]
+                exits: ["lore2"]
             },
             "spare_room": {
                 name: "Spare Room (Character Room)",
-                shortName: "SPARE_ROOM",
-                description: "An empty room with mirrors covering the walls. A place to reflect and build oneself.",
+                shortName: "CHAR_RM",
+                description: "An empty room east of the main area with mirrors covering the walls. A place to reflect and build oneself.",
                 visualPrompt: "An empty room with walls entirely made of mirrors, reflecting a lonely terminal interface in the center.",
-                exits: ["main_room"]
+                exits: ["lore2"]
             },
             "bedroom": {
                 name: "Bedroom & Bathroom",
                 shortName: "BEDROOM",
-                description: "A simple sleeping quarters with an attached, sterile bathroom.",
+                description: "A simple sleeping quarters south of the console with an attached, sterile bathroom.",
                 visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom.",
-                exits: ["hallway"]
+                exits: ["lore1"]
             },
             "hallway": {
                 name: "Hallway",
                 shortName: "HALLWAY",
-                description: "A narrow corridor connecting the apartment. The front door leading 'outside' is heavily deadbolted.",
+                description: "A narrow corridor extending south. At the far southern end is the front door leading 'outside', heavily deadbolted.",
                 visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door with multiple deadbolts, glowing red 'LOCKED' signs.",
-                exits: ["main_room", "bedroom", "closet"]
+                exits: ["lore2"]
             }
         };
 
         let localPlayer = { 
             hp: 20, 
-            currentRoom: "main_room",
+            currentRoom: "lore1",
             posture: "standing", // standing, sitting, laying
             facing: "north"      // north, south, east, west
         };
@@ -368,13 +375,11 @@
                     setupWorldListener();
                     setupMapListener();
                     
-                    // Crucial: Load player location BEFORE rendering initial visual
                     await loadPlayerState(); 
                     loadUserCharacters();
                     
                     setTimeout(() => {
-                        // Fallback to main_room if their saved room was deleted
-                        const startRoom = apartmentMap[localPlayer.currentRoom] || apartmentMap["main_room"];
+                        const startRoom = apartmentMap[localPlayer.currentRoom] || apartmentMap["lore1"];
                         addLog(`[NARRATOR]: ${startRoom.description}`, "#888");
                         updateStatusUI();
                         projectVisual(startRoom.visualPrompt);
@@ -387,7 +392,6 @@
             }
         }
 
-        // Listens for global events/chat in the general area
         function setupWorldListener() {
             if (!db) return;
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
@@ -398,16 +402,13 @@
             });
         }
 
-        // Listens for structural changes to the World Graph!
         function setupMapListener() {
             if (!db) return;
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph');
+            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v2');
             onSnapshot(mapRef, (snap) => {
                 if (!snap.exists()) {
-                    // Seed the database with our default map structure
                     setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
                 } else {
-                    // Sync our local client map with the database
                     const data = snap.data();
                     if (data.nodes) {
                         apartmentMap = data.nodes;
@@ -416,22 +417,23 @@
             });
         }
 
-        // Memory Retrieval: Gets the user's physical location
         async function loadPlayerState() {
             if (!db || !user) return;
             try {
                 const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
                 const snap = await getDoc(stateRef);
                 if (snap.exists()) {
-                    // Merge DB state over the default state
                     localPlayer = { ...localPlayer, ...snap.data() };
+                    // Safely migrate users from old map version
+                    if (localPlayer.currentRoom === 'main_room') {
+                        localPlayer.currentRoom = 'lore1';
+                    }
                 }
             } catch (e) {
                 console.error("Failed to load player state:", e);
             }
         }
 
-        // Memory Write: Saves the user's physical location
         async function savePlayerState() {
             if (!db || !user) return;
             try {
@@ -488,7 +490,6 @@
             const modal = document.getElementById('map-modal');
             const content = document.getElementById('map-content');
 
-            // Helper to style the current node brightly
             const getNode = (roomKey) => {
                 const short = apartmentMap[roomKey]?.shortName || "UNKNOWN";
                 if (localPlayer.currentRoom === roomKey) {
@@ -497,13 +498,16 @@
                 return `<span class="text-gray-600">[${short}]</span>`;
             };
 
-            // Hardcoded structural ASCII representation of the graph
+            // Redrawn ASCII layout for the new Lore 1 / Lore 2 setup
             content.innerHTML = `
-                             ${getNode('kitchen')}
-                                 |
-              ${getNode('spare_room')} -- ${getNode('main_room')} -- ${getNode('hallway')} -- ${getNode('closet')}
-                                              |
-                                          ${getNode('bedroom')}
+       ${getNode('closet')}       ${getNode('kitchen')}
+          |             |
+       ${getNode('lore1')} --- ${getNode('lore2')} --- ${getNode('spare_room')}
+          |             |
+     ${getNode('bedroom')}      ${getNode('hallway')}
+                        |
+                  [ OUTSIDE ]
+                  ( LOCKED  )
             `;
             
             modal.classList.remove('hidden');
@@ -623,7 +627,7 @@
             const posShort = localPlayer.posture === 'standing' ? 'STND' : (localPlayer.posture === 'sitting' ? 'SIT' : 'LAY');
             const dirShort = localPlayer.facing.charAt(0).toUpperCase();
             document.getElementById('player-status').innerText = `POS: ${posShort} | DIR: ${dirShort}`;
-            document.getElementById('room-display').innerText = localPlayer.currentRoom.toUpperCase();
+            document.getElementById('room-display').innerText = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
         }
 
         async function callGemini(userInput, systemPrompt) {
@@ -731,12 +735,13 @@
                     - Active NPC in focus: ${activeNPC || "None"}
                     
                     World Map Graph (The Apartment):
-                    - main_room: Connects to 'kitchen', 'spare_room', 'hallway'.
-                    - kitchen: Connects to 'main_room'.
-                    - spare_room: Connects to 'main_room'. (Self avatar creation room).
-                    - hallway: Connects to 'main_room', 'bedroom', 'closet'. Contains locked front door.
-                    - bedroom: Connects to 'hallway'.
-                    - closet: Connects to 'hallway'. (Locked).
+                    - lore1: Connects to 'lore2', 'closet', 'bedroom'. Contains the console.
+                    - lore2: Connects to 'lore1', 'kitchen', 'spare_room', 'hallway'.
+                    - kitchen: Connects to 'lore2'.
+                    - spare_room: Connects to 'lore2'. (Self avatar creation room).
+                    - hallway: Connects to 'lore2'. Contains locked front door at south end.
+                    - bedroom: Connects to 'lore1'.
+                    - closet: Connects to 'lore1'. (Locked).
 
                     Rules & Guardrails:
                     1. Interpretation: Interpret user input for talking, moving, looking, or changing posture.
