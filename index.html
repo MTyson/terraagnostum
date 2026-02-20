@@ -225,7 +225,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.2]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v5.3]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> Environment: <span class="text-blue-400">The Apartment</span></p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -253,7 +253,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
@@ -282,8 +282,8 @@
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        // The Structured Graph Map (Nodes & Edges)
-        const apartmentMap = {
+        // The Structured Graph Map (Nodes & Edges) - Now a 'let' so Firebase can update it
+        let apartmentMap = {
             "main_room": {
                 name: "Main Room (Lore Room)",
                 shortName: "MAIN_ROOM",
@@ -356,7 +356,7 @@
                     });
             }
 
-            onAuthStateChanged(auth, (u) => {
+            onAuthStateChanged(auth, async (u) => {
                 user = u;
                 if (user && !hasInitialized) {
                     hasInitialized = true;
@@ -366,11 +366,17 @@
                     addLog(`${userType} LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
                     
                     setupWorldListener();
+                    setupMapListener();
+                    
+                    // Crucial: Load player location BEFORE rendering initial visual
+                    await loadPlayerState(); 
                     loadUserCharacters();
                     
                     setTimeout(() => {
-                        const startRoom = apartmentMap[localPlayer.currentRoom];
+                        // Fallback to main_room if their saved room was deleted
+                        const startRoom = apartmentMap[localPlayer.currentRoom] || apartmentMap["main_room"];
                         addLog(`[NARRATOR]: ${startRoom.description}`, "#888");
+                        updateStatusUI();
                         projectVisual(startRoom.visualPrompt);
                     }, 800);
                 }
@@ -381,6 +387,7 @@
             }
         }
 
+        // Listens for global events/chat in the general area
         function setupWorldListener() {
             if (!db) return;
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
@@ -389,6 +396,50 @@
                     setDoc(roomRef, { created: serverTimestamp(), manifestations: [] });
                 }
             });
+        }
+
+        // Listens for structural changes to the World Graph!
+        function setupMapListener() {
+            if (!db) return;
+            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph');
+            onSnapshot(mapRef, (snap) => {
+                if (!snap.exists()) {
+                    // Seed the database with our default map structure
+                    setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
+                } else {
+                    // Sync our local client map with the database
+                    const data = snap.data();
+                    if (data.nodes) {
+                        apartmentMap = data.nodes;
+                    }
+                }
+            });
+        }
+
+        // Memory Retrieval: Gets the user's physical location
+        async function loadPlayerState() {
+            if (!db || !user) return;
+            try {
+                const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+                const snap = await getDoc(stateRef);
+                if (snap.exists()) {
+                    // Merge DB state over the default state
+                    localPlayer = { ...localPlayer, ...snap.data() };
+                }
+            } catch (e) {
+                console.error("Failed to load player state:", e);
+            }
+        }
+
+        // Memory Write: Saves the user's physical location
+        async function savePlayerState() {
+            if (!db || !user) return;
+            try {
+                const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+                await setDoc(stateRef, localPlayer);
+            } catch (e) {
+                console.error("Failed to save player state:", e);
+            }
         }
 
         async function loadUserCharacters() {
@@ -439,7 +490,7 @@
 
             // Helper to style the current node brightly
             const getNode = (roomKey) => {
-                const short = apartmentMap[roomKey].shortName;
+                const short = apartmentMap[roomKey]?.shortName || "UNKNOWN";
                 if (localPlayer.currentRoom === roomKey) {
                     return `<span class="text-black bg-green-500 font-bold px-1 shadow-[0_0_8px_rgba(0,255,65,0.8)]">[${short}]</span>`;
                 }
@@ -734,7 +785,11 @@
                         stateChanged = true;
                     }
 
-                    if (stateChanged) updateStatusUI();
+                    // Save persistence state if body or location changed!
+                    if (stateChanged) {
+                        updateStatusUI();
+                        savePlayerState(); 
+                    }
                     
                     const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
                     addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
