@@ -37,4 +37,4 @@ To establish a local instance of the Terminal, execute the following directives 
    git clone [https://github.com/your-username/terra-agnostum.git](https://github.com/your-username/terra-agnostum.git)
    cd terra-agnostum
 
-*What your do, O Seeker, know that it is nothing but pure consciousness.*
+### What your do, O Seeker, know that it is nothing but pure consciousness.
