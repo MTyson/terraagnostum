@@ -405,13 +405,11 @@
                     await loadPlayerState(); 
                     loadUserCharacters();
                     
-                    setTimeout(() => {
-                        printRoomDescription();
-                        updateStatusUI();
-                        updateInventoryUI();
-                        updateRoomItemsUI();
-                        projectVisual(apartmentMap[localPlayer.currentRoom]?.visualPrompt || apartmentMap["lore1"].visualPrompt);
-                    }, 800);
+                    printRoomDescription();
+                    updateStatusUI();
+                    updateInventoryUI();
+                    updateRoomItemsUI();
+                    projectVisual(apartmentMap[localPlayer.currentRoom]?.visualPrompt || apartmentMap["lore1"].visualPrompt);
                 }
             });
 
@@ -432,7 +430,7 @@
 
         function setupMapListener() {
             if (!db) return;
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v7');
             onSnapshot(mapRef, (snap) => {
                 if (!snap.exists()) {
                     setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
@@ -767,7 +765,7 @@
                 
                 // Sync to Firebase ATOMICALLY
                 if (isSyncEnabled) {
-                    const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                    const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v7');
                     updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(wizardState.pendingItem) });
                 }
                 
@@ -869,7 +867,7 @@
                         
                         // Atomic remote update
                         if (isSyncEnabled) {
-                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v7');
                             updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayRemove(item) });
                         }
                         
@@ -897,7 +895,7 @@
                         
                         // Atomic remote update
                         if (isSyncEnabled) {
-                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v5');
+                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v7');
                             updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(item) });
                         }
                         
@@ -909,6 +907,35 @@
                     } else {
                         addLog(`[SYSTEM]: You are not carrying '${itemName}'.`, "var(--term-amber)");
                     }
+                    return;
+                } else if (cmd.startsWith('destroy ') || cmd.startsWith('delete ')) {
+                    const itemName = cmd.replace(/^(destroy|delete)\s+/, '').toLowerCase();
+                    const room = apartmentMap[localPlayer.currentRoom];
+                    
+                    // Check inventory first
+                    const invIdx = localPlayer.inventory.findIndex(i => i.name.toLowerCase().includes(itemName));
+                    if (invIdx > -1) {
+                        const item = localPlayer.inventory.splice(invIdx, 1)[0];
+                        savePlayerState();
+                        updateInventoryUI();
+                        addLog(`[SYSTEM]: You permanently destroyed [${item.name}] from your inventory.`, "var(--term-red)");
+                        return;
+                    }
+                    
+                    // Check room
+                    const roomIdx = (room.items || []).findIndex(i => i.name.toLowerCase().includes(itemName));
+                    if (roomIdx > -1) {
+                        const item = room.items.splice(roomIdx, 1)[0];
+                        if (isSyncEnabled) {
+                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_v7');
+                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayRemove(item) });
+                        }
+                        updateRoomItemsUI();
+                        addLog(`[SYSTEM]: You permanently destroyed [${item.name}] from the room.`, "var(--term-red)");
+                        return;
+                    }
+                    
+                    addLog(`[SYSTEM]: Could not find '${itemName}' to destroy.`, "var(--term-amber)");
                     return;
                 } else if (cmd === 'quest') {
                     isGameMode = true;
@@ -934,6 +961,7 @@
                     addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move deterministically (or Arrow Keys)");
                     addLog("  <span class='text-blue-400'>CREATE</span>    - Materialize a new item into the room");
                     addLog("  <span class='text-blue-400'>TAKE/DROP</span> - Manage items (e.g., 'TAKE book')");
+                    addLog("  <span class='text-blue-400'>DESTROY</span>   - Permanently delete an item");
                     addLog("  <span class='text-blue-400'>INV</span>       - List items currently held");
                     addLog("  <span class='text-blue-400'>MAP</span>       - View visual graph of current sector");
                     addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity");
