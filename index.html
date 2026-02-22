@@ -293,7 +293,7 @@
             document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
         }
 
-        // The Structured Graph Map (Now includes 'items' array and 'marginalia' array)
+        // The Structured Graph Map (Now includes 'outside' unrendered placeholder)
         let apartmentMap = {
             "lore1": {
                 name: "Lore Room (West)",
@@ -352,9 +352,18 @@
             "hallway": {
                 name: "Hallway",
                 shortName: "HALLWAY",
-                description: "A narrow corridor extending south. At the far southern end is the front door leading 'outside', heavily deadbolted.",
-                visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door with multiple deadbolts, glowing red 'LOCKED' signs.",
-                exits: { north: "lore2" },
+                description: "A narrow corridor extending south. At the far southern end is the front door leading 'outside'. The deadbolts are currently unlocked.",
+                visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door, standing slightly open.",
+                exits: { north: "lore2", south: "outside" },
+                items: [],
+                marginalia: []
+            },
+            "outside": {
+                name: "The Unrendered Edge",
+                shortName: "VOID",
+                description: "The entire area ahead looks like it's made of cardboard, construction paper, and crayon. The Technate's render engine hasn't processed this sector yet.",
+                visualPrompt: "A glitching transition where a realistic cyberpunk city abruptly turns into a crude child's crayon drawing on cardboard.",
+                exits: { north: "hallway" },
                 items: [],
                 marginalia: []
             }
@@ -374,11 +383,12 @@
         let user = null;
         let hasInitialized = false;
 
-        // Creation Wizard State
+        // Expanded Creation Wizard State
         let wizardState = {
             active: false,
+            type: null, // 'item', 'room', or 'expand'
             step: 0,
-            pendingItem: {}
+            pendingData: {}
         };
 
         if (isSyncEnabled) {
@@ -437,7 +447,6 @@
 
         function setupMapListener() {
             if (!db) return;
-            // Locked into the permanent live map. No more version bumping/wiping!
             const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
             onSnapshot(mapRef, (snap) => {
                 if (!snap.exists()) {
@@ -582,23 +591,29 @@
             const modal = document.getElementById('map-modal');
             const content = document.getElementById('map-content');
 
-            const getNode = (roomKey) => {
-                const short = apartmentMap[roomKey]?.shortName || "UNKNOWN";
-                if (localPlayer.currentRoom === roomKey) {
-                    return `<span class="text-black bg-green-500 font-bold px-1 shadow-[0_0_8px_rgba(0,255,65,0.8)]">[${short}]</span>`;
-                }
-                return `<span class="text-gray-600">[${short}]</span>`;
+            const curr = apartmentMap[localPlayer.currentRoom];
+            
+            const formatNode = (key) => {
+                if (!key || !apartmentMap[key]) return "           ";
+                let short = (apartmentMap[key].shortName || "???").substring(0,7);
+                let padLeft = Math.floor((7 - short.length) / 2);
+                let padRight = 7 - short.length - padLeft;
+                short = ' '.repeat(padLeft) + short + ' '.repeat(padRight);
+                return `[ ${short} ]`;
             };
 
+            const currFmt = `<span class="text-black bg-green-500 font-bold shadow-[0_0_8px_rgba(0,255,65,0.8)]">${formatNode(localPlayer.currentRoom)}</span>`;
+
+            // Dynamically renders the cross-section of the graph you are currently standing in
             content.innerHTML = `
-       ${getNode('closet')}       ${getNode('kitchen')}
-          |             |
-       ${getNode('lore1')} --- ${getNode('lore2')} --- ${getNode('spare_room')}
-          |             |
-     ${getNode('bedroom')}      ${getNode('hallway')}
-                        |
-                  [ OUTSIDE ]
-                  ( LOCKED  )
+LOCAL TOPOLOGY MAP
+------------------
+
+                   ${formatNode(curr.exits?.north)}
+                          |
+ ${formatNode(curr.exits?.west)} --- ${currFmt} --- ${formatNode(curr.exits?.east)}
+                          |
+                   ${formatNode(curr.exits?.south)}
             `;
             
             modal.classList.remove('hidden');
@@ -725,11 +740,6 @@
         async function executeMovement(targetDir) {
             const currentRoom = apartmentMap[localPlayer.currentRoom];
             
-            if (targetDir === 'south' && localPlayer.currentRoom === 'hallway') {
-                addLog(`[SYSTEM]: The heavy metal door is deadbolted. You cannot go OUTSIDE.`, "var(--term-amber)");
-                return;
-            }
-
             if (currentRoom.exits && currentRoom.exits[targetDir]) {
                 const nextRoomKey = currentRoom.exits[targetDir];
                 localPlayer.currentRoom = nextRoomKey;
@@ -760,36 +770,119 @@
 
         // Creation Wizard Step Handler
         function handleWizardInput(val) {
-            if (wizardState.step === 1) {
-                if (!val) { addLog(`[WIZARD]: Name cannot be empty. Enter item name:`, "var(--term-red)"); return; }
-                wizardState.pendingItem.name = val;
-                addLog(`[WIZARD]: Name set to '${val}'. What type of item is this? (e.g., Book, Key, Weapon)`, "var(--term-amber)");
-                wizardState.step++;
-            } else if (wizardState.step === 2) {
-                wizardState.pendingItem.type = val || 'Artifact';
-                addLog(`[WIZARD]: Type set to '${wizardState.pendingItem.type}'. Finally, provide a short physical description.`, "var(--term-amber)");
-                wizardState.step++;
-            } else if (wizardState.step === 3) {
-                wizardState.pendingItem.description = val || 'An unknown manifestation.';
-                wizardState.pendingItem.id = Date.now().toString(); // unique ID
-                
-                // Add to room locally (optimistic)
-                const room = apartmentMap[localPlayer.currentRoom];
-                if (!room.items) room.items = [];
-                room.items.push(wizardState.pendingItem);
-                
-                // Sync to Firebase ATOMICALLY
-                if (isSyncEnabled) {
-                    const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-                    updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(wizardState.pendingItem) });
+            if (wizardState.type === 'item') {
+                if (wizardState.step === 1) {
+                    if (!val) { addLog(`[WIZARD]: Name cannot be empty. Enter item name:`, "var(--term-red)"); return; }
+                    wizardState.pendingData.name = val;
+                    addLog(`[WIZARD]: Name set to '${val}'. What type of item is this? (e.g., Book, Key, Weapon)`, "var(--term-amber)");
+                    wizardState.step++;
+                } else if (wizardState.step === 2) {
+                    wizardState.pendingData.type = val || 'Artifact';
+                    addLog(`[WIZARD]: Type set to '${wizardState.pendingData.type}'. Finally, provide a short physical description.`, "var(--term-amber)");
+                    wizardState.step++;
+                } else if (wizardState.step === 3) {
+                    wizardState.pendingData.description = val || 'An unknown manifestation.';
+                    wizardState.pendingData.id = Date.now().toString(); // unique ID
+                    
+                    // Add to room locally (optimistic)
+                    const room = apartmentMap[localPlayer.currentRoom];
+                    if (!room.items) room.items = [];
+                    room.items.push(wizardState.pendingData);
+                    
+                    // Sync to Firebase ATOMICALLY
+                    if (isSyncEnabled) {
+                        const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                        updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(wizardState.pendingData) });
+                    }
+                    
+                    updateRoomItemsUI();
+                    addLog(`[SYSTEM]: Successfully materialized [${wizardState.pendingData.name}] into ${room.name}.`, "var(--term-green)");
+                    
+                    // Reset Wizard
+                    document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
+                    wizardState = { active: false, type: null, step: 0, pendingData: {} };
                 }
-                
-                updateRoomItemsUI();
-                addLog(`[SYSTEM]: Successfully materialized [${wizardState.pendingItem.name}] into ${room.name}.`, "var(--term-green)");
-                
-                // Reset Wizard
-                document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
-                wizardState = { active: false, step: 0, pendingItem: {} };
+            } else if (wizardState.type === 'room') {
+                if (wizardState.step === 1) {
+                    if (!val) { addLog(`[WIZARD]: Name cannot be empty. Enter new room name:`, "var(--term-red)"); return; }
+                    wizardState.pendingData.name = val;
+                    addLog(`[WIZARD]: Room Name set to '${val}'. Now, enter the narrative description of the room:`, "var(--term-amber)");
+                    wizardState.step++;
+                } else if (wizardState.step === 2) {
+                    wizardState.pendingData.description = val || 'An indistinct area.';
+                    addLog(`[WIZARD]: Description saved. Finally, enter a visual prompt for the AI image generator (e.g., 'A dark alleyway with neon signs'):`, "var(--term-amber)");
+                    wizardState.step++;
+                } else if (wizardState.step === 3) {
+                    wizardState.pendingData.visualPrompt = val || 'A glitchy, undefined space.';
+
+                    const rKey = localPlayer.currentRoom;
+                    apartmentMap[rKey].name = wizardState.pendingData.name;
+                    apartmentMap[rKey].shortName = wizardState.pendingData.name.substring(0, 7).toUpperCase();
+                    apartmentMap[rKey].description = wizardState.pendingData.description;
+                    apartmentMap[rKey].visualPrompt = wizardState.pendingData.visualPrompt;
+
+                    if (isSyncEnabled) {
+                        const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                        updateDoc(mapRef, {
+                            [`nodes.${rKey}.name`]: wizardState.pendingData.name,
+                            [`nodes.${rKey}.shortName`]: apartmentMap[rKey].shortName,
+                            [`nodes.${rKey}.description`]: wizardState.pendingData.description,
+                            [`nodes.${rKey}.visualPrompt`]: wizardState.pendingData.visualPrompt
+                        });
+                    }
+
+                    addLog(`[SYSTEM]: Sector successfully re-rendered.`, "var(--term-green)");
+                    printRoomDescription();
+                    projectVisual(apartmentMap[rKey].visualPrompt);
+                    updateStatusUI();
+
+                    document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
+                    wizardState = { active: false, type: null, step: 0, pendingData: {} };
+                }
+            } else if (wizardState.type === 'expand') {
+                if (wizardState.step === 1) {
+                    wizardState.pendingData.name = val || "New Area";
+                    addLog(`[WIZARD]: Room Name set. Enter the narrative description:`, "var(--term-amber)");
+                    wizardState.step++;
+                } else if (wizardState.step === 2) {
+                    wizardState.pendingData.description = val || 'An indistinct area.';
+                    addLog(`[WIZARD]: Description saved. Enter a visual prompt for the image generator:`, "var(--term-amber)");
+                    wizardState.step++;
+                } else if (wizardState.step === 3) {
+                    wizardState.pendingData.visualPrompt = val || 'A glitchy, undefined space.';
+
+                    const newRoomId = 'node_' + Date.now();
+                    const currentRoomKey = localPlayer.currentRoom;
+                    const dir = wizardState.pendingData.direction; 
+                    const reverseDir = { 'north':'south', 'south':'north', 'east':'west', 'west':'east' }[dir];
+
+                    const newNode = {
+                        name: wizardState.pendingData.name,
+                        shortName: wizardState.pendingData.name.substring(0, 7).toUpperCase(),
+                        description: wizardState.pendingData.description,
+                        visualPrompt: wizardState.pendingData.visualPrompt,
+                        exits: { [reverseDir]: currentRoomKey },
+                        items: [],
+                        marginalia: []
+                    };
+
+                    apartmentMap[newRoomId] = newNode;
+                    if (!apartmentMap[currentRoomKey].exits) apartmentMap[currentRoomKey].exits = {};
+                    apartmentMap[currentRoomKey].exits[dir] = newRoomId;
+
+                    if (isSyncEnabled) {
+                        const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                        updateDoc(mapRef, {
+                            [`nodes.${currentRoomKey}.exits.${dir}`]: newRoomId,
+                            [`nodes.${newRoomId}`]: newNode
+                        });
+                    }
+
+                    addLog(`[SYSTEM]: Sector materialization complete. Path to the ${dir.toUpperCase()} is now open.`, "var(--term-green)");
+                    
+                    document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
+                    wizardState = { active: false, type: null, step: 0, pendingData: {} };
+                }
             }
         }
 
@@ -856,11 +949,29 @@
                     return;
                 }
 
-                if (cmd === 'create') {
-                    wizardState.active = true;
-                    wizardState.step = 1;
+                if (cmd === 'create' || cmd === 'create item') {
+                    wizardState = { active: true, type: 'item', step: 1, pendingData: {} };
                     document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@MATERIA:~$</span>&nbsp;`;
                     addLog(`[WIZARD]: Materialization Protocol Started. Enter the name of the new item:`, "var(--term-amber)");
+                    return;
+                } else if (cmd === 'edit room' || cmd === 'rewrite room' || cmd === 'render room') {
+                    wizardState = { active: true, type: 'room', step: 1, pendingData: {} };
+                    document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@SECTOR:~$</span>&nbsp;`;
+                    addLog(`[WIZARD]: Sector Overwrite Protocol Started. Enter the new NAME for this room:`, "var(--term-amber)");
+                    return;
+                } else if (cmd.startsWith('build ')) {
+                    const dir = cmd.split(' ')[1];
+                    if (!['north', 'south', 'east', 'west'].includes(dir)) {
+                        addLog(`[SYSTEM]: Invalid direction. Use 'build north/south/east/west'.`, "var(--term-amber)");
+                        return;
+                    }
+                    if (apartmentMap[localPlayer.currentRoom].exits && apartmentMap[localPlayer.currentRoom].exits[dir]) {
+                        addLog(`[SYSTEM]: A path to the ${dir.toUpperCase()} already exists here.`, "var(--term-red)");
+                        return;
+                    }
+                    wizardState = { active: true, type: 'expand', step: 1, pendingData: { direction: dir } };
+                    document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@EXPAND:~$</span>&nbsp;`;
+                    addLog(`[WIZARD]: Spatial Expansion Protocol Started. Enter the NAME for the new room to the ${dir.toUpperCase()}:`, "var(--term-amber)");
                     return;
                 } else if (cmd === 'look' || cmd === 'l') {
                     printRoomDescription();
@@ -971,17 +1082,19 @@
                     return;
                 } else if (cmd === 'help') {
                     addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
-                    addLog("  <span class='text-blue-400'>HELP</span>      - Display this manual");
-                    addLog("  <span class='text-blue-400'>LOOK</span>      - Inspect current room and items");
-                    addLog("  <span class='text-blue-400'>N,S,E,W</span>   - Move deterministically (or Arrow Keys)");
-                    addLog("  <span class='text-blue-400'>CREATE</span>    - Materialize a new item into the room");
-                    addLog("  <span class='text-blue-400'>TAKE/DROP</span> - Manage items (e.g., 'TAKE book')");
-                    addLog("  <span class='text-blue-400'>DESTROY</span>   - Permanently delete an item");
-                    addLog("  <span class='text-blue-400'>INV</span>       - List items currently held");
-                    addLog("  <span class='text-blue-400'>MAP</span>       - View visual graph of current sector");
-                    addLog("  <span class='text-blue-400'>REGISTER</span>  - Save your identity");
-                    addLog("  <span class='text-amber-400'>[ANY]</span>     - The System interprets natural language actions.");
-                    addLog("               <span class='text-gray-500'>(e.g., 'write on wall with marker', 'read book')</span>");
+                    addLog("  <span class='text-blue-400'>HELP</span>          - Display this manual");
+                    addLog("  <span class='text-blue-400'>LOOK</span>          - Inspect current room and items");
+                    addLog("  <span class='text-blue-400'>N,S,E,W</span>       - Move deterministically (or Arrow Keys)");
+                    addLog("  <span class='text-blue-400'>CREATE</span>        - Materialize a new item into the room");
+                    addLog("  <span class='text-blue-400'>EDIT ROOM</span>     - Permanently rewrite the current room's description/art");
+                    addLog("  <span class='text-blue-400'>BUILD [DIR]</span>   - Expand the map (e.g., 'BUILD NORTH')");
+                    addLog("  <span class='text-blue-400'>TAKE/DROP</span>     - Manage items (e.g., 'TAKE book')");
+                    addLog("  <span class='text-blue-400'>DESTROY</span>       - Permanently delete an item");
+                    addLog("  <span class='text-blue-400'>INV</span>           - List items currently held");
+                    addLog("  <span class='text-blue-400'>MAP</span>           - View visual graph of local topology");
+                    addLog("  <span class='text-blue-400'>REGISTER</span>      - Save your identity");
+                    addLog("  <span class='text-amber-400'>[ANY]</span>         - The System interprets natural language actions.");
+                    addLog("                   <span class='text-gray-500'>(e.g., 'write on wall with marker', 'read book')</span>");
                     return;
                 } else if (cmd === 'test') {
                     await callSimpleTestAPI();
