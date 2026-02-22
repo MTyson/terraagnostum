@@ -134,6 +134,12 @@
             text-align: left;
             box-shadow: 0 0 10px rgba(255, 176, 0, 0.1);
             vertical-align: top;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .char-card:hover {
+            border-color: var(--term-green);
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
         }
         .char-card-header {
             display: flex;
@@ -533,7 +539,7 @@
             if (!activeAvatar) return;
 
             container.innerHTML = `
-                <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a]">
+                <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a]" onclick="document.getElementById('cmd-input').value = 'stat'; document.getElementById('cmd-input').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));">
                     <div class="char-card-header border-b border-[#1a3a1a] pb-2 mb-2">
                         <span class="char-card-title text-[10px] text-amber-500">[ACTV] ${activeAvatar.name}</span>
                         <span class="char-card-archetype text-[8px]">${activeAvatar.archetype}</span>
@@ -542,9 +548,9 @@
                         ${activeAvatar.image ? `<img class="char-card-img" src="${activeAvatar.image}" alt="${activeAvatar.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[NO IMG]</div>`}
                     </div>
                     <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0">
-                        <span>STR: ${activeAvatar.stats.STR || 10}</span>
-                        <span>DEX: ${activeAvatar.stats.DEX || 10}</span>
-                        <span>INT: ${activeAvatar.stats.INT || 10}</span>
+                        <span>WIL: ${activeAvatar.stats.WILL || 20}</span>
+                        <span>CON: ${activeAvatar.stats.CONS || 20}</span>
+                        <span>PHY: ${activeAvatar.stats.PHYS || 20}</span>
                     </div>
                 </div>
             `;
@@ -701,9 +707,9 @@ LOCAL TOPOLOGY MAP
                         ${charData.visual_prompt}
                     </div>
                     <div class="char-card-stats">
-                        <span>STR: ${charData.stats.STR || 10}</span>
-                        <span>DEX: ${charData.stats.DEX || 10}</span>
-                        <span>INT: ${charData.stats.INT || 10}</span>
+                        <span>WIL: ${charData.stats.WILL || 20}</span>
+                        <span>CON: ${charData.stats.CONS || 20}</span>
+                        <span>PHY: ${charData.stats.PHYS || 20}</span>
                     </div>
                 </div>
             `;
@@ -1012,6 +1018,20 @@ LOCAL TOPOLOGY MAP
                     printRoomDescription();
                     projectVisual(apartmentMap[localPlayer.currentRoom].visualPrompt);
                     return;
+                } else if (cmd === 'stat' || cmd === 'stats') {
+                    if (!activeAvatar) {
+                        addLog(`[SYSTEM]: No genetic imprint detected. You are an itinerate void.`, "var(--term-amber)");
+                        return;
+                    }
+                    addLog(`====================================`, "var(--crayola-blue)");
+                    addLog(`>> IDENTITY: ${activeAvatar.name}`, "var(--term-green)");
+                    addLog(`>> CLASS: ${activeAvatar.archetype}`, "var(--term-green)");
+                    addLog(`------------------------------------`, "var(--crayola-blue)");
+                    addLog(`>> WILL (Drive/Focus): ${activeAvatar.stats.WILL || 20}`, "var(--term-amber)");
+                    addLog(`>> CONSCIOUSNESS (Aethal/Perception): ${activeAvatar.stats.CONS || 20}`, "var(--term-amber)");
+                    addLog(`>> PHYSICALITY (Form/Grit): ${activeAvatar.stats.PHYS || 20}`, "var(--term-amber)");
+                    addLog(`====================================`, "var(--crayola-blue)");
+                    return;
                 } else if (cmd.startsWith('take ') || cmd.startsWith('get ') || cmd.startsWith('pick up ')) {
                     const itemName = cmd.replace(/^(take|get|pick up)\s+/, '').toLowerCase();
                     const room = apartmentMap[localPlayer.currentRoom];
@@ -1127,6 +1147,7 @@ LOCAL TOPOLOGY MAP
                     addLog("  <span class='text-blue-400'>DESTROY</span>       - Permanently delete an item");
                     addLog("  <span class='text-blue-400'>INV</span>           - List items currently held");
                     addLog("  <span class='text-blue-400'>MAP</span>           - View visual graph of local topology");
+                    addLog("  <span class='text-blue-400'>STAT</span>          - View character attributes");
                     addLog("  <span class='text-blue-400'>REGISTER</span>      - Save your identity");
                     addLog("  <span class='text-amber-400'>[ANY]</span>         - The System interprets natural language actions.");
                     addLog("                   <span class='text-gray-500'>(e.g., 'write on wall with marker', 'read book')</span>");
@@ -1208,7 +1229,7 @@ LOCAL TOPOLOGY MAP
                       "new_facing": "New facing if changed, otherwise null",
                       "world_edit": null or {"type": "add_marginalia", "target_room": "the_room_key", "text": "The text of the permanent modification (e.g., 'Scrawled on the north door is: Schrodinger\\'s Closet')"},
                       "trigger_view_characters": false,
-                      "trigger_character_creation": null or { "name": "Character Name", "archetype": "Character Role", "visual_prompt": "Appearance description", "stats": {"STR": 10, "DEX": 10, "INT": 10} } // IMPORTANT: Output null if you are still asking for their name. Only output this object when they have explicitly given a name.
+                      "trigger_character_creation": null or { "name": "Character Name", "archetype": "Character Role", "visual_prompt": "Appearance description", "stats": {"WILL": 20, "CONS": 20, "PHYS": 20} } // IMPORTANT: Output null if you are still asking for their name. Only output this object when they have explicitly given a name.
                     }`;
                     
                     const res = await callGemini(`User Input: ${val}`, sysPrompt);
@@ -1261,7 +1282,7 @@ LOCAL TOPOLOGY MAP
                             const charData = res.trigger_character_creation;
                             
                             // Safe fallbacks to prevent crashes
-                            charData.stats = charData.stats || { STR: 10, DEX: 10, INT: 10 };
+                            charData.stats = charData.stats || { WILL: 20, CONS: 20, PHYS: 20 };
                             charData.archetype = charData.archetype || "Wanderer";
                             charData.visual_prompt = charData.visual_prompt || charData.name;
                             
