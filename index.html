@@ -388,7 +388,8 @@
             active: false,
             type: null, // 'item', 'room', or 'expand'
             step: 0,
-            pendingData: {}
+            pendingData: {},
+            existingData: {}
         };
 
         if (isSyncEnabled) {
@@ -800,20 +801,23 @@ LOCAL TOPOLOGY MAP
                     
                     // Reset Wizard
                     document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
-                    wizardState = { active: false, type: null, step: 0, pendingData: {} };
+                    wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                 }
             } else if (wizardState.type === 'room') {
                 if (wizardState.step === 1) {
-                    if (!val) { addLog(`[WIZARD]: Name cannot be empty. Enter new room name:`, "var(--term-red)"); return; }
-                    wizardState.pendingData.name = val;
-                    addLog(`[WIZARD]: Room Name set to '${val}'. Now, enter the narrative description of the room:`, "var(--term-amber)");
+                    wizardState.pendingData.name = val || wizardState.existingData.name;
+                    addLog(`[WIZARD]: Room Name set to '${wizardState.pendingData.name}'.`);
+                    addLog(`Current NARRATIVE: "${wizardState.existingData.description}"`, "var(--crayola-blue)");
+                    addLog(`Enter new NARRATIVE (or press Enter to keep current):`, "var(--term-amber)");
                     wizardState.step++;
                 } else if (wizardState.step === 2) {
-                    wizardState.pendingData.description = val || 'An indistinct area.';
-                    addLog(`[WIZARD]: Description saved. Finally, enter a visual prompt for the AI image generator (e.g., 'A dark alleyway with neon signs'):`, "var(--term-amber)");
+                    wizardState.pendingData.description = val || wizardState.existingData.description;
+                    addLog(`[WIZARD]: Description saved.`);
+                    addLog(`Current VISUAL PROMPT: "${wizardState.existingData.visualPrompt}"`, "var(--crayola-blue)");
+                    addLog(`Enter new VISUAL PROMPT (or press Enter to keep current):`, "var(--term-amber)");
                     wizardState.step++;
                 } else if (wizardState.step === 3) {
-                    wizardState.pendingData.visualPrompt = val || 'A glitchy, undefined space.';
+                    wizardState.pendingData.visualPrompt = val || wizardState.existingData.visualPrompt;
 
                     const rKey = localPlayer.currentRoom;
                     apartmentMap[rKey].name = wizardState.pendingData.name;
@@ -837,7 +841,7 @@ LOCAL TOPOLOGY MAP
                     updateStatusUI();
 
                     document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
-                    wizardState = { active: false, type: null, step: 0, pendingData: {} };
+                    wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                 }
             } else if (wizardState.type === 'expand') {
                 if (wizardState.step === 1) {
@@ -881,7 +885,7 @@ LOCAL TOPOLOGY MAP
                     addLog(`[SYSTEM]: Sector materialization complete. Path to the ${dir.toUpperCase()} is now open.`, "var(--term-green)");
                     
                     document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@ROOT:~$&nbsp;`;
-                    wizardState = { active: false, type: null, step: 0, pendingData: {} };
+                    wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                 }
             }
         }
@@ -925,9 +929,10 @@ LOCAL TOPOLOGY MAP
                 e.preventDefault();
                 const val = input.value.trim();
                 input.value = '';
-                if (!val || isProcessing) return;
+                if (!val && !wizardState.active) return;
+                if (isProcessing) return;
                 
-                addLog(val, "#ffffff");
+                if (val) addLog(val, "#ffffff");
 
                 // Route to Wizard if active
                 if (wizardState.active) {
@@ -950,14 +955,27 @@ LOCAL TOPOLOGY MAP
                 }
 
                 if (cmd === 'create' || cmd === 'create item') {
-                    wizardState = { active: true, type: 'item', step: 1, pendingData: {} };
+                    wizardState = { active: true, type: 'item', step: 1, pendingData: {}, existingData: {} };
                     document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@MATERIA:~$</span>&nbsp;`;
                     addLog(`[WIZARD]: Materialization Protocol Started. Enter the name of the new item:`, "var(--term-amber)");
                     return;
                 } else if (cmd === 'edit room' || cmd === 'rewrite room' || cmd === 'render room') {
-                    wizardState = { active: true, type: 'room', step: 1, pendingData: {} };
+                    const currentRoomData = apartmentMap[localPlayer.currentRoom];
+                    wizardState = { 
+                        active: true, 
+                        type: 'room', 
+                        step: 1, 
+                        pendingData: {}, 
+                        existingData: {
+                            name: currentRoomData.name || '',
+                            description: currentRoomData.description || '',
+                            visualPrompt: currentRoomData.visualPrompt || ''
+                        } 
+                    };
                     document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@SECTOR:~$</span>&nbsp;`;
-                    addLog(`[WIZARD]: Sector Overwrite Protocol Started. Enter the new NAME for this room:`, "var(--term-amber)");
+                    addLog(`[WIZARD]: Sector Overwrite Protocol Started.`);
+                    addLog(`Current NAME: "${wizardState.existingData.name}"`, "var(--crayola-blue)");
+                    addLog(`Enter new NAME (or press Enter to keep current):`, "var(--term-amber)");
                     return;
                 } else if (cmd.startsWith('build ')) {
                     const dir = cmd.split(' ')[1];
@@ -969,7 +987,7 @@ LOCAL TOPOLOGY MAP
                         addLog(`[SYSTEM]: A path to the ${dir.toUpperCase()} already exists here.`, "var(--term-red)");
                         return;
                     }
-                    wizardState = { active: true, type: 'expand', step: 1, pendingData: { direction: dir } };
+                    wizardState = { active: true, type: 'expand', step: 1, pendingData: { direction: dir }, existingData: {} };
                     document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@EXPAND:~$</span>&nbsp;`;
                     addLog(`[WIZARD]: Spatial Expansion Protocol Started. Enter the NAME for the new room to the ${dir.toUpperCase()}:`, "var(--term-amber)");
                     return;
