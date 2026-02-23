@@ -9,7 +9,6 @@
 </div>
 
 <img width="1778" height="889" alt="image" src="https://github.com/user-attachments/assets/935d4a2c-e30d-4488-9993-1930394467b5" />
-/>
 
 Ch. 1. The Solipsystem
 ======================
