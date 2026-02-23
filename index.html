@@ -208,6 +208,19 @@
             justify-content: space-around;
             border: 1px solid #222;
         }
+        
+        /* Interactive Map Overlay */
+        #map-canvas-container {
+            position: relative;
+        }
+        .map-clickable-zone {
+            position: absolute;
+            cursor: pointer;
+            z-index: 30;
+        }
+        .map-clickable-zone:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
     </style>
 </head>
 <body class="crt">
@@ -250,21 +263,21 @@
             <!-- HUD SIDEBAR -->
             <div class="hidden md:flex w-64 flex-col border-l border-green-900 pl-4 overflow-y-auto shrink-0 pr-2">
                 
-                <!-- LIVE TOPOLOGY MAP -->
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2">SYSTEM.TOPOLOGY</div>
-                <div class="w-full bg-black/50 border border-green-900/50 rounded mb-4 flex items-center justify-center overflow-hidden h-40">
-                    <canvas id="map-canvas" width="230" height="150" class="max-w-full opacity-80"></canvas>
-                </div>
-
-                <!-- BIOMETRICS -->
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-2">SYSTEM.BIOMETRICS</div>
+                <!-- BIOMETRICS (Moved to Top) -->
+                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2">SYSTEM.BIOMETRICS</div>
                 <div id="avatar-container">
                     <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2">
                         NO VESSEL DETECTED<br>DISEMBODIED STATE
                     </div>
                 </div>
                 
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">SYSTEM.INVENTORY</div>
+                <!-- LIVE TOPOLOGY MAP -->
+                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">SYSTEM.TOPOLOGY</div>
+                <div id="map-canvas-container" class="w-full bg-black/50 border border-green-900/50 rounded mb-4 flex items-center justify-center overflow-hidden h-40">
+                    <canvas id="map-canvas" width="230" height="150" class="max-w-full opacity-80"></canvas>
+                </div>
+                
+                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-2">SYSTEM.INVENTORY</div>
                 <div id="inventory-container" class="text-xs text-gray-500 flex flex-col gap-2">
                     [EMPTY]
                 </div>
@@ -678,15 +691,21 @@
             addLog(`Obvious Exits: ${exits || 'NONE'}`, "#555");
         }
 
+        // --- MAP HUD RENDERER & INTERACTION ---
         function renderMapHUD() {
+            const canvasContainer = document.getElementById('map-canvas-container');
             const canvas = document.getElementById('map-canvas');
-            if (!canvas) return;
+            if (!canvas || !canvasContainer) return;
             const ctx = canvas.getContext('2d');
             
+            // Clear existing clickable zones
+            const existingZones = canvasContainer.querySelectorAll('.map-clickable-zone');
+            existingZones.forEach(zone => zone.remove());
+
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Fetch active stratum theme colors to dynamically paint the map
+            // Fetch active stratum theme colors
             const computedStyle = getComputedStyle(document.body);
             const termGreen = computedStyle.getPropertyValue('--term-green').trim() || '#00ff41';
             const termAmber = computedStyle.getPropertyValue('--term-amber').trim() || '#ffb000';
@@ -697,7 +716,7 @@
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
 
-            // Breadth-First Search (BFS) to map logical topology based on current room
+            // BFS
             let coords = {}; 
             let queue = [{key: localPlayer.currentRoom, logicalX: 0, logicalY: 0}];
             coords[localPlayer.currentRoom] = {x: 0, y: 0};
@@ -731,7 +750,7 @@
                 }
             }
 
-            // Phase 1: Draw Connecting Edges (Lines)
+            // Draw Lines
             ctx.strokeStyle = termGreen;
             ctx.lineWidth = 1.5;
             ctx.globalAlpha = 0.4; 
@@ -759,7 +778,7 @@
                 }
             });
 
-            // Phase 2: Draw Node Boxes & Labels
+            // Draw Nodes and Clickable Zones
             ctx.globalAlpha = 1.0;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
@@ -774,7 +793,10 @@
                 let y = centerY + p.y * spacing;
                 let isCurrent = (key === localPlayer.currentRoom);
 
-                // Draw background box
+                // Check bounds to ensure we don't draw clickable zones way off canvas
+                if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
+
+                // Box
                 if (isCurrent) {
                     ctx.fillStyle = termGreen; 
                     ctx.shadowColor = termGreen;
@@ -788,11 +810,28 @@
                 ctx.fillRect(x - nodeSize/2, y - nodeSize/2, nodeSize, nodeSize);
                 ctx.strokeRect(x - nodeSize/2, y - nodeSize/2, nodeSize, nodeSize);
 
-                // Draw label
+                // Label
                 ctx.fillStyle = isCurrent ? '#000' : termAmber; 
                 ctx.shadowBlur = 0;
                 let shortName = (node.shortName || "???").substring(0, 4);
                 ctx.fillText(shortName, x, y);
+
+                // Clickable Overlay
+                if (!isCurrent) {
+                    let clickZone = document.createElement('div');
+                    clickZone.className = 'map-clickable-zone';
+                    clickZone.style.left = `${x - nodeSize/2}px`;
+                    clickZone.style.top = `${y - nodeSize/2}px`;
+                    clickZone.style.width = `${nodeSize}px`;
+                    clickZone.style.height = `${nodeSize}px`;
+                    clickZone.title = `Go to ${node.name}`;
+                    
+                    clickZone.onclick = () => {
+                        document.getElementById('cmd-input').value = `go to ${node.name}`;
+                        document.getElementById('cmd-input').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));
+                    };
+                    canvasContainer.appendChild(clickZone);
+                }
             });
         }
 
