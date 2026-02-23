@@ -1,10 +1,12 @@
-***Psychotasy***
+<div align="center">
 
-I
+# ***Psychotasy***
+### I
+## The Archive of Madness
+*By Chris Johansen*
 
-The Archive of Madness
-
-_By Chris Johansen_
+---
+</div>
 
 Ch. 1. The Solipsystem
 ======================
