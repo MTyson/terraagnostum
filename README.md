@@ -18,7 +18,7 @@ The UI is a pure function of state. Reality is not a fixed construct you merely 
 
 [ SYSTEM CAPABILITIES ]
 
-AI-Mediated Reality (The Eld Master): A dynamic, LLM-powered Game Master persona that evaluates user intent, generates real-time narrative responses, and enforces the physical and metaphysical laws of the render.
+AI-Mediated Reality (TANDEM aka Tandy): A dynamic, LLM-powered Game Master persona that evaluates user intent, generates real-time narrative responses, and enforces the physical and metaphysical laws of the render.
 
 Semantic Scripting (Aethal Integration): Execute low-level assembly commands directly on the source code of reality using Aethal runes (e.g., IXA to ignite meaning, SOL to expose marginalia).
 
