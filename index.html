@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
+            /* Default Mundane Theme */
             --term-green: #00ff41;
             --term-amber: #ffb000;
             --term-red: #ff3e3e;
@@ -29,6 +30,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            transition: background-color 1s ease, color 1s ease;
         }
 
         .crt::before {
@@ -213,6 +215,7 @@
     <div class="terminal-container">
         <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70">
             <span>Node: <span id="room-display">LORE1</span></span>
+            <span id="stratum-display" class="text-gray-500 font-bold">STRATA: MUNDANE</span>
             <span id="player-status" class="text-amber-500">POS: STND | DIR: N</span>
             <span id="sync-status">SYNC: INITIALIZING</span>
             <span id="time-display">T+00:00:00</span>
@@ -375,10 +378,11 @@
             }
         };
 
-        // Player State now includes an Inventory array
+        // Player State now includes Stratum
         let localPlayer = { 
             hp: 20, 
             currentRoom: "lore1",
+            stratum: "mundane",
             posture: "standing",
             facing: "north",
             inventory: []
@@ -392,22 +396,55 @@
         // Expanded Creation Wizard State
         let wizardState = {
             active: false,
-            type: null, // 'item', 'room', or 'expand'
+            type: null, 
             step: 0,
             pendingData: {},
             existingData: {}
         };
+
+        // Theme Engine
+        function applyStratumTheme(stratum) {
+            const root = document.documentElement;
+            const stratDisp = document.getElementById('stratum-display');
+            
+            if (stratum === 'faen') {
+                root.style.setProperty('--term-green', '#fce788'); // Arcane Gold
+                root.style.setProperty('--term-amber', '#ff9d00'); // Deep Orange
+                root.style.setProperty('--term-red', '#e53935'); 
+                root.style.setProperty('--term-bg', '#1c0f1a'); // Mystic Purple
+                root.style.setProperty('--crayola-blue', '#b084e8'); 
+                root.style.setProperty('--gm-purple', '#ff77ff');
+                stratDisp.innerText = 'STRATA: FAEN';
+                stratDisp.style.color = 'var(--crayola-blue)';
+            } else if (stratum === 'technate') {
+                root.style.setProperty('--term-green', '#e0f7fa'); // Cold Cyan
+                root.style.setProperty('--term-amber', '#ff2a2a'); // Harsh Red
+                root.style.setProperty('--term-red', '#ff0000'); 
+                root.style.setProperty('--term-bg', '#010a0f'); // Sterile Teal
+                root.style.setProperty('--crayola-blue', '#00ffff'); 
+                root.style.setProperty('--gm-purple', '#ffffff');
+                stratDisp.innerText = 'STRATA: TECHNATE';
+                stratDisp.style.color = 'var(--term-green)';
+            } else {
+                root.style.setProperty('--term-green', '#00ff41'); // Mundane Green
+                root.style.setProperty('--term-amber', '#ffb000');
+                root.style.setProperty('--term-red', '#ff3e3e');
+                root.style.setProperty('--term-bg', '#050505');
+                root.style.setProperty('--crayola-blue', '#3b82f6');
+                root.style.setProperty('--gm-purple', '#a855f7');
+                stratDisp.innerText = 'STRATA: MUNDANE';
+                stratDisp.style.color = '#888';
+            }
+        }
 
         function updateCommandPrompt() {
             const prefixEl = document.getElementById('prompt-prefix');
             const roomShort = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
             
             if (user && !user.isAnonymous) {
-                // Registered User: Blue text, shows email prefix or UID, plus current room
                 const identity = user.email ? user.email.split('@')[0] : user.uid.substring(0, 5);
                 prefixEl.innerHTML = `<span class="text-blue-400 font-bold">ARCHITECT[${identity}]@${roomShort}:~$</span>&nbsp;`;
             } else {
-                // Anonymous Guest: Gray text, VOID state or current room
                 prefixEl.innerHTML = `<span class="text-gray-500">GUEST@${roomShort}:~$</span>&nbsp;`;
             }
         }
@@ -434,7 +471,7 @@
                     hasInitialized = true;
                     const userType = user.isAnonymous ? "GUEST" : "ARCHITECT";
                     
-                    updateCommandPrompt(); // Initial prompt setup
+                    updateCommandPrompt(); 
 
                     addLog(`${userType} LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
                     
@@ -444,6 +481,7 @@
                     await loadPlayerState(); 
                     loadUserCharacters();
                     
+                    applyStratumTheme(localPlayer.stratum);
                     printRoomDescription();
                     updateStatusUI();
                     updateInventoryUI();
@@ -477,7 +515,7 @@
                     const data = snap.data();
                     if (data.nodes) {
                         apartmentMap = data.nodes;
-                        updateRoomItemsUI(); // Refresh local materia whenever map data syncs
+                        updateRoomItemsUI(); 
                     }
                 }
             });
@@ -493,12 +531,13 @@
                     localPlayer = { 
                         ...localPlayer, 
                         ...data,
-                        inventory: data.inventory || [] // Ensure inventory array exists
+                        inventory: data.inventory || [],
+                        stratum: data.stratum || "mundane"
                     };
                     if (localPlayer.currentRoom === 'main_room') {
                         localPlayer.currentRoom = 'lore1';
                     }
-                    updateCommandPrompt(); // Ensure prompt matches loaded room
+                    updateCommandPrompt(); 
                 }
             } catch (e) {
                 console.error("Failed to load player state:", e);
@@ -547,10 +586,10 @@
                     <div class="char-card-img-container h-32 border-[#1a3a1a] mb-2">
                         ${activeAvatar.image ? `<img class="char-card-img" src="${activeAvatar.image}" alt="${activeAvatar.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[NO IMG]</div>`}
                     </div>
-                    <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0">
-                        <span>WIL: ${activeAvatar.stats.WILL || 20}</span>
-                        <span>CON: ${activeAvatar.stats.CONS || 20}</span>
-                        <span>PHY: ${activeAvatar.stats.PHYS || 20}</span>
+                    <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0 flex-col text-[9px] gap-1">
+                        <span>WILL (Mng): ${activeAvatar.stats.WILL || 20}</span>
+                        <span>CONS (Amn): ${activeAvatar.stats.CONS || 20}</span>
+                        <span>PHYS (HP): ${activeAvatar.stats.PHYS || 20}</span>
                     </div>
                 </div>
             `;
@@ -674,11 +713,14 @@ LOCAL TOPOLOGY MAP
             loader.classList.remove('hidden');
             img.style.display = 'none';
 
+            // Append the stratum style dynamically to the visual generation
+            const styledPrompt = `Lofi glitch terminal art: ${prompt}, ${localPlayer.stratum} stratum aesthetic`;
+
             try {
                 const res = await fetch(API_IMAGE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ instances: [{ prompt: `Lofi glitch terminal art: ${prompt}` }] })
+                    body: JSON.stringify({ instances: [{ prompt: styledPrompt }] })
                 });
                 const data = await res.json();
                 if (data.predictions?.[0]) {
@@ -1027,9 +1069,9 @@ LOCAL TOPOLOGY MAP
                     addLog(`>> IDENTITY: ${activeAvatar.name}`, "var(--term-green)");
                     addLog(`>> CLASS: ${activeAvatar.archetype}`, "var(--term-green)");
                     addLog(`------------------------------------`, "var(--crayola-blue)");
-                    addLog(`>> WILL (Drive/Focus): ${activeAvatar.stats.WILL || 20}`, "var(--term-amber)");
-                    addLog(`>> CONSCIOUSNESS (Aethal/Perception): ${activeAvatar.stats.CONS || 20}`, "var(--term-amber)");
-                    addLog(`>> PHYSICALITY (Form/Grit): ${activeAvatar.stats.PHYS || 20}`, "var(--term-amber)");
+                    addLog(`>> WILL (Meaning/Level): ${activeAvatar.stats.WILL || 20}`, "var(--term-amber)");
+                    addLog(`>> CONSCIOUSNESS (Amn/Magic): ${activeAvatar.stats.CONS || 20}`, "var(--term-amber)");
+                    addLog(`>> PHYSICALITY (Health/HP): ${activeAvatar.stats.PHYS || 20}`, "var(--term-amber)");
                     addLog(`====================================`, "var(--crayola-blue)");
                     return;
                 } else if (cmd.startsWith('take ') || cmd.startsWith('get ') || cmd.startsWith('pick up ')) {
@@ -1203,6 +1245,7 @@ LOCAL TOPOLOGY MAP
                     
                     Player Context:
                     - Current Location: ${currentRoomData.name} (Key: ${localPlayer.currentRoom})
+                    - Current Stratum: ${localPlayer.stratum.toUpperCase()} (Narrative Tone: 'mundane' = gritty/noir realism, 'faen' = high fantasy/magic, 'technate' = sterile/dystopian sci-fi)
                     - Room Description: ${currentRoomData.description}
                     - Room Marginalia (Player Etchings): ${marginaliaText || "None"}
                     - Items laying in Room: ${roomItemNames || "None"}
@@ -1211,12 +1254,13 @@ LOCAL TOPOLOGY MAP
                     - Player Inventory: ${inventoryNames || "Empty"}
 
                     Rules & Guardrails:
-                    1. Interpretation: Interpret user input for talking, looking at specific details, interacting with items, or changing posture.
+                    1. Interpretation: Interpret user input for talking, looking at specific details, interacting with items, or changing posture. Tone of narration must match the Current Stratum.
                     2. Strict Movement: ALL movement is handled by the client. If the user tries to move (e.g. "go to char room"), REFUSE the action and instruct them to use directional commands (N, S, E, W) or Arrow Keys. Never output "new_room".
                     3. Inventory Logic: ALL picking up and dropping of items is handled by the client via "TAKE" and "DROP" commands. Do NOT tell the user they picked something up.
-                    4. Item Usage (Narrative): If the user interacts with an item, provide the specific, flavorful outcome in the narrative.
+                    4. Item/Scenery Usage: Users can USE inventory items AND scenery items (like a Terminal or console). You play the role of the item (e.g. the Terminal AI) if they interact with it, and provide a flavorful outcome.
                     5. Marginalia (World Edits): If the user explicitly uses an item (like a marker, knife, or spray paint) to permanently write on, draw on, or alter the environment, output a "world_edit" object to permanently etch this into the room.
-                    6. Self Avatar Creation: ONLY ALLOWED IN THE 'spare_room'. If the user says they want to create an avatar but HAS NOT given a name yet, ask them for a name in the narrative and leave 'trigger_character_creation' as null. DO NOT output the object until they provide a name.
+                    6. Self Avatar Creation: ONLY ALLOWED IN THE 'spare_room'. If the user says they want to create an avatar but HAS NOT given a name yet, ask them for a name in the narrative and leave 'trigger_character_creation' as null.
+                    7. Strata Shifting (Dimensional Jump): If the user explicitly uses a tuning device (like a 'Hacked Schumann Generator') in an enclosed space (like 'Schrödinger's Closet') to shift to a different reality/strata ('Mundane', 'Faen', or 'Technate'), set "trigger_stratum_shift" to the target stratum name.
                     
                     Respond STRICTLY in JSON:
                     {
@@ -1227,9 +1271,10 @@ LOCAL TOPOLOGY MAP
                       "set_npc": "Name of NPC to make active, or null",
                       "new_posture": "New posture if changed, otherwise null",
                       "new_facing": "New facing if changed, otherwise null",
+                      "trigger_stratum_shift": null or "mundane", "faen", or "technate",
                       "world_edit": null or {"type": "add_marginalia", "target_room": "the_room_key", "text": "The text of the permanent modification (e.g., 'Scrawled on the north door is: Schrodinger\\'s Closet')"},
                       "trigger_view_characters": false,
-                      "trigger_character_creation": null or { "name": "Character Name", "archetype": "Character Role", "visual_prompt": "Appearance description", "stats": {"WILL": 20, "CONS": 20, "PHYS": 20} } // IMPORTANT: Output null if you are still asking for their name. Only output this object when they have explicitly given a name.
+                      "trigger_character_creation": null or { "name": "Character Name", "archetype": "Character Role", "visual_prompt": "Appearance description", "stats": {"WILL": 20, "CONS": 20, "PHYS": 20} }
                     }`;
                     
                     const res = await callGemini(`User Input: ${val}`, sysPrompt);
@@ -1248,6 +1293,17 @@ LOCAL TOPOLOGY MAP
                     if (res.new_facing && res.new_facing !== localPlayer.facing) {
                         localPlayer.facing = res.new_facing;
                         stateChanged = true;
+                    }
+
+                    // Process Strata Shifting!
+                    if (res.trigger_stratum_shift) {
+                        const targetStratum = res.trigger_stratum_shift.toLowerCase();
+                        if (['mundane', 'faen', 'technate'].includes(targetStratum) && localPlayer.stratum !== targetStratum) {
+                            localPlayer.stratum = targetStratum;
+                            stateChanged = true;
+                            applyStratumTheme(targetStratum);
+                            addLog(`[SYSTEM]: Quantum resonance shift detected. Rendering ${targetStratum.toUpperCase()} stratum...`, "var(--gm-purple)");
+                        }
                     }
 
                     if (stateChanged) {
@@ -1335,6 +1391,9 @@ LOCAL TOPOLOGY MAP
 
                     if (res.trigger_visual && !res.trigger_character_creation) {
                         projectVisual(res.trigger_visual);
+                    } else if (res.trigger_stratum_shift) {
+                        // Automatically render the new stratum if jumping realities!
+                        projectVisual(apartmentMap[localPlayer.currentRoom].visualPrompt);
                     }
                     
                     if (isSyncEnabled && user) {
