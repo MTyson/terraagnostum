@@ -16,6 +16,18 @@ The UI is a pure function of state. Reality is not a fixed construct you merely 
 
 "Whatever the consciousness conceives of as the order of nature (niyati) in that universe, that comes to be established there."
 
+[ THE UNIVERSE & CORE FEATURES ]
+
+Vast, Extensible Lore: Explore a tri-layered reality. Navigate the sterile, transhumanist utopia of The Technate, the ethereal and infinite magic plane of Faen, and the grounding anchor of the Mundane. The lore is deep, but the borders are undefined—waiting for you to render them.
+
+Dynamic World Building: You are an Architect. Forge new items (CREATE ITEM), rewrite the narrative descriptions of your surroundings (EDIT ROOM), and carve new pathways into the unrendered void (BUILD [DIR]).
+
+Avatar Materialization: Ditch static character sheets. Step into the Archive and use the forging wizard to generate a unique identity (e.g., Cyber-Merc, Harmonic Bard, Faen Weaver), complete with custom attributes and an AI-painted, MTG-style portrait card.
+
+Live Topology HUD: A real-time, interactive graph maps the local sector as players move, explore, and manifest new rooms into existence.
+
+Generative Visual Projections: The terminal doesn't just describe reality; it projects it. Every sector transition triggers an AI-generated lo-fi glitch art visual reflecting the room's narrative and the aesthetic of the current Stratum.
+
 [ SYSTEM CAPABILITIES ]
 
 AI-Mediated Reality (TANDEM aka Tandy): A dynamic, LLM-powered Game Master persona that evaluates user intent, generates real-time narrative responses, and enforces the physical and metaphysical laws of the render.
@@ -85,4 +97,5 @@ Or is it: what is the nature of reality?
 In either case, it is consciousness which persists, and consciousness which must be addressed, directly.
 
 <img width="1778" height="889" alt="image" src="https://github.com/user-attachments/assets/935d4a2c-e30d-4488-9993-1930394467b5" />
-The Technate CityCore
+
+
