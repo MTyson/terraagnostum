@@ -1,4 +1,4 @@
-<style>
+
         :root {
             /* Default Mundane Theme */
             --term-green: #00ff41;
@@ -243,4 +243,3 @@
         .map-clickable-zone:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
-    </style>
