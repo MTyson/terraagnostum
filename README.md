@@ -28,8 +28,9 @@ Live Topology HUD: A real-time, interactive graph maps the local sector as playe
 
 Generative Visual Projections: The terminal doesn't just describe reality; it projects it. Every sector transition triggers an AI-generated lo-fi glitch art visual reflecting the room's narrative and the aesthetic of the current Stratum.
 
-<img width="2816" height="1504" alt="Gemini_Generated_Image_4hnl8t4hnl8t4hnl" src="https://github.com/user-attachments/assets/bb308d23-632b-4ec6-9fcc-33139f7e983a" />
-The Torlight at Corovon
+<img width="2816" heigh*t="1504" alt="Gemini_Generated_Image_4hnl8t4hnl8t4hnl" src="https://github.com/user-attachments/assets/bb308d23-632b-4ec6-9fcc-33139f7e983a" />
+*The Torlight at Corovon*
+
 
 [ SYSTEM CAPABILITIES ]
 
@@ -75,7 +76,6 @@ The terminal relies on Vercel Serverless Functions for API proxying. Use the Ver
 npm i -g vercel
 vercel dev
 
-
 The Node will materialize at http://localhost:3000.
 
 [ PHILOSOPHICAL FOUNDATIONS ]
@@ -91,7 +91,7 @@ Of all the founding fathers of quantum science, Schrödinger is perhaps the most
 
 Or as Ramana Maharshi asked: who am I?
 
-<img width="739" height="768" alt="image" src="https://github.com/user-attachments/assets/0df181dc-5719-4223-8067-4a8e54080d0c" />
+<img width="201" alt="image" src="https://github.com/user-attachments/assets/0df181dc-5719-4223-8067-4a8e54080d0c" />
 
 Isn't that the most basic question?
 
