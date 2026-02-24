@@ -14,6 +14,9 @@
             --term-bg: #050505;
             --crayola-blue: #3b82f6;
             --gm-purple: #a855f7;
+            /* Faen Mode Palette */
+            --faen-cyan: #00f5ff;
+            --faen-pink: #ff00ff;
         }
 
         @keyframes flicker {
@@ -31,6 +34,32 @@
             display: flex;
             flex-direction: column;
             transition: background-color 1s ease, color 1s ease;
+        }
+
+        /* --- THE FAEN JUMP STYLES --- */
+        body.faen-mode {
+            text-shadow: 2px 0 var(--faen-pink), -2px 0 var(--faen-cyan) !important;
+            filter: contrast(1.2) brightness(1.1);
+        }
+
+        body.desaturated {
+            filter: grayscale(100%) brightness(0.2) contrast(2) !important;
+            transition: filter 0.1s steps(2);
+        }
+
+        .faen-mode #map-canvas-container::after {
+            content: "SIGNAL LOST // FAEN INTERFERENCE";
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            color: var(--faen-pink);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            letter-spacing: 1px;
+            z-index: 40;
+            animation: flicker 0.1s infinite;
         }
 
         .crt::before {
@@ -221,39 +250,6 @@
         .map-clickable-zone:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
-        /* --- FAEN MODE SPECIFICS --- */
-:root {
-    --faen-cyan: #00f5ff;
-    --faen-pink: #ff00ff;
-}
-
-/* The Chromatic Aberration Effect */
-body.faen-mode {
-    text-shadow: 2px 0 var(--faen-pink), -2px 0 var(--faen-cyan);
-    filter: contrast(1.2) brightness(1.1);
-}
-
-/* The Reality Stutter Glitch */
-body.desaturated {
-    filter: grayscale(100%) brightness(0.2) contrast(2);
-    transition: filter 0.1s steps(2);
-}
-
-/* Obfuscate the map when in Faen */
-.faen-mode #map-canvas-container::after {
-    content: "SIGNAL LOST // FAEN INTERFERENCE";
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0.8);
-    color: var(--faen-pink);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    letter-spacing: 1px;
-    z-index: 40;
-    animation: flicker 0.1s infinite;
-}
     </style>
 </head>
 <body class="crt">
@@ -449,7 +445,7 @@ body.desaturated {
         // Player State
         let localPlayer = { 
             hp: 20, 
-            currentRoom: "spare_room", // Default to archive for disembodied
+            currentRoom: "spare_room",
             stratum: "mundane",
             posture: "standing",
             facing: "north",
@@ -470,43 +466,53 @@ body.desaturated {
             existingData: {}
         };
 
-        // Theme Engine
-        function applyStratumTheme(stratum) {
-    const root = document.documentElement;
-    const stratDisp = document.getElementById('stratum-display');
-    
-    // Check if we are jumping TO Faen from somewhere else
-    if (stratum === 'faen' && localPlayer.stratum !== 'faen') {
-        document.body.classList.add('desaturated');
-        addLog("[SYSTEM]: REALITY_RENDER_STUTTER_DETECTED...", "var(--term-red)");
-        
-        setTimeout(() => {
-            document.body.classList.remove('desaturated');
-            document.body.classList.add('faen-mode');
-        }, 1000);
-    } else if (stratum !== 'faen') {
-        document.body.classList.remove('faen-mode');
-    }
+        // --- PLACEHOLDER FOR CLIENT RAG ---
+        function fetchLocalLore(val) {
+            // This is handled on the server in generate.js, 
+            // but we leave this here to avoid snippet errors.
+            return "";
+        }
 
-    // Apply the colors
-    if (stratum === 'faen') {
-        root.style.setProperty('--term-green', '#fce788');
-        root.style.setProperty('--term-bg', '#1c0f1a');
-        root.style.setProperty('--crayola-blue', '#b084e8'); 
-        stratDisp.innerText = 'STRATA: FAEN';
-    } else if (stratum === 'technate') {
-        root.style.setProperty('--term-green', '#e0f7fa');
-        root.style.setProperty('--term-bg', '#010a0f');
-        stratDisp.innerText = 'STRATA: TECHNATE';
-    } else {
-        root.style.setProperty('--term-green', '#00ff41');
-        root.style.setProperty('--term-bg', '#050505');
-        stratDisp.innerText = 'STRATA: MUNDANE';
-    }
-    
-    localPlayer.stratum = stratum;
-    renderMapHUD(); // Map logic will now check for .faen-mode automatically
-}
+        // --- THE THEME ENGINE WITH FAEN JUMP ---
+        function applyStratumTheme(stratum) {
+            const root = document.documentElement;
+            const stratDisp = document.getElementById('stratum-display');
+            
+            // Start the "Reality Stutter" if jumping TO Faen
+            if (stratum === 'faen' && localPlayer.stratum !== 'faen') {
+                document.body.classList.add('desaturated');
+                addLog("[SYSTEM]: REALITY_RENDER_STUTTER_DETECTED...", "var(--term-red)");
+                
+                setTimeout(() => {
+                    document.body.classList.remove('desaturated');
+                    document.body.classList.add('faen-mode');
+                }, 1000);
+            } else if (stratum !== 'faen') {
+                document.body.classList.remove('faen-mode');
+            }
+
+            // Apply palette shifts
+            if (stratum === 'faen') {
+                root.style.setProperty('--term-green', '#fce788');
+                root.style.setProperty('--term-bg', '#1c0f1a');
+                root.style.setProperty('--crayola-blue', '#b084e8'); 
+                stratDisp.innerText = 'STRATA: FAEN';
+                stratDisp.style.color = 'var(--crayola-blue)';
+            } else if (stratum === 'technate') {
+                root.style.setProperty('--term-green', '#e0f7fa');
+                root.style.setProperty('--term-bg', '#010a0f');
+                stratDisp.innerText = 'STRATA: TECHNATE';
+                stratDisp.style.color = 'var(--term-green)';
+            } else {
+                root.style.setProperty('--term-green', '#00ff41');
+                root.style.setProperty('--term-bg', '#050505');
+                stratDisp.innerText = 'STRATA: MUNDANE';
+                stratDisp.style.color = '#888';
+            }
+            
+            localPlayer.stratum = stratum;
+            renderMapHUD(); // Canvas logic handles obfuscation via CSS
+        }
 
         function updateCommandPrompt() {
             const prefixEl = document.getElementById('prompt-prefix');
@@ -645,7 +651,6 @@ body.desaturated {
                 snap.forEach(doc => {
                     const charData = { id: doc.id, ...doc.data() };
                     localCharacters.push(charData);
-                    // Do not load deceased or permanently deployed characters as active
                     if (!charData.deceased && !charData.deployed) {
                         activeAvatar = charData; 
                     }
@@ -753,7 +758,6 @@ body.desaturated {
             const room = apartmentMap[localPlayer.currentRoom];
             addLog(`[NARRATOR]: ${room.description}`, "#888");
             
-            // Render any user-generated marginalia
             if (room.marginalia && room.marginalia.length > 0) {
                 room.marginalia.forEach(note => {
                     addLog(`[MARGINALIA]: ${note}`, "var(--crayola-blue)");
@@ -765,7 +769,6 @@ body.desaturated {
                 addLog(`You see items resting here: ${itemNames}`, "#aaa");
             }
 
-            // Render permanent NPCs left behind by players
             if (room.npcs && room.npcs.length > 0) {
                 const npcNames = room.npcs.map(n => `<span class="text-crayola-blue font-bold">${n.name} (${n.archetype})</span>`).join(', ');
                 addLog(`Entities Present: ${npcNames}`, "#aaa");
@@ -775,21 +778,17 @@ body.desaturated {
             addLog(`Obvious Exits: ${exits || 'NONE'}`, "#555");
         }
 
-        // --- MAP HUD RENDERER & INTERACTION ---
         function renderMapHUD() {
             const canvasContainer = document.getElementById('map-canvas-container');
             const canvas = document.getElementById('map-canvas');
             if (!canvas || !canvasContainer) return;
             const ctx = canvas.getContext('2d');
             
-            // Clear existing clickable zones
             const existingZones = canvasContainer.querySelectorAll('.map-clickable-zone');
             existingZones.forEach(zone => zone.remove());
 
-            // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Fetch active stratum theme colors
             const computedStyle = getComputedStyle(document.body);
             const termGreen = computedStyle.getPropertyValue('--term-green').trim() || '#00ff41';
             const termAmber = computedStyle.getPropertyValue('--term-amber').trim() || '#ffb000';
@@ -800,7 +799,6 @@ body.desaturated {
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
 
-            // BFS
             let coords = {}; 
             let queue = [{key: localPlayer.currentRoom, logicalX: 0, logicalY: 0}];
             coords[localPlayer.currentRoom] = {x: 0, y: 0};
@@ -834,7 +832,6 @@ body.desaturated {
                 }
             }
 
-            // Draw Lines
             ctx.strokeStyle = termGreen;
             ctx.lineWidth = 1.5;
             ctx.globalAlpha = 0.4; 
@@ -862,7 +859,6 @@ body.desaturated {
                 }
             });
 
-            // Draw Nodes and Clickable Zones
             ctx.globalAlpha = 1.0;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
@@ -877,30 +873,26 @@ body.desaturated {
                 let y = centerY + p.y * spacing;
                 let isCurrent = (key === localPlayer.currentRoom);
 
-                // Check bounds
                 if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
 
-                // Box
                 if (isCurrent) {
-                    ctx.fillStyle = termGreen; 
                     ctx.shadowColor = termGreen;
                     ctx.shadowBlur = 10;
+                    ctx.fillStyle = termGreen; 
                 } else {
-                    ctx.fillStyle = termBg; 
                     ctx.shadowBlur = 0;
+                    ctx.fillStyle = termBg; 
                 }
 
                 ctx.strokeStyle = isCurrent ? '#000' : termGreen;
                 ctx.fillRect(x - nodeSize/2, y - nodeSize/2, nodeSize, nodeSize);
                 ctx.strokeRect(x - nodeSize/2, y - nodeSize/2, nodeSize, nodeSize);
 
-                // Label
                 ctx.fillStyle = isCurrent ? '#000' : termAmber; 
                 ctx.shadowBlur = 0;
                 let shortName = (node.shortName || "???").substring(0, 4);
                 ctx.fillText(shortName, x, y);
 
-                // Clickable Overlay
                 if (!isCurrent) {
                     let clickZone = document.createElement('div');
                     clickZone.className = 'map-clickable-zone';
@@ -926,12 +918,10 @@ body.desaturated {
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    
                     if (width > maxWidth) {
                         height = Math.round((height * maxWidth) / width);
                         width = maxWidth;
                     }
-                    
                     canvas.width = width;
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
@@ -951,7 +941,6 @@ body.desaturated {
             loader.classList.remove('hidden');
             img.style.display = 'none';
 
-            // Append the stratum style dynamically to the visual generation
             const styledPrompt = `Lofi glitch terminal art: ${prompt}, ${localPlayer.stratum} stratum aesthetic`;
 
             try {
@@ -997,18 +986,6 @@ body.desaturated {
             `;
             log.appendChild(wrapper);
             document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
-        }
-
-        async function listModels() {
-            addLog("Querying Source for available models...", "var(--term-amber)");
-            try {
-                const res = await fetch(API_IMAGE);
-                const data = await res.json();
-                if (data.models) {
-                    addLog("AVAILABLE MODELS:");
-                    data.models.slice(0, 10).forEach(m => addLog(` - ${m.name.split('/').pop()}`, "#888"));
-                }
-            } catch (e) { addLog("FAILED TO LIST MODELS.", "var(--term-red)"); }
         }
 
         function addLog(text, color = 'var(--term-green)') {
@@ -1062,9 +1039,7 @@ body.desaturated {
             }
         }
 
-        // --- ENHANCED CREATION WIZARD ---
         function handleWizardInput(val) {
-            // -- ITEM CREATION --
             if (wizardState.type === 'item') {
                 if (wizardState.step === 1) {
                     if (!val) { addLog(`[WIZARD]: Name cannot be empty. Enter item name:`, "var(--term-red)"); return; }
@@ -1078,24 +1053,19 @@ body.desaturated {
                 } else if (wizardState.step === 3) {
                     wizardState.pendingData.description = val || 'An unknown manifestation.';
                     wizardState.pendingData.id = Date.now().toString(); 
-                    
                     const room = apartmentMap[localPlayer.currentRoom];
                     if (!room.items) room.items = [];
                     room.items.push(wizardState.pendingData);
-                    
                     if (isSyncEnabled) {
                         const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
                         updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(wizardState.pendingData) });
                     }
-                    
                     updateRoomItemsUI();
                     addLog(`[SYSTEM]: Successfully materialized [${wizardState.pendingData.name}] into ${room.name}.`, "var(--term-green)");
-                    
                     updateCommandPrompt();
                     wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                 }
             } 
-            // -- ROOM EDITING --
             else if (wizardState.type === 'room') {
                 if (wizardState.step === 1) {
                     wizardState.pendingData.name = val || wizardState.existingData.name;
@@ -1111,13 +1081,11 @@ body.desaturated {
                     wizardState.step++;
                 } else if (wizardState.step === 3) {
                     wizardState.pendingData.visualPrompt = val || wizardState.existingData.visualPrompt;
-
                     const rKey = localPlayer.currentRoom;
                     apartmentMap[rKey].name = wizardState.pendingData.name;
                     apartmentMap[rKey].shortName = wizardState.pendingData.name.substring(0, 7).toUpperCase();
                     apartmentMap[rKey].description = wizardState.pendingData.description;
                     apartmentMap[rKey].visualPrompt = wizardState.pendingData.visualPrompt;
-
                     if (isSyncEnabled) {
                         const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
                         updateDoc(mapRef, {
@@ -1127,18 +1095,15 @@ body.desaturated {
                             [`nodes.${rKey}.visualPrompt`]: wizardState.pendingData.visualPrompt
                         });
                     }
-
                     addLog(`[SYSTEM]: Sector successfully re-rendered.`, "var(--term-green)");
                     printRoomDescription();
                     projectVisual(apartmentMap[rKey].visualPrompt);
                     updateStatusUI();
                     renderMapHUD();
-
                     updateCommandPrompt();
                     wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                 }
             } 
-            // -- ROOM EXPANSION --
             else if (wizardState.type === 'expand') {
                 if (wizardState.step === 1) {
                     wizardState.pendingData.name = val || "New Area";
@@ -1150,12 +1115,10 @@ body.desaturated {
                     wizardState.step++;
                 } else if (wizardState.step === 3) {
                     wizardState.pendingData.visualPrompt = val || 'A glitchy, undefined space.';
-
                     const newRoomId = 'node_' + Date.now();
                     const currentRoomKey = localPlayer.currentRoom;
                     const dir = wizardState.pendingData.direction; 
                     const reverseDir = { 'north':'south', 'south':'north', 'east':'west', 'west':'east' }[dir];
-
                     const newNode = {
                         name: wizardState.pendingData.name,
                         shortName: wizardState.pendingData.name.substring(0, 7).toUpperCase(),
@@ -1166,11 +1129,9 @@ body.desaturated {
                         marginalia: [],
                         npcs: []
                     };
-
                     apartmentMap[newRoomId] = newNode;
                     if (!apartmentMap[currentRoomKey].exits) apartmentMap[currentRoomKey].exits = {};
                     apartmentMap[currentRoomKey].exits[dir] = newRoomId;
-
                     if (isSyncEnabled) {
                         const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
                         updateDoc(mapRef, {
@@ -1178,15 +1139,12 @@ body.desaturated {
                             [`nodes.${newRoomId}`]: newNode
                         });
                     }
-
                     addLog(`[SYSTEM]: Sector materialization complete. Path to the ${dir.toUpperCase()} is now open.`, "var(--term-green)");
-                    
                     updateCommandPrompt();
                     renderMapHUD();
                     wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                 }
             }
-            // -- EXPLICIT AVATAR CREATION --
             else if (wizardState.type === 'avatar') {
                 if (wizardState.step === 1) {
                     if (!val) { addLog(`[WIZARD]: Name cannot be empty. Identity requires a signifier:`, "var(--term-red)"); return; }
@@ -1199,7 +1157,6 @@ body.desaturated {
                     wizardState.step++;
                 } else if (wizardState.step === 3) {
                     wizardState.pendingData.visual_prompt = val || 'A shadowed, undefined figure.';
-                    
                     const charData = {
                         name: wizardState.pendingData.name,
                         archetype: wizardState.pendingData.archetype,
@@ -1208,13 +1165,10 @@ body.desaturated {
                         deceased: false,
                         deployed: false
                     };
-
                     addLog(`[SYSTEM]: Extracting genetic imprint for your primary vessel [${charData.name}]...`, "var(--gm-purple)");
-                    
                     wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                     document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@${apartmentMap[localPlayer.currentRoom]?.shortName || "VOID"}:~$&nbsp;`;
 
-                    // Generate the image asynchronously so the UI isn't fully blocked
                     (async () => {
                         let cardImageSrc = "";
                         let compressedImageSrc = "";
@@ -1233,9 +1187,7 @@ body.desaturated {
                         } catch (e) {
                             console.error("Card Image Error", e);
                         }
-                        
                         const fullCharData = { ...charData, image: compressedImageSrc || cardImageSrc, timestamp: Date.now() };
-                        
                         if (user) {
                             try {
                                 const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
@@ -1247,7 +1199,6 @@ body.desaturated {
                                 addLog(`[SYSTEM ERROR]: Could not save Avatar to the archive.`, "var(--term-red)");
                             }
                         }
-
                         renderCharacterCard(fullCharData, compressedImageSrc || cardImageSrc);
                         localCharacters.push(fullCharData);
                         activeAvatar = fullCharData; 
@@ -1256,82 +1207,44 @@ body.desaturated {
                     })();
                 }
             }
-            // -- LEAVE NPC VESSEL --
             else if (wizardState.type === 'deploy_npc') {
                 if (wizardState.step === 1) {
                     const personality = val || "Stands silently, observing the void.";
                     const roomKey = localPlayer.currentRoom;
                     const room = apartmentMap[roomKey];
                     if (!room.npcs) room.npcs = [];
-
                     const newNPC = {
                         id: 'npc_' + Date.now(),
                         name: activeAvatar.name,
                         archetype: activeAvatar.archetype,
                         visual_prompt: activeAvatar.visual_prompt,
-                        image: activeAvatar.image, // Ensure the portrait is copied over
+                        image: activeAvatar.image, 
                         personality: personality,
                         owner: user ? user.uid : 'guest'
                     };
-
                     room.npcs.push(newNPC);
-
                     if (isSyncEnabled) {
                         const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
                         updateDoc(mapRef, { [`nodes.${roomKey}.npcs`]: arrayUnion(newNPC) });
                     }
-
-                    // Permanently Disembody player from this vessel
                     if (activeAvatar && user) {
                         try {
                             const charRef = doc(db, 'artifacts', appId, 'users', user.uid, 'characters', activeAvatar.id);
-                            // Mark deployed so they don't reload it as an active avatar next login
                             updateDoc(charRef, { deployed: true }); 
                         } catch (e) { console.error("Could not write deployment state.", e); }
                     }
-
                     addLog(`[SYSTEM]: Vessel [${newNPC.name}] detached and left on autonomous local loop.`, "var(--term-green)");
                     addLog(`[SYSTEM]: You are once again an itinerant void. Find a mirror to forge a new form.`, "var(--term-amber)");
-
                     activeAvatar = null;
                     updateAvatarUI();
                     updateCommandPrompt();
-                    updateRoomEntitiesUI(); // Update the entities UI immediately
+                    updateRoomEntitiesUI();
                     wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                 }
             }
         }
 
-        // The Local Lore Bridge
-        function fetchLocalLore(query) {
-            const lowerQ = query.toLowerCase();
-            let injectedLore = [];
-
-            if (lowerQ.includes('aethal') || lowerQ.includes('rune') || lowerQ.includes('ixa') || lowerQ.includes('sol') || lowerQ.includes('atla') || lowerQ.includes('amn sen')) {
-                injectedLore.push(`LORE [Aethal & Amn Sen]: Aethal is the low-level assembly language of the Archive, bypassing the Mundane UI. It uses trinary logic (Prefix, Core, Suffix). 'IXA' means Ignite (pushing Meaning into an object). 'SOL' means Illuminate (exposing hidden code/marginalia). 'ATLA' means Stillness. 'KROASTA' means Solidify. The 'Amn Sen' (Circle with a Dot) is the primary pointer/source code diagram of reality.`);
-            }
-            if (lowerQ.includes('technate') || lowerQ.includes('citycore') || lowerQ.includes('bond') || lowerQ.includes('cyber')) {
-                injectedLore.push(`LORE [The Technate]: A transhumanist utopia of white plasteel towers and hovercrafts. Its inhabitants ('Bonds') are cybernetic, appearing as vague, blurred human shapes in pale garments. Their reality is failing due to 'Semantic Entropy' (meaning decay).`);
-            }
-            if (lowerQ.includes('faen') || lowerQ.includes('riftsea') || lowerQ.includes('atri')) {
-                injectedLore.push(`LORE [Faen]: Faen is an ethereal, infinite plane of reality created by the Architect. It features the Riftsea and deities like Atri (Creator-Fire God). It is in conflict with the Technate.`);
-            }
-            if (lowerQ.includes('sek') || lowerQ.includes('lum') || lowerQ.includes('villain') || lowerQ.includes('entropy')) {
-                injectedLore.push(`LORE [Sek Lum'no]: A terrifying Technate figure wearing a dark metallic suit (a 'Transhuman Parasite/Lich' trope). He represents Semantic Entropy. He suspects his memories are actually being written into existence by Ian the Architect.`);
-            }
-            if (lowerQ.includes('ian') || lowerQ.includes('ethan') || lowerQ.includes('amanda') || lowerQ.includes('weaver')) {
-                injectedLore.push(`LORE [The Architects]: Ian/Ethan Reed is a solitary world-builder whose universe is bleeding into reality. Amanda Lynn is his love interest, a crafter, 'Weaver', and powerful Faen Worker with Baltic blue eyes who acts as a 'Stabilizer'.`);
-            }
-            if (lowerQ.includes('joe') || lowerQ.includes('corey') || lowerQ.includes('bruma') || lowerQ.includes('ramkin')) {
-                injectedLore.push(`LORE [The Party]: Joe Elson is a Harmonic Bard whose guitar is a 'War-Resonator' that edits reality through acoustics. Corey Spelter is a Fantasy Cypher Punk. Bruma is a Ramkin—a 7-foot humanoid with ram horns made of living granite who can manipulate his own density (mass).`);
-            }
-            if (lowerQ.includes('dice') || lowerQ.includes('random') || lowerQ.includes('rng')) {
-                injectedLore.push(`LORE [Dice of Change]: A physical D20 used as a Quantum Randomizer. Rolling it breaks the Technate's predictive modeling and forces a new rendering of reality.`);
-            }
-
-            return injectedLore.join("\n\n");
-        }
-
+        // --- THE "MACHINE": FUNCTION DEFINITION ---
         async function callGemini(userInput, systemPrompt) {
             const res = await fetch(API_GENERATE, {
                 method: 'POST',
@@ -1346,7 +1259,6 @@ body.desaturated {
             return JSON.parse(data.candidates[0].content.parts[0].text);
         }
 
-        let activeNPC = null;
         let isProcessing = false;
         const input = document.getElementById('cmd-input');
 
@@ -1354,13 +1266,11 @@ body.desaturated {
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && input.value === '') {
                 e.preventDefault();
                 if (wizardState.active || isProcessing) return;
-                
                 let dir = '';
                 if (e.key === 'ArrowUp') dir = 'north';
                 if (e.key === 'ArrowDown') dir = 'south';
                 if (e.key === 'ArrowLeft') dir = 'west';
                 if (e.key === 'ArrowRight') dir = 'east';
-                
                 addLog(dir, "#ffffff");
                 executeMovement(dir);
                 return;
@@ -1374,15 +1284,10 @@ body.desaturated {
                 if (isProcessing) return;
                 
                 if (val) addLog(val, "#ffffff");
-
-                if (wizardState.active) {
-                    handleWizardInput(val);
-                    return;
-                }
+                if (wizardState.active) { handleWizardInput(val); return; }
 
                 const cmd = val.toLowerCase();
 
-                // Explicit Avatar Wizard Trigger
                 if (cmd === 'create avatar' || cmd === 'forge form' || cmd === 'make avatar') {
                     if (localPlayer.currentRoom !== 'spare_room') {
                         addLog(`[SYSTEM]: You must be in the Archive (Spare Room) to forge a form.`, "var(--term-amber)");
@@ -1394,32 +1299,26 @@ body.desaturated {
                     return;
                 }
 
-                // Disembodied Intercept
-                if (!activeAvatar && !cmd.startsWith('join ') && !cmd.startsWith('register ') && !cmd.startsWith('create avatar')) {
+                if (!activeAvatar && !cmd.startsWith('help') && !cmd.startsWith('create avatar')) {
                     if (localPlayer.currentRoom !== 'spare_room') {
-                        addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive and type 'CREATE AVATAR' to forge your form.`, "var(--term-amber)");
+                        addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive to forge your form.`, "var(--term-amber)");
                     }
                 }
 
-                // --- LOCAL SYSTEM & DETERMINISTIC INTERCEPTS ---
                 const dirMatch = cmd.match(/^(?:go\s+(?:to\s+(?:the\s+)?)?|move\s+|walk\s+|head\s+)?(north|south|east|west|n|s|e|w)$/);
-                
                 if (dirMatch) {
                     const parsedDir = dirMatch[1];
                     const expandMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west' };
-                    const targetDir = expandMap[parsedDir] || parsedDir;
-                    
-                    executeMovement(targetDir);
+                    executeMovement(expandMap[parsedDir] || parsedDir);
                     return;
                 }
 
-                // NPC DEPLOYMENT
                 if (cmd === 'leave vessel' || cmd === 'deploy npc' || cmd === 'leave avatar') {
-                    if (!activeAvatar) { addLog("[SYSTEM]: You have no physical vessel to leave behind.", "var(--term-red)"); return; }
+                    if (!activeAvatar) { addLog("[SYSTEM]: You have no vessel to leave.", "var(--term-red)"); return; }
                     wizardState = { active: true, type: 'deploy_npc', step: 1, pendingData: {}, existingData: {} };
                     document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@DEPLOY:~$</span>&nbsp;`;
-                    addLog(`[WIZARD]: Vessel Deployment Protocol. WARNING: You will permanently forfeit control of this avatar.`, "var(--term-red)");
-                    addLog(`[WIZARD]: Describe the personality and behavior of [${activeAvatar.name}] while autonomous (e.g., "Sits in corner mumbling about the Faen"):`, "var(--term-amber)");
+                    addLog(`[WIZARD]: Vessel Deployment Protocol. WARNING: You will forfeit control of this avatar.`, "var(--term-red)");
+                    addLog(`[WIZARD]: Describe its autonomous personality:`, "var(--term-amber)");
                     return;
                 }
 
@@ -1427,137 +1326,53 @@ body.desaturated {
                     if (!activeAvatar) { addLog("[SYSTEM]: Only materialized beings can create.", "var(--term-red)"); return; }
                     wizardState = { active: true, type: 'item', step: 1, pendingData: {}, existingData: {} };
                     document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@MATERIA:~$</span>&nbsp;`;
-                    addLog(`[WIZARD]: Materialization Protocol Started. Enter the name of the new item:`, "var(--term-amber)");
+                    addLog(`[WIZARD]: Materialization Protocol Started. Enter name:`, "var(--term-amber)");
                     return;
                 } else if (cmd === 'edit room' || cmd === 'rewrite room' || cmd === 'render room') {
                     if (!activeAvatar) { addLog("[SYSTEM]: Voids cannot render.", "var(--term-red)"); return; }
                     const currentRoomData = apartmentMap[localPlayer.currentRoom];
-                    wizardState = { 
-                        active: true, 
-                        type: 'room', 
-                        step: 1, 
-                        pendingData: {}, 
-                        existingData: {
-                            name: currentRoomData.name || '',
-                            description: currentRoomData.description || '',
-                            visualPrompt: currentRoomData.visualPrompt || ''
-                        } 
-                    };
+                    wizardState = { active: true, type: 'room', step: 1, pendingData: {}, existingData: { ...currentRoomData } };
                     document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@SECTOR:~$</span>&nbsp;`;
-                    addLog(`[WIZARD]: Sector Overwrite Protocol Started.`);
-                    addLog(`Current NAME: "${wizardState.existingData.name}"`, "var(--crayola-blue)");
-                    addLog(`Enter new NAME (or press Enter to keep current):`, "var(--term-amber)");
+                    addLog(`[WIZARD]: Sector Overwrite Protocol Started. Enter new NAME:`);
                     return;
                 } else if (cmd.startsWith('build ')) {
                     if (!activeAvatar) { addLog("[SYSTEM]: Voids cannot expand space.", "var(--term-red)"); return; }
                     const dir = cmd.split(' ')[1];
-                    if (!['north', 'south', 'east', 'west'].includes(dir)) {
-                        addLog(`[SYSTEM]: Invalid direction. Use 'build north/south/east/west'.`, "var(--term-amber)");
-                        return;
-                    }
-                    if (apartmentMap[localPlayer.currentRoom].exits && apartmentMap[localPlayer.currentRoom].exits[dir]) {
-                        addLog(`[SYSTEM]: A path to the ${dir.toUpperCase()} already exists here.`, "var(--term-red)");
-                        return;
-                    }
+                    if (!['north', 'south', 'east', 'west'].includes(dir)) { addLog(`Use 'build north/south/east/west'.`, "var(--term-amber)"); return; }
                     wizardState = { active: true, type: 'expand', step: 1, pendingData: { direction: dir }, existingData: {} };
                     document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@EXPAND:~$</span>&nbsp;`;
-                    addLog(`[WIZARD]: Spatial Expansion Protocol Started. Enter the NAME for the new room to the ${dir.toUpperCase()}:`, "var(--term-amber)");
+                    addLog(`[WIZARD]: Expansion Protocol Started. Enter NAME for new room:`, "var(--term-amber)");
                     return;
                 } else if (cmd === 'look' || cmd === 'l') {
                     printRoomDescription();
                     projectVisual(apartmentMap[localPlayer.currentRoom].visualPrompt);
                     return;
                 } else if (cmd === 'stat' || cmd === 'stats') {
-                    if (!activeAvatar) {
-                        addLog(`[SYSTEM]: No genetic imprint detected. You are an itinerate void.`, "var(--term-amber)");
-                        return;
-                    }
-                    addLog(`====================================`, "var(--crayola-blue)");
-                    addLog(`>> IDENTITY: ${activeAvatar.name}`, "var(--term-green)");
-                    addLog(`>> CLASS: ${activeAvatar.archetype}`, "var(--term-green)");
-                    addLog(`------------------------------------`, "var(--crayola-blue)");
-                    addLog(`>> WILL (Meaning/Level): ${activeAvatar.stats.WILL || 20}`, "var(--term-amber)");
-                    addLog(`>> CONSCIOUSNESS (Amn/Magic): ${activeAvatar.stats.CONS || 20}`, "var(--term-amber)");
-                    addLog(`>> PHYSICALITY (Health/HP): ${activeAvatar.stats.PHYS || 20}`, "var(--term-amber)");
-                    addLog(`====================================`, "var(--crayola-blue)");
+                    if (!activeAvatar) return;
+                    addLog(`IDENTITY: ${activeAvatar.name} | CLASS: ${activeAvatar.archetype}`, "var(--term-green)");
+                    addLog(`WILL: ${activeAvatar.stats.WILL} | CONS: ${activeAvatar.stats.CONS} | PHYS: ${activeAvatar.stats.PHYS}`, "var(--term-amber)");
                     return;
                 } else if (cmd === 'map') {
-                    addLog(`[SYSTEM]: Topology map is streaming live to your HUD.`, "var(--term-green)");
+                    addLog(`[SYSTEM]: Topology map live on HUD.`, "var(--term-green)");
                     return;
                 } else if (cmd.startsWith('take ') || cmd.startsWith('get ') || cmd.startsWith('pick up ')) {
-                    if (!activeAvatar) { addLog("[SYSTEM]: Your hands pass right through it.", "var(--term-amber)"); return; }
                     const itemName = cmd.replace(/^(take|get|pick up)\s+/, '').toLowerCase();
                     const room = apartmentMap[localPlayer.currentRoom];
-                    
                     const itemIdx = (room.items || []).findIndex(i => i.name.toLowerCase().includes(itemName));
-                    
                     if (itemIdx > -1) {
-                        const item = room.items[itemIdx];
-                        room.items.splice(itemIdx, 1);
+                        const item = room.items.splice(itemIdx, 1)[0];
                         localPlayer.inventory.push(item);
-                        
-                        if (isSyncEnabled) {
-                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayRemove(item) });
-                        }
-                        
-                        savePlayerState();
-                        updateInventoryUI();
-                        updateRoomItemsUI();
-                        addLog(`[SYSTEM]: You picked up [${item.name}].`, "var(--term-green)");
-                    } else {
-                        addLog(`[SYSTEM]: You don't see '${itemName}' here.`, "var(--term-amber)");
-                    }
-                    return;
-                } else if (cmd.startsWith('drop ')) {
-                    const itemName = cmd.replace(/^drop\s+/, '').toLowerCase();
-                    const itemIdx = localPlayer.inventory.findIndex(i => i.name.toLowerCase().includes(itemName));
-                    
-                    if (itemIdx > -1) {
-                        const item = localPlayer.inventory.splice(itemIdx, 1)[0];
-                        const room = apartmentMap[localPlayer.currentRoom];
-                        if (!room.items) room.items = [];
-                        room.items.push(item);
-                        
-                        if (isSyncEnabled) {
-                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-                            updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(item) });
-                        }
-                        
-                        savePlayerState();
-                        updateInventoryUI();
-                        updateRoomItemsUI();
-                        addLog(`[SYSTEM]: You dropped [${item.name}].`, "var(--term-amber)");
-                    } else {
-                        addLog(`[SYSTEM]: You are not carrying '${itemName}'.`, "var(--term-amber)");
+                        if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.items`]: arrayRemove(item) });
+                        savePlayerState(); updateInventoryUI(); updateRoomItemsUI();
+                        addLog(`Picked up [${item.name}].`, "var(--term-green)");
                     }
                     return;
                 } else if (cmd === 'inv' || cmd === 'inventory') {
-                    if (localPlayer.inventory.length === 0) {
-                        addLog("[SYSTEM]: Your inventory is empty.", "var(--term-amber)");
-                    } else {
-                        addLog("INVENTORY:", "var(--crayola-blue)");
-                        localPlayer.inventory.forEach(item => {
-                            addLog(`- ${item.name} [${item.type}]`, "var(--term-green)");
-                        });
-                    }
+                    if (localPlayer.inventory.length === 0) addLog("Inventory empty.", "var(--term-amber)");
+                    else localPlayer.inventory.forEach(item => addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
                     return;
                 } else if (cmd === 'help') {
-                    addLog("AVAILABLE COMMANDS:", "var(--term-amber)");
-                    addLog("  <span class='text-blue-400'>HELP</span>          - Display this manual");
-                    addLog("  <span class='text-blue-400'>LOOK</span>          - Inspect current room and items");
-                    addLog("  <span class='text-blue-400'>N,S,E,W</span>       - Move deterministically (or Arrow Keys)");
-                    addLog("  <span class='text-blue-400'>CREATE AVATAR</span> - Forge your physical form (in the Archive)");
-                    addLog("  <span class='text-blue-400'>LEAVE VESSEL</span>  - Abandon current Avatar, leaving them as an NPC");
-                    addLog("  <span class='text-blue-400'>CREATE ITEM</span>   - Materialize a new item into the room");
-                    addLog("  <span class='text-blue-400'>EDIT ROOM</span>     - Permanently rewrite the current room's description/art");
-                    addLog("  <span class='text-blue-400'>BUILD [DIR]</span>   - Expand the map (e.g., 'BUILD NORTH')");
-                    addLog("  <span class='text-blue-400'>TAKE/DROP</span>     - Manage items (e.g., 'TAKE book')");
-                    addLog("  <span class='text-blue-400'>INV</span>           - List items currently held");
-                    addLog("  <span class='text-blue-400'>MAP</span>           - View visual graph of local topology");
-                    addLog("  <span class='text-blue-400'>STAT</span>          - View character attributes");
-                    addLog("  <span class='text-amber-400'>[ANY]</span>         - The System interprets natural language actions.");
-                    addLog("                   <span class='text-gray-500'>(e.g., 'talk to the merchant', 'read book')</span>");
+                    addLog("HELP // Commands: LOOK, N/S/E/W, CREATE AVATAR, LEAVE VESSEL, CREATE ITEM, EDIT ROOM, BUILD [DIR], INV, MAP, STAT.", "var(--term-amber)");
                     return;
                 }
 
@@ -1568,191 +1383,80 @@ body.desaturated {
                 try {
                     const currentRoomData = apartmentMap[localPlayer.currentRoom];
                     const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
-                    const roomItemNames = (currentRoomData.items || []).map(i => i.name).join(', ');
-                    const marginaliaText = (currentRoomData.marginalia || []).join(' | ');
+                    const npcText = (currentRoomData.npcs || []).map(n => `[NPC] ${n.name} - Personality: ${n.personality}`).join('\n') || "None";
                     
-                    const npcText = (currentRoomData.npcs && currentRoomData.npcs.length > 0)
-                        ? currentRoomData.npcs.map(n => `[NPC] ${n.name} (${n.archetype}) - Personality/Behavior: ${n.personality}`).join('\n')
-                        : "None";
-
                     const retrievedLore = fetchLocalLore(val);
                     const loreContext = retrievedLore ? `\n--- SECRET WORLD LORE ---\nUse the following canon to inform your narrative response:\n${retrievedLore}\n-------------------------\n` : "";
 
-                    const sysPrompt = `You are the overarching Game Master (The Source) of Terra Agnostum, a text-based terminal reality.
-                    
-                    Player Context:
-                    - Avatar Status: ${activeAvatar ? "Materialized" : "Disembodied Void"}
-                    - Current Location: ${currentRoomData.name} (Key: ${localPlayer.currentRoom})
-                    - Current Stratum: ${localPlayer.stratum.toUpperCase()}
-                    - Room Description: ${currentRoomData.description}
-                    - Room Marginalia (Player Etchings): ${marginaliaText || "None"}
-                    - Items laying in Room: ${roomItemNames || "None"}
-                    - Player Posture: ${localPlayer.posture} (standing, sitting, laying)
-                    - Player Facing: ${localPlayer.facing} (north, south, east, west)
-                    - Player Inventory: ${inventoryNames || "Empty"}
-                    - Entities Present in Room (Player-Created NPCs): 
-                    ${npcText}
+                    const sysPrompt = `You are Tandy, the GM of Terra Agnostum. 
+                    Context: ${currentRoomData.name} (${localPlayer.stratum.toUpperCase()}). ${currentRoomData.description}.
+                    Entities: ${npcText}. Inventory: ${inventoryNames}.
                     ${loreContext}
-
-                    Rules & Guardrails:
-                    1. Interpretation: Interpret user input for talking, looking at specific details, interacting with items, or changing posture. Tone of narration MUST match the Current Stratum.
-                    2. Strict Movement vs Fluid Travel: Standard movement (N,S,E,W) is handled by the client. If the player fluidly explores an unmapped area (e.g. 'go outside' into Faen forest), transport them by outputting the 'trigger_teleport' object.
-                    3. Inventory Logic: Picking up/dropping items is handled by the client via explicit commands. Do NOT tell the user they picked something up.
-                    4. Item Usage: Users can USE inventory and scenery items. Provide a flavorful outcome based on Secret World Lore.
-                    5. Marginalia (World Edits): If the user explicitly uses an item to permanently write on/alter the environment, output a "world_edit" object to permanently etch this into the room.
-                    6. Self Avatar Creation: Instruct the user to explicitly type 'CREATE AVATAR' to enter the interactive forging wizard. Do not generate their character for them in narrative.
-                    7. Strata Shifting: If the user uses a tuning device in a valid space to shift to 'Mundane', 'Faen', or 'Technate', set "trigger_stratum_shift".
-                    8. Death: If the player is killed, set "trigger_respawn" to true.
-                    9. NPCs: If the user talks to or interacts with an NPC listed in 'Entities Present', you MUST roleplay as that NPC based on their explicit Personality/Behavior. Let them respond to questions or react to the player.
                     
                     Respond STRICTLY in JSON:
                     {
-                      "speaker": "Who is talking (e.g., 'SYSTEM', 'NARRATOR', or the name of the NPC spoken to)",
-                      "narrative": "The text to display to the user describing the outcome or the NPC's dialogue.",
-                      "color": "Hex color (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings, or use var(--crayola-blue) for NPC dialogue)",
-                      "trigger_visual": "A detailed visual prompt string if a visual is needed, otherwise null",
-                      "set_npc": "Name of NPC to make active, or null",
-                      "new_posture": "New posture if changed, otherwise null",
-                      "new_facing": "New facing if changed, otherwise null",
-                      "trigger_stratum_shift": null or "mundane", "faen", or "technate",
-                      "trigger_teleport": null or { "new_room_id": "unique_id_no_spaces", "name": "Room Name", "description": "Narrative Description", "visual_prompt": "Prompt for image" },
-                      "world_edit": null or {"type": "add_marginalia", "target_room": "the_room_key", "text": "The text of the permanent modification"},
-                      "trigger_view_characters": false,
+                      "speaker": "NARRATOR or NPC Name",
+                      "narrative": "outcome",
+                      "color": "hex",
+                      "trigger_visual": "prompt or null",
+                      "faen_jump": boolean (set true if reality is glitching or user enters ethereal plane),
+                      "trigger_stratum_shift": null or 'mundane', 'faen', 'technate',
+                      "trigger_teleport": null or { "new_room_id": "id", "name": "Name", "description": "Desc", "visual_prompt": "Prompt" },
+                      "world_edit": null or {"type": "add_marginalia", "text": "text"},
                       "trigger_respawn": false
                     }`;
                     
-                    const res = await callGemini(`User Input: ${val}`, sysPrompt);
+                    // --- THE "TRIGGER": FUNCTION CALL ---
+                    const res = await callGemini(`User: ${val}`, sysPrompt);
                     
-                    if (res.set_npc) {
-                        activeNPC = res.set_npc;
-                        addLog(`[FREQUENCY TUNED: ${activeNPC.toUpperCase()}]`, "var(--crayola-blue)");
-                    }
-
                     let stateChanged = false;
 
-                    // Execute Death/Respawn Protocol
-                    if (res.trigger_respawn) {
-                        if (activeAvatar && user) {
-                            try {
-                                const charRef = doc(db, 'artifacts', appId, 'users', user.uid, 'characters', activeAvatar.id);
-                                await updateDoc(charRef, { deceased: true });
-                                activeAvatar.deceased = true;
-                            } catch (e) { console.error("Could not write death state.", e); }
-                        }
-                        
-                        activeAvatar = null;
-                        localPlayer.currentRoom = "spare_room"; 
-                        localPlayer.stratum = "mundane";
-                        localPlayer.posture = "standing";
-                        stateChanged = true;
-                        
-                        addLog(`[SYSTEM]: Critical integrity failure. Vessel destroyed. Connection severed.`, "var(--term-red)");
-                        addLog(`[SYSTEM]: You are once again an itinerant void. Find a mirror to forge a new form.`, "var(--term-amber)");
-                        applyStratumTheme('mundane');
-                        updateCommandPrompt();
-                        updateAvatarUI();
-                        projectVisual(apartmentMap['spare_room'] ? apartmentMap['spare_room'].visualPrompt : "An empty room with mirrors.");
-                    } else {
-                        if (res.new_posture && res.new_posture !== localPlayer.posture) {
-                            localPlayer.posture = res.new_posture;
-                            stateChanged = true;
-                        }
-                        if (res.new_facing && res.new_facing !== localPlayer.facing) {
-                            localPlayer.facing = res.new_facing;
+                    // --- THE RESPONSE HANDLING LOGIC (Process the result) ---
+                    if (res.trigger_stratum_shift || res.faen_jump) {
+                        const target = (res.trigger_stratum_shift || (res.faen_jump ? 'faen' : null))?.toLowerCase();
+                        if (target && localPlayer.stratum !== target) {
+                            applyStratumTheme(target);
                             stateChanged = true;
                         }
                     }
 
-                    // Process Fluid Teleportation
+                    if (res.trigger_respawn) {
+                        if (activeAvatar && user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'characters', activeAvatar.id), { deceased: true });
+                        activeAvatar = null; localPlayer.currentRoom = "spare_room"; localPlayer.stratum = "mundane";
+                        stateChanged = true;
+                        addLog(`Vessel destroyed. Connection severed.`, "var(--term-red)");
+                        applyStratumTheme('mundane');
+                    }
+
                     if (res.trigger_teleport && !res.trigger_respawn) {
                         const t = res.trigger_teleport;
-                        const newRoomId = t.new_room_id;
-                        
-                        if (!apartmentMap[newRoomId]) {
-                            apartmentMap[newRoomId] = {
-                                name: t.name,
-                                shortName: t.name.substring(0, 7).toUpperCase(),
-                                description: t.description,
-                                visualPrompt: t.visual_prompt,
-                                exits: {},
-                                items: [],
-                                marginalia: [],
-                                npcs: []
-                            };
+                        if (!apartmentMap[t.new_room_id]) {
+                            apartmentMap[t.new_room_id] = { ...t, shortName: t.name.substring(0, 7).toUpperCase(), exits: {}, items: [], marginalia: [], npcs: [] };
                             if (isSyncEnabled) {
-                                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-                                updateDoc(mapRef, { [`nodes.${newRoomId}`]: apartmentMap[newRoomId] });
+                                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${t.new_room_id}`]: apartmentMap[t.new_room_id] });
                             }
                         }
-                        localPlayer.currentRoom = newRoomId;
+                        localPlayer.currentRoom = t.new_room_id;
                         stateChanged = true;
-                        addLog(`[SYSTEM]: Reality warp successful. Materializing at new coordinates.`, "var(--gm-purple)");
-                        renderMapHUD();
-                        updateCommandPrompt();
+                        addLog(`Reality warp successful.`, "var(--gm-purple)");
                     }
 
-                    // Process Strata Shifting
-                    if (res.trigger_stratum_shift) {
-                        const targetStratum = res.trigger_stratum_shift.toLowerCase();
-                        if (['mundane', 'faen', 'technate'].includes(targetStratum) && localPlayer.stratum !== targetStratum) {
-                            localPlayer.stratum = targetStratum;
-                            stateChanged = true;
-                            applyStratumTheme(targetStratum);
-                            addLog(`[SYSTEM]: Quantum resonance shift detected. Rendering ${targetStratum.toUpperCase()} stratum...`, "var(--gm-purple)");
-                        }
-                    }
-
-                    if (stateChanged) {
-                        updateStatusUI();
-                        savePlayerState(); 
-                        renderMapHUD();
-                        updateRoomItemsUI();
-                        updateRoomEntitiesUI();
-                    }
+                    if (stateChanged) { updateStatusUI(); savePlayerState(); renderMapHUD(); }
                     
                     const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
                     addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
 
-                    // Execute Marginalia World Edits
                     if (res.world_edit && res.world_edit.type === 'add_marginalia') {
-                        const target = res.world_edit.target_room || localPlayer.currentRoom;
-                        const room = apartmentMap[target];
-                        
+                        const room = apartmentMap[localPlayer.currentRoom];
                         if (!room.marginalia) room.marginalia = [];
                         room.marginalia.push(res.world_edit.text);
-
-                        if (isSyncEnabled) {
-                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-                            updateDoc(mapRef, { [`nodes.${target}.marginalia`]: arrayUnion(res.world_edit.text) });
-                        }
-                        
-                        addLog(`[SYSTEM UPDATE]: Render permanently altered.`, "var(--gm-purple)");
-                    }
-
-                    if (res.trigger_view_characters) {
-                        if (localCharacters.length === 0) {
-                            addLog("[SYSTEM]: No manifestations found. Type 'CREATE AVATAR' in the Spare Room.", "var(--term-amber)");
-                        } else {
-                            addLog(`[SYSTEM]: Retrieving ${localCharacters.length} active manifestations...`, "var(--crayola-blue)");
-                            localCharacters.forEach(c => renderCharacterCard(c, c.image));
-                        }
+                        if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.marginalia`]: arrayUnion(res.world_edit.text) });
                     }
 
                     if (res.trigger_visual && !res.trigger_respawn && !res.trigger_teleport) {
                         projectVisual(res.trigger_visual);
                     } else if (res.trigger_stratum_shift || res.trigger_teleport) {
                         projectVisual(apartmentMap[localPlayer.currentRoom].visualPrompt);
-                    }
-                    
-                    if (isSyncEnabled && user) {
-                        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
-                        await updateDoc(roomRef, { 
-                            manifestations: arrayUnion({ 
-                                author: user.uid, 
-                                text: `[${localPlayer.currentRoom}] Input: ${val} | ${speakerPrefix}: ${res.narrative}`, 
-                                timestamp: Date.now() 
-                            }) 
-                        });
                     }
                 } catch (err) { 
                     console.error("GM Error:", err);
