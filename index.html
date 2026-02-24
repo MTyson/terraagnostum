@@ -247,7 +247,7 @@
 
                 <div id="output">
                     <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v6.3 - Lore Bridge]</p>
+                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v6.5 - Manifestation Node]</p>
                         <p>> The Overarching Mind is Online.</p>
                         <p>> <span class="text-crayola-blue font-bold">CURRENT DIRECTIVE:</span> Remote connection established. Escape the local sector.</p>
                         <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
@@ -332,7 +332,8 @@
                 visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.",
                 exits: { east: "lore2", north: "closet", south: "bedroom" },
                 items: [],
-                marginalia: []
+                marginalia: [],
+                npcs: []
             },
             "lore2": {
                 name: "Lore Room (East)",
@@ -341,7 +342,8 @@
                 visualPrompt: "A cyberpunk apartment living room, dim lighting, worn retro-futuristic couch, cables running along the floor.",
                 exits: { west: "lore1", north: "kitchen", east: "spare_room", south: "hallway" },
                 items: [],
-                marginalia: []
+                marginalia: [],
+                npcs: []
             },
             "closet": {
                 name: "Schrödinger's Closet",
@@ -350,7 +352,8 @@
                 visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges.",
                 exits: { south: "lore1" },
                 items: [],
-                marginalia: []
+                marginalia: [],
+                npcs: []
             },
             "kitchen": {
                 name: "Small Kitchen",
@@ -359,7 +362,8 @@
                 visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds.",
                 exits: { south: "lore2" },
                 items: [],
-                marginalia: []
+                marginalia: [],
+                npcs: []
             },
             "spare_room": {
                 name: "Spare Room (The Archive)",
@@ -368,7 +372,8 @@
                 visualPrompt: "An empty room with walls entirely made of mirrors, reflecting a lonely terminal interface in the center.",
                 exits: { west: "lore2" },
                 items: [],
-                marginalia: []
+                marginalia: [],
+                npcs: []
             },
             "bedroom": {
                 name: "Bedroom & Bathroom",
@@ -377,7 +382,8 @@
                 visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom.",
                 exits: { north: "lore1" },
                 items: [],
-                marginalia: []
+                marginalia: [],
+                npcs: []
             },
             "hallway": {
                 name: "Hallway",
@@ -386,7 +392,8 @@
                 visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door, standing slightly open.",
                 exits: { north: "lore2", south: "outside" },
                 items: [],
-                marginalia: []
+                marginalia: [],
+                npcs: []
             },
             "outside": {
                 name: "The Unrendered Edge",
@@ -395,7 +402,8 @@
                 visualPrompt: "A glitching transition where a realistic cyberpunk city abruptly turns into a crude child's crayon drawing on cardboard.",
                 exits: { north: "hallway" },
                 items: [],
-                marginalia: []
+                marginalia: [],
+                npcs: []
             }
         };
 
@@ -593,8 +601,9 @@
                 snap.forEach(doc => {
                     const charData = { id: doc.id, ...doc.data() };
                     localCharacters.push(charData);
-                    if (!charData.deceased) {
-                        activeAvatar = charData; // Most recent living avatar
+                    // Do not load deceased or permanently deployed characters as active
+                    if (!charData.deceased && !charData.deployed) {
+                        activeAvatar = charData; 
                     }
                 });
                 
@@ -685,6 +694,12 @@
             if (room.items && room.items.length > 0) {
                 const itemNames = room.items.map(i => `<span class="text-amber-400">${i.name}</span>`).join(', ');
                 addLog(`You see items resting here: ${itemNames}`, "#aaa");
+            }
+
+            // Render permanent NPCs left behind by players
+            if (room.npcs && room.npcs.length > 0) {
+                const npcNames = room.npcs.map(n => `<span class="text-crayola-blue font-bold">${n.name} (${n.archetype})</span>`).join(', ');
+                addLog(`Entities Present: ${npcNames}`, "#aaa");
             }
             
             const exits = Object.keys(room.exits || {}).join(', ').toUpperCase();
@@ -890,7 +905,7 @@
             const log = document.getElementById('log');
             const wrapper = document.createElement('div');
             const deceasedClass = charData.deceased ? 'deceased' : '';
-            const statusLabel = charData.deceased ? '[DECEASED]' : '[ACTV]';
+            const statusLabel = charData.deceased ? '[DECEASED]' : (charData.deployed ? '[DEPLOYED]' : '[ACTV]');
             
             wrapper.innerHTML = `
                 <div class="char-card ${deceasedClass}">
@@ -1078,7 +1093,8 @@
                         visualPrompt: wizardState.pendingData.visualPrompt,
                         exits: { [reverseDir]: currentRoomKey },
                         items: [],
-                        marginalia: []
+                        marginalia: [],
+                        npcs: []
                     };
 
                     apartmentMap[newRoomId] = newNode;
@@ -1119,7 +1135,8 @@
                         archetype: wizardState.pendingData.archetype,
                         visual_prompt: wizardState.pendingData.visual_prompt,
                         stats: { WILL: 20, CONS: 20, PHYS: 20 },
-                        deceased: false
+                        deceased: false,
+                        deployed: false
                     };
 
                     addLog(`[SYSTEM]: Extracting genetic imprint for your primary vessel [${charData.name}]...`, "var(--gm-purple)");
@@ -1167,6 +1184,48 @@
                         updateAvatarUI(); 
                         updateCommandPrompt();
                     })();
+                }
+            }
+            // -- LEAVE NPC VESSEL --
+            else if (wizardState.type === 'deploy_npc') {
+                if (wizardState.step === 1) {
+                    const personality = val || "Stands silently, observing the void.";
+                    const roomKey = localPlayer.currentRoom;
+                    const room = apartmentMap[roomKey];
+                    if (!room.npcs) room.npcs = [];
+
+                    const newNPC = {
+                        id: 'npc_' + Date.now(),
+                        name: activeAvatar.name,
+                        archetype: activeAvatar.archetype,
+                        visual_prompt: activeAvatar.visual_prompt,
+                        personality: personality,
+                        owner: user ? user.uid : 'guest'
+                    };
+
+                    room.npcs.push(newNPC);
+
+                    if (isSyncEnabled) {
+                        const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                        updateDoc(mapRef, { [`nodes.${roomKey}.npcs`]: arrayUnion(newNPC) });
+                    }
+
+                    // Permanently Disembody player from this vessel
+                    if (activeAvatar && user) {
+                        try {
+                            const charRef = doc(db, 'artifacts', appId, 'users', user.uid, 'characters', activeAvatar.id);
+                            // Mark deployed so they don't reload it as an active avatar next login
+                            updateDoc(charRef, { deployed: true }); 
+                        } catch (e) { console.error("Could not write deployment state.", e); }
+                    }
+
+                    addLog(`[SYSTEM]: Vessel [${newNPC.name}] detached and left on autonomous local loop.`, "var(--term-green)");
+                    addLog(`[SYSTEM]: You are once again an itinerant void. Find a mirror to forge a new form.`, "var(--term-amber)");
+
+                    activeAvatar = null;
+                    updateAvatarUI();
+                    updateCommandPrompt();
+                    wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
                 }
             }
         }
@@ -1279,6 +1338,16 @@
                     const targetDir = expandMap[parsedDir] || parsedDir;
                     
                     executeMovement(targetDir);
+                    return;
+                }
+
+                // NPC DEPLOYMENT
+                if (cmd === 'leave vessel' || cmd === 'deploy npc' || cmd === 'leave avatar') {
+                    if (!activeAvatar) { addLog("[SYSTEM]: You have no physical vessel to leave behind.", "var(--term-red)"); return; }
+                    wizardState = { active: true, type: 'deploy_npc', step: 1, pendingData: {}, existingData: {} };
+                    document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@DEPLOY:~$</span>&nbsp;`;
+                    addLog(`[WIZARD]: Vessel Deployment Protocol. WARNING: You will permanently forfeit control of this avatar.`, "var(--term-red)");
+                    addLog(`[WIZARD]: Describe the personality and behavior of [${activeAvatar.name}] while autonomous (e.g., "Sits in corner mumbling about the Faen"):`, "var(--term-amber)");
                     return;
                 }
 
@@ -1407,6 +1476,7 @@
                     addLog("  <span class='text-blue-400'>LOOK</span>          - Inspect current room and items");
                     addLog("  <span class='text-blue-400'>N,S,E,W</span>       - Move deterministically (or Arrow Keys)");
                     addLog("  <span class='text-blue-400'>CREATE AVATAR</span> - Forge your physical form (in the Archive)");
+                    addLog("  <span class='text-blue-400'>LEAVE VESSEL</span>  - Abandon current Avatar, leaving them as an NPC");
                     addLog("  <span class='text-blue-400'>CREATE ITEM</span>   - Materialize a new item into the room");
                     addLog("  <span class='text-blue-400'>EDIT ROOM</span>     - Permanently rewrite the current room's description/art");
                     addLog("  <span class='text-blue-400'>BUILD [DIR]</span>   - Expand the map (e.g., 'BUILD NORTH')");
@@ -1415,7 +1485,7 @@
                     addLog("  <span class='text-blue-400'>MAP</span>           - View visual graph of local topology");
                     addLog("  <span class='text-blue-400'>STAT</span>          - View character attributes");
                     addLog("  <span class='text-amber-400'>[ANY]</span>         - The System interprets natural language actions.");
-                    addLog("                   <span class='text-gray-500'>(e.g., 'write on wall with marker', 'read book')</span>");
+                    addLog("                   <span class='text-gray-500'>(e.g., 'talk to the merchant', 'read book')</span>");
                     return;
                 }
 
@@ -1429,6 +1499,10 @@
                     const roomItemNames = (currentRoomData.items || []).map(i => i.name).join(', ');
                     const marginaliaText = (currentRoomData.marginalia || []).join(' | ');
                     
+                    const npcText = (currentRoomData.npcs && currentRoomData.npcs.length > 0)
+                        ? currentRoomData.npcs.map(n => `[NPC] ${n.name} (${n.archetype}) - Personality/Behavior: ${n.personality}`).join('\n')
+                        : "None";
+
                     const retrievedLore = fetchLocalLore(val);
                     const loreContext = retrievedLore ? `\n--- SECRET WORLD LORE ---\nUse the following canon to inform your narrative response:\n${retrievedLore}\n-------------------------\n` : "";
 
@@ -1444,6 +1518,8 @@
                     - Player Posture: ${localPlayer.posture} (standing, sitting, laying)
                     - Player Facing: ${localPlayer.facing} (north, south, east, west)
                     - Player Inventory: ${inventoryNames || "Empty"}
+                    - Entities Present in Room (Player-Created NPCs): 
+                    ${npcText}
                     ${loreContext}
 
                     Rules & Guardrails:
@@ -1455,12 +1531,13 @@
                     6. Self Avatar Creation: Instruct the user to explicitly type 'CREATE AVATAR' to enter the interactive forging wizard. Do not generate their character for them in narrative.
                     7. Strata Shifting: If the user uses a tuning device in a valid space to shift to 'Mundane', 'Faen', or 'Technate', set "trigger_stratum_shift".
                     8. Death: If the player is killed, set "trigger_respawn" to true.
+                    9. NPCs: If the user talks to or interacts with an NPC listed in 'Entities Present', you MUST roleplay as that NPC based on their explicit Personality/Behavior. Let them respond to questions or react to the player.
                     
                     Respond STRICTLY in JSON:
                     {
-                      "speaker": "Who is talking (e.g., 'SYSTEM', 'NARRATOR')",
-                      "narrative": "The text to display to the user describing the outcome.",
-                      "color": "Hex color (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings)",
+                      "speaker": "Who is talking (e.g., 'SYSTEM', 'NARRATOR', or the name of the NPC spoken to)",
+                      "narrative": "The text to display to the user describing the outcome or the NPC's dialogue.",
+                      "color": "Hex color (use var(--gm-purple) for SYSTEM, #888 for NARRATOR, #ffb000 for warnings, or use var(--crayola-blue) for NPC dialogue)",
                       "trigger_visual": "A detailed visual prompt string if a visual is needed, otherwise null",
                       "set_npc": "Name of NPC to make active, or null",
                       "new_posture": "New posture if changed, otherwise null",
@@ -1527,7 +1604,8 @@
                                 visualPrompt: t.visual_prompt,
                                 exits: {},
                                 items: [],
-                                marginalia: []
+                                marginalia: [],
+                                npcs: []
                             };
                             if (isSyncEnabled) {
                                 const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
