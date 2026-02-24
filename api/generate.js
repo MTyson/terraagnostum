@@ -1,13 +1,30 @@
 /**
  * Vercel Serverless Function
  * Path: /api/generate.js
- * Purpose: The AI Game Master (Tandy) brain, now augmented with the Akashic Record (RAG).
+ * Purpose: The AI Game Master (Tandy) brain, augmented with an Anchor file and dynamic RAG.
  */
 import fs from 'fs';
 import path from 'path';
 
-// --- THE ZERO-DB RAG ENGINE ---
-// This reads the vault, chunks it, and finds the most relevant canonical lore.
+// --- THE ANCHOR ENGINE (ALWAYS INCLUDED) ---
+// This reads a central 'core_bible.md' file that contains the core, unbreakable rules 
+// of your universe. It is injected into every single prompt.
+function fetchAnchorLore() {
+    try {
+        const anchorPath = path.join(process.cwd(), 'lore/vault/lore/core_bible.md');
+        
+        if (fs.existsSync(anchorPath)) {
+            const anchorText = fs.readFileSync(anchorPath, 'utf8');
+            return `\n\n[CORE UNIVERSE BIBLE - ALWAYS ADHERE TO THESE RULES]:\n"${anchorText}"\n`;
+        }
+    } catch (e) {
+        console.error("Anchor Fetch Error:", e);
+    }
+    return ""; // Fail gracefully if the Anchor file hasn't been created yet
+}
+
+// --- THE ZERO-DB RAG ENGINE (DYNAMICALLY INCLUDED) ---
+// This reads the rest of the vault, chunks it, and finds the most relevant canonical lore based on the user's action.
 function fetchRelevantLore(userCommand) {
     if (!userCommand) return "";
 
@@ -61,7 +78,7 @@ function fetchRelevantLore(userCommand) {
         const topLore = bestChunks.slice(0, 2).map(c => c.text).join('\n\n');
 
         // Return the formatted injection string for the AI
-        return topLore ? `\n\n[CRITICAL CANONICAL CONTEXT TO INCORPORATE]:\n"${topLore}"\n(Do not quote this directly, but use its facts, tone, and specific details to shape your narrative response.)` : "";
+        return topLore ? `\n\n[SPECIFIC SITUATIONAL CONTEXT TO INCORPORATE]:\n"${topLore}"\n(Do not quote this directly, but use its facts, tone, and specific details to shape your narrative response.)` : "";
 
     } catch (e) {
         console.error("RAG Chunking Error:", e);
@@ -84,24 +101,27 @@ export default async function handler(req, res) {
              return res.status(400).json({ error: 'Missing prompt data' });
         }
 
-        // 1. DYNAMIC RAG INJECTION
-        // We fetch the lore based on what the user typed in `userMessage`
+        // 1. STATIC ANCHOR INJECTION
+        // Fetch the immutable core universe rules
+        const anchorLore = fetchAnchorLore();
+
+        // 2. DYNAMIC RAG INJECTION
+        // Fetch specific lore chunks based on what the user typed in `userMessage`
         const dynamicLoreContext = fetchRelevantLore(userMessage);
 
-        // 2. AUGMENT THE SYSTEM PROMPT
-        // We combine your base Tandy instructions with the newly fetched lore
-        const augmentedSystemPrompt = systemPrompt + dynamicLoreContext;
+        // 3. AUGMENT THE SYSTEM PROMPT
+        // We combine your base Tandy instructions with the Anchor Bible AND the situational RAG lore
+        const augmentedSystemPrompt = systemPrompt + anchorLore + dynamicLoreContext;
 
-        // 3. CALL THE LLM API
-        // (Assuming you are using OpenAI here, adjust the fetch URL/Headers if you are using Gemini or Anthropic)
+        // 4. CALL THE LLM API
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` // Make sure this matches your environment variable
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` 
             },
             body: JSON.stringify({
-                model: 'gpt-4o-mini', // or your preferred model
+                model: 'gpt-4o-mini', 
                 messages: [
                     { role: 'system', content: augmentedSystemPrompt },
                     { role: 'user', content: userMessage }
