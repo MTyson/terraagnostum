@@ -101,4 +101,7 @@ In either case, it is consciousness which persists, and consciousness which must
 
 <img width="1778" height="889" alt="image" src="https://github.com/user-attachments/assets/935d4a2c-e30d-4488-9993-1930394467b5" />
 
+Developed by:
+[![Company Logo](https://link-to-your-logo.png)](https://mindframegames.com)
+
 
