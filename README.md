@@ -2,6 +2,7 @@
 
 Developed By: [MINDFRAME GAMES ⬡](https://www.mindframegames.com)
 
+
 <img width="1174" height="925" alt="unnamed" src="https://github.com/user-attachments/assets/333163ec-23a2-4e92-9262-3e06ebb0deb5" />
 
 >> SYSTEM STATE: LIVE
@@ -101,8 +102,8 @@ Or is it: what is the nature of reality?
 
 In either case, it is consciousness which persists, and consciousness which must be addressed, directly.
 
+---
+Developed By: [MINDFRAME GAMES ⬡](https://www.mindframegames.com)
 
-<img width="100"  alt="image" src="https://github.com/user-attachments/assets/2d16f8d2-7eeb-40b8-820c-1849cb98cda7" />
-Developed by [Mindframe Games](https://mindframegames.com)
 
 
