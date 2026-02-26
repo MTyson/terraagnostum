@@ -520,9 +520,9 @@
                         coords[node.exits.south] = {x: curr.logicalX, y: curr.logicalY + 1};
                         queue.push({key: node.exits.south, logicalX: curr.logicalX, logicalY: curr.logicalY + 1});
                     }
-                    if (node.exits.east && !coords[node.exits.east]) {
+                   if (node.exits.east && !coords[node.exits.east]) {
                         coords[node.exits.east] = {x: curr.logicalX + 1, y: curr.logicalY};
-                        queue.push({key: node.exits.east, logicalX: curr.logicalX + 1, curr.logicalY});
+                        queue.push({key: node.exits.east, logicalX: curr.logicalX + 1, logicalY: curr.logicalY});
                     }
                     if (node.exits.west && !coords[node.exits.west]) {
                         coords[node.exits.west] = {x: curr.logicalX - 1, y: curr.logicalY};
