@@ -1,0 +1,1006 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+// IMPORT DECOMPOSED DATA & SERVICES (Updated paths for JS folder context)
+import { apartmentMap as initialMap } from './mapData.js';
+import { callGemini, projectVisual, compressImage } from './apiService.js';
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
+    authDomain: "terra-agnostum.firebaseapp.com",
+    projectId: "terra-agnostum",
+    storageBucket: "terra-agnostum.firebasestorage.app",
+    messagingSenderId: "809154092201",
+    appId: "1:809154092201:web:95aaddd47c6ce021cf1db8"
+};
+
+const appId = 'terra-agnostum-shared';
+
+let app, auth, db, storage;
+let isSyncEnabled = false;
+
+try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+    isSyncEnabled = true;
+    document.getElementById('sync-status').innerText = "SYNC: READY";
+    document.getElementById('sync-status').style.color = "var(--term-amber)";
+} catch (e) {
+    document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
+}
+
+// Initialize with seed data
+let apartmentMap = { ...initialMap };
+
+// Player State
+let localPlayer = { 
+    hp: 20, 
+    currentRoom: "spare_room", 
+    stratum: "mundane",
+    posture: "standing",
+    inventory: []
+};
+
+let localCharacters = []; 
+let activeAvatar = null;  
+let user = null;
+let hasInitialized = false;
+
+// Base64 storage for pinning
+let currentBase64 = null;
+
+// Expanded Creation Wizard State
+let wizardState = {
+    active: false,
+    type: null, 
+    step: 0,
+    pendingData: {},
+    existingData: {}
+};
+
+// --- THEME ENGINE ---
+export function applyStratumTheme(stratum) {
+    const root = document.documentElement;
+    const stratDisp = document.getElementById('stratum-display');
+    
+    if (stratum === 'faen' && localPlayer.stratum !== 'faen') {
+        document.body.classList.add('desaturated');
+        addLog("[SYSTEM]: REALITY_RENDER_STUTTER_DETECTED...", "var(--term-red)");
+        setTimeout(() => {
+            document.body.classList.remove('desaturated');
+            document.body.classList.add('faen-mode');
+        }, 1000);
+    } else if (stratum !== 'faen') {
+        document.body.classList.remove('faen-mode');
+    }
+
+    if (stratum === 'faen') {
+        root.style.setProperty('--term-green', '#fce788');
+        root.style.setProperty('--term-amber', '#ff9d00');
+        root.style.setProperty('--term-red', '#e53935'); 
+        root.style.setProperty('--term-bg', '#1c0f1a');
+        root.style.setProperty('--crayola-blue', '#b084e8'); 
+        root.style.setProperty('--gm-purple', '#ff77ff');
+        stratDisp.innerText = 'STRATA: FAEN';
+        stratDisp.style.color = 'var(--crayola-blue)';
+    } else if (stratum === 'technate') {
+        root.style.setProperty('--term-green', '#e0f7fa');
+        root.style.setProperty('--term-amber', '#ff2a2a');
+        root.style.setProperty('--term-red', '#ff0000'); 
+        root.style.setProperty('--term-bg', '#010a0f');
+        root.style.setProperty('--crayola-blue', '#00ffff'); 
+        root.style.setProperty('--gm-purple', '#ffffff');
+        stratDisp.innerText = 'STRATA: TECHNATE';
+        stratDisp.style.color = 'var(--term-green)';
+    } else {
+        root.style.setProperty('--term-green', '#00ff41');
+        root.style.setProperty('--term-amber', '#ffb000');
+        root.style.setProperty('--term-red', '#ff3e3e');
+        root.style.setProperty('--term-bg', '#050505');
+        root.style.setProperty('--crayola-blue', '#3b82f6');
+        root.style.setProperty('--gm-purple', '#a855f7');
+        stratDisp.innerText = 'STRATA: MUNDANE';
+        stratDisp.style.color = '#888';
+    }
+    
+    localPlayer.stratum = stratum;
+    renderMapHUD();
+}
+
+export function updateCommandPrompt() {
+    const prefixEl = document.getElementById('prompt-prefix');
+    const roomShort = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
+    
+    if (!activeAvatar) {
+        prefixEl.innerHTML = `<span class="text-gray-500 font-bold">VOID@${roomShort}:~$</span>&nbsp;`;
+        return;
+    }
+
+    if (user && !user.isAnonymous) {
+        const identity = user.email ? user.email.split('@')[0] : user.uid.substring(0, 5);
+        prefixEl.innerHTML = `<span class="text-blue-400 font-bold">ARCHITECT[${identity}]@${roomShort}:~$</span>&nbsp;`;
+    } else {
+        prefixEl.innerHTML = `<span class="text-gray-500">GUEST@${roomShort}:~$</span>&nbsp;`;
+    }
+}
+
+// --- AUTHENTICATION & SYNC ---
+if (isSyncEnabled) {
+    if (isSignInWithEmailLink(auth, window.location.href)) {
+        let email = window.localStorage.getItem('emailForSignIn');
+        if (!email) {
+            email = window.prompt('Please provide your email for confirmation');
+        }
+        signInWithEmailLink(auth, email, window.location.href)
+            .then(() => {
+                window.localStorage.removeItem('emailForSignIn');
+                addLog(`[SYSTEM]: Identity confirmed. Welcome to the Technate, Architect.`, "var(--crayola-blue)");
+            })
+            .catch((error) => {
+                addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
+            });
+    }
+
+    onAuthStateChanged(auth, async (u) => {
+        user = u;
+        if (user && !hasInitialized) {
+            hasInitialized = true;
+            const userType = user.isAnonymous ? "GUEST" : "ARCHITECT";
+            updateCommandPrompt(); 
+            addLog(`${userType} LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
+            setupWorldListener();
+            setupMapListener();
+            await loadPlayerState(); 
+            await loadUserCharacters();
+            applyStratumTheme(localPlayer.stratum);
+            printRoomDescription();
+            updateStatusUI();
+            updateInventoryUI();
+            updateRoomItemsUI();
+            updateRoomEntitiesUI();
+            renderMapHUD();
+            triggerVisualUpdate(apartmentMap[localPlayer.currentRoom]?.visualPrompt || apartmentMap["lore1"].visualPrompt);
+        }
+    });
+
+    if (!auth.currentUser && !isSignInWithEmailLink(auth, window.location.href)) {
+        signInAnonymously(auth);
+    }
+}
+
+function setupWorldListener() {
+    if (!db) return;
+    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
+    onSnapshot(roomRef, (snap) => {
+        if (!snap.exists()) {
+            setDoc(roomRef, { created: serverTimestamp(), manifestations: [] });
+        }
+    });
+}
+
+function setupMapListener() {
+    if (!db) return;
+    const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+    onSnapshot(mapRef, (snap) => {
+        if (!snap.exists()) {
+            setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
+        } else {
+            const data = snap.data();
+            if (data.nodes) {
+                apartmentMap = data.nodes;
+                updateRoomItemsUI(); 
+                updateRoomEntitiesUI();
+                renderMapHUD();
+            }
+        }
+    });
+}
+
+async function loadPlayerState() {
+    if (!db || !user) return;
+    try {
+        const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+        const snap = await getDoc(stateRef);
+        if (snap.exists()) {
+            const data = snap.data();
+            localPlayer = { 
+                ...localPlayer, 
+                ...data,
+                inventory: data.inventory || [],
+                stratum: data.stratum || "mundane"
+            };
+            if (localPlayer.currentRoom === 'main_room') {
+                localPlayer.currentRoom = 'lore1';
+            }
+            updateCommandPrompt(); 
+        }
+    } catch (e) {
+        console.error("Failed to load player state:", e);
+    }
+}
+
+async function savePlayerState() {
+    if (!db || !user) return;
+    try {
+        const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+        await setDoc(stateRef, localPlayer);
+    } catch (e) {
+        console.error("Failed to save player state:", e);
+    }
+}
+
+async function loadUserCharacters() {
+    if (!db || !user) return;
+    try {
+        const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
+        const snap = await getDocs(charCol);
+        localCharacters = [];
+        activeAvatar = null;
+        snap.forEach(doc => {
+            const charData = { id: doc.id, ...doc.data() };
+            localCharacters.push(charData);
+            if (!charData.deceased && !charData.deployed) {
+                activeAvatar = charData; 
+            }
+        });
+        if (localCharacters.length > 0) {
+            addLog(`[SYSTEM]: Retrieved ${localCharacters.length} saved avatar(s) from your private archive.`, "var(--term-green)");
+        }
+        updateAvatarUI();
+        updateCommandPrompt();
+    } catch (error) {
+        console.error("Failed to load characters:", error);
+    }
+}
+
+// --- UI COMPONENT RENDERING ---
+export function updateAvatarUI() {
+    const container = document.getElementById('avatar-container');
+    if (!activeAvatar) {
+        container.innerHTML = `
+            <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2">
+                NO VESSEL DETECTED<br>DISEMBODIED STATE<br><br><span class="text-gray-500 text-[8px]">Go to the Archive and type 'CREATE AVATAR' to forge a form.</span>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a]" onclick="document.getElementById('cmd-input').value = 'stat'; document.getElementById('cmd-input').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));">
+            <div class="char-card-header border-b border-[#1a3a1a] pb-2 mb-2">
+                <span class="char-card-title text-[10px] text-amber-500">[ACTV] ${activeAvatar.name}</span>
+                <span class="char-card-archetype text-[8px]">${activeAvatar.archetype}</span>
+            </div>
+            <div class="char-card-img-container h-32 border-[#1a3a1a] mb-2">
+                ${activeAvatar.image ? `<img class="char-card-img" src="${activeAvatar.image}" alt="${activeAvatar.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[NO IMG]</div>`}
+            </div>
+            <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0 flex-col text-[9px] gap-1">
+                <span>WILL (Mng): ${activeAvatar.stats.WILL || 20}</span>
+                <span>CONS (Amn): ${activeAvatar.stats.CONS || 20}</span>
+                <span>PHYS (HP): ${activeAvatar.stats.PHYS || 20}</span>
+            </div>
+        </div>
+    `;
+}
+
+export function updateInventoryUI() {
+    const container = document.getElementById('inventory-container');
+    if (localPlayer.inventory.length === 0) {
+        container.innerHTML = "[EMPTY]";
+        return;
+    }
+    container.innerHTML = localPlayer.inventory.map(item => `
+        <div class="border border-[#1a3a1a] p-2 rounded bg-black/40 border-l-4 border-l-green-900">
+            <span class="text-amber-500 font-bold block">${item.name}</span>
+            <span class="text-[9px] text-blue-400 uppercase">${item.type}</span>
+            <div class="mt-1 leading-tight">${item.description}</div>
+        </div>
+    `).join('');
+}
+
+export function updateRoomItemsUI() {
+    const container = document.getElementById('room-items-container');
+    const room = apartmentMap[localPlayer.currentRoom];
+    if (!room || !room.items || room.items.length === 0) {
+        container.innerHTML = "[EMPTY]";
+        return;
+    }
+    container.innerHTML = room.items.map(item => `
+        <div class="border border-[#1a3a1a] p-2 rounded bg-black/40 border-l-4 border-l-amber-700">
+            <span class="text-amber-500 font-bold block">${item.name}</span>
+            <span class="text-[9px] text-blue-400 uppercase">${item.type}</span>
+            <div class="mt-1 leading-tight">${item.description}</div>
+        </div>
+    `).join('');
+}
+
+export function updateRoomEntitiesUI() {
+    const container = document.getElementById('room-entities-container');
+    const room = apartmentMap[localPlayer.currentRoom];
+    if (!room || !room.npcs || room.npcs.length === 0) {
+        container.innerHTML = "[NONE]";
+        return;
+    }
+    container.innerHTML = room.npcs.map(npc => `
+        <div class="border border-[#1a3a1a] p-2 rounded bg-black/40 border-l-4 cursor-pointer transition-colors flex items-center gap-3 hover:bg-[#001a33]"
+             style="border-left-color: var(--crayola-blue);"
+             onclick="document.getElementById('cmd-input').value = 'look at ${npc.name}'; document.getElementById('cmd-input').focus();">
+            ${npc.image 
+                ? `<img src="${npc.image}" style="width: 36px; height: 36px; object-fit: cover; border: 1px solid #333; border-radius: 4px;" alt="${npc.name}">` 
+                : `<div style="width: 36px; height: 36px; background: #111; border: 1px solid #333; display: flex; align-items: center; justify-content: center; font-size: 8px; border-radius: 4px; color: #555;">[?]</div>`
+            }
+            <div style="flex: 1; min-width: 0;">
+                <span style="color: var(--crayola-blue); font-weight: bold; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;" class="uppercase">${npc.name}</span>
+                <span class="text-[9px] text-gray-500 uppercase block truncate">${npc.archetype}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+export function printRoomDescription() {
+    const room = apartmentMap[localPlayer.currentRoom];
+    addLog(`[NARRATOR]: ${room.description}`, "#888");
+    if (room.marginalia && room.marginalia.length > 0) {
+        room.marginalia.forEach(note => {
+            addLog(`[MARGINALIA]: ${note}`, "var(--crayola-blue)");
+        });
+    }
+    if (room.items && room.items.length > 0) {
+        const itemNames = room.items.map(i => `<span class="text-amber-400">${i.name}</span>`).join(', ');
+        addLog(`You see items resting here: ${itemNames}`, "#aaa");
+    }
+    if (room.npcs && room.npcs.length > 0) {
+        const npcNames = room.npcs.map(n => `<span class="text-crayola-blue font-bold">${n.name} (${n.archetype})</span>`).join(', ');
+        addLog(`Entities Present: ${npcNames}`, "#aaa");
+    }
+    if (localPlayer.stratum !== 'faen') {
+        const exits = Object.keys(room.exits || {}).join(', ').toUpperCase();
+        addLog(`Obvious Exits: ${exits || 'NONE'}`, "#555");
+    } else {
+        addLog(`The ethereal plane stretches infinitely.`, "var(--faen-pink)");
+    }
+}
+
+// --- TOPOLOGY MAP DRAWING ---
+export function renderMapHUD() {
+    const canvasContainer = document.getElementById('map-canvas-container');
+    const canvas = document.getElementById('map-canvas');
+    if (!canvas || !canvasContainer) return;
+    const ctx = canvas.getContext('2d');
+    const existingZones = canvasContainer.querySelectorAll('.map-clickable-zone');
+    existingZones.forEach(zone => zone.remove());
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (localPlayer.stratum === 'faen') return;
+
+    const computedStyle = getComputedStyle(document.body);
+    const termGreen = computedStyle.getPropertyValue('--term-green').trim() || '#00ff41';
+    const termAmber = computedStyle.getPropertyValue('--term-amber').trim() || '#ffb000';
+    const termBg = computedStyle.getPropertyValue('--term-bg').trim() || '#050505';
+
+    const nodeSize = 30;
+    const spacing = 60;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    let coords = {}; 
+    let queue = [{key: localPlayer.currentRoom, logicalX: 0, logicalY: 0}];
+    coords[localPlayer.currentRoom] = {x: 0, y: 0};
+    let processed = new Set();
+
+    while(queue.length > 0) {
+        let curr = queue.shift();
+        if (processed.has(curr.key)) continue;
+        processed.add(curr.key);
+        let node = apartmentMap[curr.key];
+        if(!node) continue;
+        if (node.exits) {
+            if (node.exits.north && !coords[node.exits.north]) {
+                coords[node.exits.north] = {x: curr.logicalX, y: curr.logicalY - 1};
+                queue.push({key: node.exits.north, logicalX: curr.logicalX, logicalY: curr.logicalY - 1});
+            }
+            if (node.exits.south && !coords[node.exits.south]) {
+                coords[node.exits.south] = {x: curr.logicalX, y: curr.logicalY + 1};
+                queue.push({key: node.exits.south, logicalX: curr.logicalX, logicalY: curr.logicalY + 1});
+            }
+            if (node.exits.east && !coords[node.exits.east]) {
+                coords[node.exits.east] = {x: curr.logicalX + 1, y: curr.logicalY};
+                queue.push({key: node.exits.east, logicalX: curr.logicalX + 1, logicalY: curr.logicalY});
+            }
+            if (node.exits.west && !coords[node.exits.west]) {
+                coords[node.exits.west] = {x: curr.logicalX - 1, y: curr.logicalY};
+                queue.push({key: node.exits.west, logicalX: curr.logicalX - 1, logicalY: curr.logicalY});
+            }
+        }
+    }
+
+    ctx.strokeStyle = termGreen;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.4; 
+    processed.forEach(key => {
+        let node = apartmentMap[key];
+        let p1 = coords[key];
+        if(!node || !p1) return;
+        const drawEdge = (targetKey) => {
+            let p2 = coords[targetKey];
+            if(p2) {
+                ctx.beginPath();
+                ctx.moveTo(centerX + p1.x * spacing, centerY + p1.y * spacing);
+                ctx.lineTo(centerX + p2.x * spacing, centerY + p2.y * spacing);
+                ctx.stroke();
+            }
+        };
+        if(node.exits) {
+            if(node.exits.north) drawEdge(node.exits.north);
+            if(node.exits.south) drawEdge(node.exits.south);
+            if(node.exits.east) drawEdge(node.exits.east);
+            if(node.exits.west) drawEdge(node.exits.west);
+        }
+    });
+
+    ctx.globalAlpha = 1.0;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "bold 9px monospace";
+    processed.forEach(key => {
+        let node = apartmentMap[key];
+        let p = coords[key];
+        if(!node || !p) return;
+        let x = centerX + p.x * spacing;
+        let y = centerY + p.y * spacing;
+        let isCurrent = (key === localPlayer.currentRoom);
+        if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
+        if (isCurrent) {
+            ctx.shadowColor = termGreen;
+            ctx.shadowBlur = 10;
+            ctx.fillStyle = termGreen; 
+        } else {
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = termBg; 
+        }
+        ctx.strokeStyle = isCurrent ? '#000' : termGreen;
+        ctx.fillRect(x - nodeSize/2, y - nodeSize/2, nodeSize, nodeSize);
+        ctx.strokeRect(x - nodeSize/2, y - nodeSize/2, nodeSize, nodeSize);
+        ctx.fillStyle = isCurrent ? '#000' : termAmber; 
+        ctx.shadowBlur = 0;
+        let shortName = (node.shortName || "???").substring(0, 4);
+        ctx.fillText(shortName, x, y);
+        if (!isCurrent) {
+            let clickZone = document.createElement('div');
+            clickZone.className = 'map-clickable-zone';
+            clickZone.style.left = `${x - nodeSize/2}px`;
+            clickZone.style.top = `${y - nodeSize/2}px`;
+            clickZone.style.width = `${nodeSize}px`;
+            clickZone.style.height = `${nodeSize}px`;
+            clickZone.title = `Go to ${node.name}`;
+            clickZone.onclick = () => {
+                document.getElementById('cmd-input').value = `go to ${node.name}`;
+                document.getElementById('cmd-input').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));
+            };
+            canvasContainer.appendChild(clickZone);
+        }
+    });
+}
+
+// --- VISUAL & PINNING SYSTEM ---
+export async function triggerVisualUpdate(overridePrompt = null) {
+    const roomId = localPlayer.currentRoom;
+    const room = apartmentMap[roomId] || {};
+    const pinBtn = document.getElementById('pin-view-btn');
+    pinBtn.classList.add('hidden');
+    currentBase64 = null;
+    const pinnedUrl = (!overridePrompt && room.pinnedView) ? room.pinnedView : null;
+    const basePrompt = overridePrompt || room.visualPrompt || "A glitching void.";
+    currentBase64 = await projectVisual(basePrompt, localPlayer.stratum, addLog, pinnedUrl);
+    if (currentBase64 && user && !user.isAnonymous) {
+        pinBtn.classList.remove('hidden');
+        pinBtn.innerText = "PIN VIEW";
+    }
+}
+
+export async function pinCurrentView() {
+    if (!currentBase64 || !user || user.isAnonymous) return;
+    const roomId = localPlayer.currentRoom;
+    const pinBtn = document.getElementById('pin-view-btn');
+    pinBtn.innerText = "UPLOADING..."; pinBtn.disabled = true;
+    try {
+        const dataUrl = `data:image/png;base64,${currentBase64}`;
+        const fileRef = ref(storage, `maps/${appId}/${roomId}_pinned_${Date.now()}.png`);
+        await uploadString(fileRef, dataUrl, 'data_url');
+        const downloadUrl = await getDownloadURL(fileRef);
+        const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+        await updateDoc(mapRef, { [`nodes.${roomId}.pinnedView`]: downloadUrl });
+        apartmentMap[roomId].pinnedView = downloadUrl;
+        pinBtn.innerText = "PINNED!";
+        pinBtn.classList.add('bg-green-600', 'border-green-400');
+        addLog(`[SYSTEM]: Consensus reality locked. The visual projection of ${apartmentMap[roomId].name} is now canonical.`, "var(--gm-purple)");
+        setTimeout(() => { pinBtn.classList.add('hidden'); pinBtn.classList.remove('bg-green-600', 'border-green-400'); pinBtn.disabled = false; }, 2000);
+    } catch (e) {
+        console.error("Pinning error:", e);
+        pinBtn.innerText = "ERROR"; pinBtn.disabled = false;
+        addLog(`[SYSTEM ERROR]: Failed to anchor memory to the cloud.`, "var(--term-red)");
+    }
+}
+
+document.getElementById('pin-view-btn').addEventListener('click', pinCurrentView);
+
+// --- NARRATIVE ENGINE ---
+export function addLog(text, color = 'var(--term-green)') {
+    const log = document.getElementById('log');
+    const p = document.createElement('div');
+    p.style.color = color;
+    p.className = 'mb-1';
+    p.innerHTML = `> ${text}`;
+    log.appendChild(p);
+    document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
+}
+
+export function updateStatusUI() {
+    const posShort = localPlayer.posture === 'standing' ? 'STND' : (localPlayer.posture === 'sitting' ? 'SIT' : 'LAY');
+    document.getElementById('player-status').innerText = `POS: ${posShort}`;
+    document.getElementById('room-display').innerText = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
+}
+
+export function renderCharacterCard(charData, imgSrc) {
+    const log = document.getElementById('log');
+    const wrapper = document.createElement('div');
+    const deceasedClass = charData.deceased ? 'deceased' : '';
+    const statusLabel = charData.deceased ? '[DECEASED]' : (charData.deployed ? '[DEPLOYED]' : '[ACTV]');
+    
+    wrapper.innerHTML = `
+        <div class="char-card ${deceasedClass}">
+            <div class="char-card-header">
+                <span class="char-card-title">${statusLabel} ${charData.name}</span>
+                <span class="char-card-archetype">${charData.archetype}</span>
+            </div>
+            <div class="char-card-img-container">
+                ${imgSrc ? `<img class="char-card-img" src="${imgSrc}" alt="${charData.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[IMAGE UNAVAILABLE]</div>`}
+            </div>
+            <div class="char-card-desc">
+                ${charData.visual_prompt}
+            </div>
+            <div class="char-card-stats">
+                <span>WIL: ${charData.stats.WILL || 20}</span>
+                <span>CON: ${charData.stats.CONS || 20}</span>
+                <span>PHY: ${charData.stats.PHYS || 20}</span>
+            </div>
+        </div>
+    `;
+    log.appendChild(wrapper);
+    document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
+}
+
+async function executeMovement(targetDir) {
+    const currentRoom = apartmentMap[localPlayer.currentRoom];
+    if (localPlayer.stratum === 'faen') {
+        const nextId = 'faen_' + Date.now();
+        apartmentMap[nextId] = {
+            name: "Procedural Faen Pocket", shortName: "FAEN",
+            description: "A surreal, ever-shifting landscape of translucent light and geometric fractals. Directions have no meaning here.",
+            visualPrompt: "Abstract ethereal plane, glowing cyan and pink geometric structures, floating light particles.",
+            exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
+        };
+        localPlayer.currentRoom = nextId;
+        updateCommandPrompt(); updateStatusUI(); savePlayerState(); updateRoomItemsUI(); updateRoomEntitiesUI(); renderMapHUD();
+        addLog(`[SYSTEM]: You traverse the ethereal currents to a new pocket of Faen.`, "var(--term-green)");
+        printRoomDescription();
+        triggerVisualUpdate();
+        return;
+    }
+    if (currentRoom.exits && currentRoom.exits[targetDir]) {
+        const nextRoomKey = currentRoom.exits[targetDir];
+        localPlayer.currentRoom = nextRoomKey;
+        const nextRoom = apartmentMap[nextRoomKey];
+        updateCommandPrompt(); updateStatusUI(); savePlayerState(); updateRoomItemsUI(); updateRoomEntitiesUI(); renderMapHUD();
+        addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
+        printRoomDescription();
+        triggerVisualUpdate(nextRoom.visualPrompt);
+        if (isSyncEnabled && user) {
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
+            updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: `[${localPlayer.currentRoom}] User arrived from the ${targetDir}.`, timestamp: Date.now() }) });
+        }
+    } else {
+        updateStatusUI();
+        addLog(`[SYSTEM]: You cannot go that way.`, "var(--term-amber)");
+        triggerVisualUpdate();
+    }
+}
+
+// --- CREATION WIZARD ---
+function handleWizardInput(val) {
+    if (wizardState.type === 'item') {
+        if (wizardState.step === 1) {
+            if (!val) { addLog(`[WIZARD]: Name cannot be empty.`, "var(--term-red)"); return; }
+            wizardState.pendingData.name = val;
+            addLog(`[WIZARD]: Name set to '${val}'. What type of item is this? (e.g., Book, Key, Weapon)`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 2) {
+            wizardState.pendingData.type = val || 'Artifact';
+            addLog(`[WIZARD]: Type set to '${wizardState.pendingData.type}'. Finally, provide a short physical description.`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 3) {
+            wizardState.pendingData.description = val || 'An unknown manifestation.';
+            wizardState.pendingData.id = Date.now().toString(); 
+            const room = apartmentMap[localPlayer.currentRoom];
+            if (!room.items) room.items = [];
+            room.items.push(wizardState.pendingData);
+            if (isSyncEnabled) {
+                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(wizardState.pendingData) });
+            }
+            updateRoomItemsUI();
+            addLog(`[SYSTEM]: Successfully materialized [${wizardState.pendingData.name}] into ${room.name}.`, "var(--term-green)");
+            updateCommandPrompt();
+            wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
+        }
+    } 
+    else if (wizardState.type === 'room') {
+        if (wizardState.step === 1) {
+            wizardState.pendingData.name = val || wizardState.existingData.name;
+            addLog(`[WIZARD]: Room Name set to '${wizardState.pendingData.name}'.`);
+            addLog(`Current NARRATIVE: "${wizardState.existingData.description}"`, "var(--crayola-blue)");
+            addLog(`Enter new NARRATIVE (or press Enter to keep current):`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 2) {
+            wizardState.pendingData.description = val || wizardState.existingData.description;
+            addLog(`[WIZARD]: Description saved.`);
+            addLog(`Current VISUAL PROMPT: "${wizardState.existingData.visualPrompt}"`, "var(--crayola-blue)");
+            addLog(`Enter new VISUAL PROMPT (or press Enter to keep current):`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 3) {
+            wizardState.pendingData.visualPrompt = val || wizardState.existingData.visualPrompt;
+            const rKey = localPlayer.currentRoom;
+            apartmentMap[rKey].name = wizardState.pendingData.name;
+            apartmentMap[rKey].shortName = wizardState.pendingData.name.substring(0, 7).toUpperCase();
+            apartmentMap[rKey].description = wizardState.pendingData.description;
+            apartmentMap[rKey].visualPrompt = wizardState.pendingData.visualPrompt;
+            if (isSyncEnabled) {
+                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                updateDoc(mapRef, {
+                    [`nodes.${rKey}.name`]: wizardState.pendingData.name,
+                    [`nodes.${rKey}.shortName`]: apartmentMap[rKey].shortName,
+                    [`nodes.${rKey}.description`]: wizardState.pendingData.description,
+                    [`nodes.${rKey}.visualPrompt`]: wizardState.pendingData.visualPrompt
+                });
+            }
+            addLog(`[SYSTEM]: Sector successfully re-rendered.`, "var(--term-green)");
+            printRoomDescription();
+            triggerVisualUpdate(apartmentMap[rKey].visualPrompt);
+            updateStatusUI();
+            renderMapHUD();
+            updateCommandPrompt();
+            wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
+        }
+    } 
+    else if (wizardState.type === 'expand') {
+        if (wizardState.step === 1) {
+            wizardState.pendingData.name = val || "New Area";
+            addLog(`[WIZARD]: Room Name set. Enter the narrative description:`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 2) {
+            wizardState.pendingData.description = val || 'An indistinct area.';
+            addLog(`[WIZARD]: Description saved. Enter a visual prompt for the image generator:`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 3) {
+            wizardState.pendingData.visualPrompt = val || 'A glitchy, undefined space.';
+            const newRoomId = 'node_' + Date.now();
+            const currentRoomKey = localPlayer.currentRoom;
+            const dir = wizardState.pendingData.direction; 
+            const reverseDir = { 'north':'south', 'south':'north', 'east':'west', 'west':'east' }[dir];
+            const newNode = {
+                name: wizardState.pendingData.name,
+                shortName: wizardState.pendingData.name.substring(0, 7).toUpperCase(),
+                description: wizardState.pendingData.description,
+                visualPrompt: wizardState.pendingData.visualPrompt,
+                exits: { [reverseDir]: currentRoomKey },
+                pinnedView: null,
+                items: [],
+                marginalia: [],
+                npcs: []
+            };
+            apartmentMap[newRoomId] = newNode;
+            if (!apartmentMap[currentRoomKey].exits) apartmentMap[currentRoomKey].exits = {};
+            apartmentMap[currentRoomKey].exits[dir] = newRoomId;
+            if (isSyncEnabled) {
+                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                updateDoc(mapRef, {
+                    [`nodes.${currentRoomKey}.exits.${dir}`]: newRoomId,
+                    [`nodes.${newRoomId}`]: newNode
+                });
+            }
+            addLog(`[SYSTEM]: Sector materialization complete. Path to the ${dir.toUpperCase()} is now open.`, "var(--term-green)");
+            updateCommandPrompt();
+            renderMapHUD();
+            wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
+        }
+    }
+    else if (wizardState.type === 'avatar') {
+        if (wizardState.step === 1) {
+            if (!val) { addLog(`[WIZARD]: Name cannot be empty.`, "var(--term-red)"); return; }
+            wizardState.pendingData.name = val;
+            addLog(`[WIZARD]: Identity confirmed as '${val}'. Enter your Archetype/Class (e.g., Cyber-Merc, Harmonic Bard, Faen Weaver):`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 2) {
+            wizardState.pendingData.archetype = val || 'Wanderer';
+            addLog(`[WIZARD]: Archetype logged. Describe your vessel's physical appearance in detail (this drives your portrait generation):`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 3) {
+            wizardState.pendingData.visual_prompt = val || 'A shadowed, undefined figure.';
+            const charData = {
+                name: wizardState.pendingData.name,
+                archetype: wizardState.pendingData.archetype,
+                visual_prompt: wizardState.pendingData.visual_prompt,
+                stats: { WILL: 20, CONS: 20, PHYS: 20 },
+                deceased: false,
+                deployed: false
+            };
+            addLog(`[SYSTEM]: Extracting genetic imprint for your primary vessel [${charData.name}]...`, "var(--gm-purple)");
+            wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
+            document.getElementById('prompt-prefix').innerHTML = `${user?.isAnonymous ? "GUEST" : "ARCHITECT"}@${apartmentMap[localPlayer.currentRoom]?.shortName || "VOID"}:~$&nbsp;`;
+
+            (async () => {
+                let cardImageSrc = "";
+                let compressedImageSrc = "";
+                try {
+                    const combinedPrompt = `Highly detailed character portrait, ${localPlayer.stratum} aesthetic, Magic the Gathering card art style: ${charData.visual_prompt}`;
+                    const imgRes = await fetch("/api/image", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ instances: [{ prompt: combinedPrompt }] })
+                    });
+                    const imgData = await imgRes.json();
+                    if (imgData.predictions?.[0]) {
+                        cardImageSrc = `data:image/png;base64,${imgData.predictions[0].bytesBase64Encoded}`;
+                        compressedImageSrc = await compressImage(cardImageSrc);
+                    }
+                } catch (e) {
+                    console.error("Card Image Error", e);
+                }
+                const fullCharData = { ...charData, image: compressedImageSrc || cardImageSrc, timestamp: Date.now() };
+                if (user) {
+                    try {
+                        const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
+                        const docRef = await addDoc(charCol, fullCharData);
+                        fullCharData.id = docRef.id; 
+                        addLog(`[SYSTEM]: Avatar Card [${charData.name}] permanently registered to your profile.`, "var(--term-green)");
+                    } catch (e) {
+                        console.error("Firestore Save Error:", e);
+                        addLog(`[SYSTEM ERROR]: Could not save Avatar to the archive.`, "var(--term-red)");
+                    }
+                }
+                renderCharacterCard(fullCharData, compressedImageSrc || cardImageSrc);
+                localCharacters.push(fullCharData);
+                activeAvatar = fullCharData; 
+                updateAvatarUI(); 
+                updateCommandPrompt();
+            })();
+        }
+    }
+    else if (wizardState.type === 'deploy_npc') {
+        if (wizardState.step === 1) {
+            const personality = val || "Stands silently, observing the void.";
+            const roomKey = localPlayer.currentRoom;
+            const room = apartmentMap[roomKey];
+            if (!room.npcs) room.npcs = [];
+            const newNPC = {
+                id: 'npc_' + Date.now(),
+                name: activeAvatar.name,
+                archetype: activeAvatar.archetype,
+                visual_prompt: activeAvatar.visual_prompt,
+                image: activeAvatar.image, 
+                personality: personality,
+                owner: user ? user.uid : 'guest'
+            };
+            room.npcs.push(newNPC);
+            if (isSyncEnabled) {
+                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                updateDoc(mapRef, { [`nodes.${roomKey}.npcs`]: arrayUnion(newNPC) });
+            }
+            if (activeAvatar && user) {
+                try {
+                    const charRef = doc(db, 'artifacts', appId, 'users', user.uid, 'characters', activeAvatar.id);
+                    updateDoc(charRef, { deployed: true }); 
+                } catch (e) { console.error("Could not write deployment state.", e); }
+            }
+            addLog(`[SYSTEM]: Vessel [${newNPC.name}] detached and left on autonomous local loop.`, "var(--term-green)");
+            addLog(`[SYSTEM]: You are once again an itinerant void. Find a mirror to forge a new form.`, "var(--term-amber)");
+            activeAvatar = null;
+            updateAvatarUI();
+            updateCommandPrompt();
+            updateRoomEntitiesUI();
+            wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
+        }
+    }
+}
+
+// --- COMMAND PARSER ---
+let isProcessing = false;
+const input = document.getElementById('cmd-input');
+
+input.addEventListener('keydown', async (e) => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && input.value === '') {
+        e.preventDefault();
+        if (wizardState.active || isProcessing) return;
+        let dir = '';
+        if (e.key === 'ArrowUp') dir = 'north';
+        if (e.key === 'ArrowDown') dir = 'south';
+        if (e.key === 'ArrowLeft') dir = 'west';
+        if (e.key === 'ArrowRight') dir = 'east';
+        addLog(dir, "#ffffff");
+        executeMovement(dir);
+        return;
+    }
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = input.value.trim();
+        input.value = '';
+        if (!val && !wizardState.active) return;
+        if (isProcessing) return;
+        if (val) addLog(val, "#ffffff");
+        if (wizardState.active) { handleWizardInput(val); return; }
+        const cmd = val.toLowerCase();
+
+        // CORE COMMANDS
+        if (cmd === 'create avatar' || cmd === 'forge form' || cmd === 'make avatar') {
+            if (localPlayer.currentRoom !== 'spare_room') {
+                addLog(`[SYSTEM]: You must be in the Archive (Spare Room) to forge a form.`, "var(--term-amber)");
+                return;
+            }
+            wizardState = { active: true, type: 'avatar', step: 1, pendingData: {}, existingData: {} };
+            document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@FORGE:~$</span>&nbsp;`;
+            addLog(`[WIZARD]: Vessel Forging Protocol Initiated. Enter your identity (Name):`, "var(--term-amber)");
+            return;
+        }
+
+        if (!activeAvatar && !cmd.startsWith('help') && !cmd.startsWith('create avatar')) {
+            if (localPlayer.currentRoom !== 'spare_room') {
+                addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive to forge your form.`, "var(--term-amber)");
+            }
+        }
+
+        const dirMatch = cmd.match(/^(?:go\s+(?:to\s+(?:the\s+)?)?|move\s+|walk\s+|head\s+)?(north|south|east|west|n|s|e|w)$/);
+        if (dirMatch) {
+            const parsedDir = dirMatch[1];
+            const expandMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west' };
+            executeMovement(expandMap[parsedDir] || parsedDir); return;
+        }
+
+        if (cmd === 'leave vessel' || cmd === 'deploy npc' || cmd === 'leave avatar') {
+            if (!activeAvatar) { addLog("[SYSTEM]: You have no vessel to leave.", "var(--term-red)"); return; }
+            wizardState = { active: true, type: 'deploy_npc', step: 1, pendingData: {}, existingData: {} };
+            document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@DEPLOY:~$</span>&nbsp;`;
+            addLog(`[WIZARD]: Vessel Deployment Protocol. WARNING: You will forfeit control of this avatar.`, "var(--term-red)");
+            addLog(`[WIZARD]: Describe its autonomous personality:`, "var(--term-amber)");
+            return;
+        }
+
+        if (cmd === 'create' || cmd === 'create item') {
+            if (!activeAvatar) { addLog("[SYSTEM]: Only materialized beings can create.", "var(--term-red)"); return; }
+            wizardState = { active: true, type: 'item', step: 1, pendingData: {}, existingData: {} };
+            document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@MATERIA:~$</span>&nbsp;`;
+            addLog(`[WIZARD]: Materialization Protocol Started. Enter name:`, "var(--term-amber)");
+            return;
+        } else if (cmd === 'edit room' || cmd === 'rewrite room' || cmd === 'render room') {
+            if (!activeAvatar) { addLog("[SYSTEM]: Voids cannot render.", "var(--term-red)"); return; }
+            const currentRoomData = apartmentMap[localPlayer.currentRoom];
+            wizardState = { active: true, type: 'room', step: 1, pendingData: {}, existingData: { ...currentRoomData } };
+            document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@SECTOR:~$</span>&nbsp;`;
+            addLog(`[WIZARD]: Sector Overwrite Protocol Started. Enter new NAME:`);
+            return;
+        } else if (cmd.startsWith('build ')) {
+            if (!activeAvatar) { addLog("[SYSTEM]: Voids cannot expand space.", "var(--term-red)"); return; }
+            const dir = cmd.split(' ')[1];
+            if (!['north', 'south', 'east', 'west'].includes(dir)) { addLog(`Use 'build north/south/east/west'.`, "var(--term-amber)"); return; }
+            wizardState = { active: true, type: 'expand', step: 1, pendingData: { direction: dir }, existingData: {} };
+            document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">WIZARD@EXPAND:~$</span>&nbsp;`;
+            addLog(`[WIZARD]: Expansion Protocol Started. Enter NAME for new room:`, "var(--term-amber)");
+            return;
+        } else if (cmd === 'look' || cmd === 'l') {
+            printRoomDescription(); triggerVisualUpdate(); return;
+        } else if (cmd === 'stat' || cmd === 'stats') {
+            if (!activeAvatar) return;
+            addLog(`IDENTITY: ${activeAvatar.name} | CLASS: ${activeAvatar.archetype}`, "var(--term-green)");
+            addLog(`WILL: ${activeAvatar.stats.WILL} | CONS: ${activeAvatar.stats.CONS} | PHYS: ${activeAvatar.stats.PHYS}`, "var(--term-amber)");
+            return;
+        } else if (cmd === 'map') {
+            addLog(`[SYSTEM]: Topology map live on HUD.`, "var(--term-green)"); return;
+        } else if (cmd.startsWith('take ') || cmd.startsWith('get ') || cmd.startsWith('pick up ')) {
+            const itemName = cmd.replace(/^(take|get|pick up)\s+/, '').toLowerCase();
+            const room = apartmentMap[localPlayer.currentRoom];
+            const itemIdx = (room.items || []).findIndex(i => i.name.toLowerCase().includes(itemName));
+            if (itemIdx > -1) {
+                const item = room.items.splice(itemIdx, 1)[0];
+                localPlayer.inventory.push(item);
+                if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.items`]: arrayRemove(item) });
+                savePlayerState(); updateInventoryUI(); updateRoomItemsUI();
+                addLog(`Picked up [${item.name}].`, "var(--term-green)");
+            }
+            return;
+        } else if (cmd === 'inv' || cmd === 'inventory') {
+            if (localPlayer.inventory.length === 0) addLog("Inventory empty.", "var(--term-amber)");
+            else localPlayer.inventory.forEach(item => addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
+            return;
+        } else if (cmd === 'help') {
+            addLog("HELP // Commands: LOOK, N/S/E/W, CREATE AVATAR, LEAVE VESSEL, CREATE ITEM, EDIT ROOM, BUILD [DIR], INV, MAP, STAT.", "var(--term-amber)");
+            return;
+        }
+
+        // --- THE UNIVERSAL GM INTENT ENGINE ---
+        isProcessing = true;
+        addLog(`<span id="thinking-indicator" class="italic" style="color: var(--gm-purple)">EVALUATING INTENT...</span>`);
+        try {
+            const currentRoomData = apartmentMap[localPlayer.currentRoom];
+            const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
+            const npcText = (currentRoomData.npcs || []).map(n => `[NPC] ${n.name} - Personality: ${n.personality}`).join('\n') || "None";
+            const sysPrompt = `You are Tandy, the GM of Terra Agnostum. 
+            Context: ${currentRoomData.name} (${localPlayer.stratum.toUpperCase()}). ${currentRoomData.description}.
+            Entities: ${npcText}. Inventory: ${inventoryNames}.
+            IMPORTANT: A 'faen_jump' can ONLY happen if the user is in 'Schrödinger's Closet' (CLOSET) or explicitly uses specific 'Aethal' code.
+            IMPORTANT: Only use 'trigger_teleport' for magical/forced warping, NEVER for standard movement.
+            Respond STRICTLY in JSON:
+            {
+              "speaker": "NARRATOR or NPC Name",
+              "narrative": "outcome",
+              "color": "hex",
+              "trigger_visual": "prompt or null",
+              "faen_jump": boolean,
+              "trigger_stratum_shift": null or 'mundane', 'faen', 'technate',
+              "trigger_teleport": null or { "new_room_id": "id", "name": "Name", "description": "Desc", "visual_prompt": "Prompt" },
+              "world_edit": null or {"type": "add_marginalia", "text": "text"},
+              "trigger_respawn": false
+            }`;
+            const res = await callGemini(`User: ${val}`, sysPrompt);
+            let stateChanged = false;
+            if (res.faen_jump && localPlayer.stratum !== 'faen') {
+                if (localPlayer.currentRoom === 'closet' || cmd.includes('aethal')) {
+                    applyStratumTheme('faen');
+                    localPlayer.currentRoom = 'faen_entry';
+                    apartmentMap['faen_entry'] = {
+                        name: "Faen Nexus", shortName: "NEXUS",
+                        description: "The entry point to the ethereal plane. Space is fluid and glowing.",
+                        visualPrompt: "Glowing ethereal nexus portal.",
+                        exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
+                    };
+                    stateChanged = true;
+                    addLog(`[SYSTEM]: Conventional geometry discarded. Welcome to Faen.`, "var(--faen-pink)");
+                } else {
+                    addLog("[SYSTEM]: Dimensional shift failed. Anchors too strong in this node.", "var(--term-red)");
+                }
+            } else if (res.trigger_stratum_shift) {
+                const target = res.trigger_stratum_shift.toLowerCase();
+                if (localPlayer.stratum !== target) { applyStratumTheme(target); stateChanged = true; }
+            }
+            if (res.trigger_respawn) {
+                if (activeAvatar && user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'characters', activeAvatar.id), { deceased: true });
+                activeAvatar = null; localPlayer.currentRoom = "spare_room"; localPlayer.stratum = "mundane";
+                stateChanged = true; addLog(`Vessel destroyed. Connection severed.`, "var(--term-red)"); applyStratumTheme('mundane');
+            }
+            if (res.trigger_teleport && !res.trigger_respawn) {
+                const t = res.trigger_teleport;
+                if (!apartmentMap[t.new_room_id]) {
+                    apartmentMap[t.new_room_id] = { ...t, shortName: t.name.substring(0, 7).toUpperCase(), exits: {}, pinnedView: null, items: [], marginalia: [], npcs: [] };
+                    if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${t.new_room_id}`]: apartmentMap[t.new_room_id] });
+                }
+                localPlayer.currentRoom = t.new_room_id; stateChanged = true; addLog(`Reality warp successful.`, "var(--gm-purple)");
+            }
+            if (stateChanged) { updateStatusUI(); savePlayerState(); renderMapHUD(); }
+            const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
+            addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
+            if (res.world_edit && res.world_edit.type === 'add_marginalia') {
+                const room = apartmentMap[localPlayer.currentRoom];
+                if (!room.marginalia) room.marginalia = [];
+                room.marginalia.push(res.world_edit.text);
+                if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.marginalia`]: arrayUnion(res.world_edit.text) });
+            }
+            if (res.trigger_visual && !res.trigger_respawn && !res.trigger_teleport) {
+                triggerVisualUpdate(res.trigger_visual);
+            } else if (res.trigger_stratum_shift || res.trigger_teleport || res.faen_jump) {
+                triggerVisualUpdate();
+            }
+        } catch (err) { addLog("SYSTEM EVALUATION FAILED!", "var(--term-red)"); } finally { document.getElementById('thinking-indicator')?.remove(); isProcessing = false; }
+    }
+});
+
+setInterval(() => { document.getElementById('time-display').innerText = `T+${new Date().toLocaleTimeString([], {hour12:false})}`; }, 1000);
