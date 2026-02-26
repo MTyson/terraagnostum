@@ -597,7 +597,9 @@ input.addEventListener('keydown', async (e) => {
             const currentRoomData = apartmentMap[localPlayer.currentRoom];
             wizardState = { active: true, type: 'room', step: 1, pendingData: {}, existingData: { ...currentRoomData } };
             UI.setWizardPrompt("WIZARD@SECTOR:~$");
-            UI.addLog(`[WIZARD]: Sector Overwrite Protocol Started. Enter new NAME:`);
+            UI.addLog(`[WIZARD]: Sector Overwrite Protocol Started.`);
+            UI.addLog(`Current NAME: "${currentRoomData.name}"`, "var(--crayola-blue)");
+            UI.addLog(`Enter new NAME (or press Enter to keep current):`, "var(--term-amber)");
             return;
         } else if (cmd.startsWith('build ')) {
             if (!activeAvatar) { UI.addLog("[SYSTEM]: Voids cannot expand space.", "var(--term-red)"); return; }
