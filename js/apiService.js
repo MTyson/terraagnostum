@@ -1,10 +1,8 @@
 // js/apiService.js
 
-// Import configurations or define them here if they are shared
 const API_GENERATE = "/api/generate";
 const API_IMAGE = "/api/image";
 
-// Helper function to compress images
 export async function compressImage(base64Str, maxWidth = 400, quality = 0.7) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -27,7 +25,6 @@ export async function compressImage(base64Str, maxWidth = 400, quality = 0.7) {
     });
 }
 
-// Function to call the Gemini API
 export async function callGemini(userInput, systemPrompt) {
     const res = await fetch(API_GENERATE, {
         method: 'POST',
@@ -40,7 +37,6 @@ export async function callGemini(userInput, systemPrompt) {
     });
     
     if (!res.ok) {
-         // Try to parse the error response
         let errorMessage = "Unknown API Error";
         try {
             const errorData = await res.json();
@@ -52,31 +48,31 @@ export async function callGemini(userInput, systemPrompt) {
     }
 
     const data = await res.json();
-    
-    // Safety check to ensure the structure exists before trying to parse it
-    if (!data || !data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-         throw new Error("Invalid response format from Gemini API");
-    }
-
     return JSON.parse(data.candidates[0].content.parts[0].text);
 }
 
-// Function to generate and project a visual
-export async function projectVisual(prompt, stratum, addLogCallback) {
+// Generates the image or loads the pinned URL
+export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewUrl = null) {
     const loader = document.getElementById('visual-loading');
     const buffer = document.getElementById('visual-buffer');
     const img = document.getElementById('visual-image');
     
-    if(!loader || !buffer || !img) {
-        console.error("Visual elements not found in the DOM.");
-        return;
-    }
+    if(!loader || !buffer || !img) return null;
 
     buffer.style.display = 'block';
     loader.classList.remove('hidden');
     img.style.display = 'none';
 
-    const styledPrompt = `Lofi glitch terminal art: ${prompt}, ${stratum} stratum aesthetic`;
+    // If an Architect has pinned a view for this room, skip AI entirely!
+    if (pinnedViewUrl) {
+        img.src = pinnedViewUrl;
+        img.style.display = 'block';
+        loader.classList.add('hidden');
+        if (addLogCallback) addLogCallback(`[SYSTEM]: Retrieving Architect-pinned memory for this sector...`, "var(--term-green)");
+        return null; 
+    }
+
+    const styledPrompt = `Lofi glitch terminal art: ${prompt}. ${stratum} stratum aesthetic`;
 
     try {
         const res = await fetch(API_IMAGE, {
@@ -85,17 +81,15 @@ export async function projectVisual(prompt, stratum, addLogCallback) {
             body: JSON.stringify({ instances: [{ prompt: styledPrompt }] })
         });
         
-        if (!res.ok) {
-            throw new Error(`Image API returned status ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Image API returned status ${res.status}`);
 
         const data = await res.json();
         if (data.predictions && data.predictions[0]) {
-            img.src = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+            const b64 = data.predictions[0].bytesBase64Encoded;
+            img.src = `data:image/png;base64,${b64}`;
             img.style.display = 'block';
-            if (addLogCallback) addLogCallback("VISUAL BUFFER PULSED.", "var(--term-amber)");
-        } else {
-             throw new Error("No image data returned from API.");
+            if (addLogCallback) addLogCallback(`VISUAL BUFFER PULSED.`, "var(--term-amber)");
+            return b64; 
         }
     } catch (e) { 
         console.error("Image Projection Error:", e);
@@ -104,4 +98,5 @@ export async function projectVisual(prompt, stratum, addLogCallback) {
     finally { 
         loader.classList.add('hidden'); 
     }
+    return null;
 }
