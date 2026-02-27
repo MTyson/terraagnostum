@@ -1,30 +1,12 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+import { signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
 // IMPORT DECOMPOSED DATA & SERVICES
 import { apartmentMap as initialMap } from './mapData.js';
 import { callGemini, projectVisual, compressImage } from './apiService.js';
 import * as UI from './ui.js';
-import { firebaseConfig } from './firebaseConfig.js';
-
-const appId = 'terra-agnostum-shared';
-
-let app, auth, db, storage;
-let isSyncEnabled = false;
-
-try {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    storage = getStorage(app);
-    isSyncEnabled = true;
-    document.getElementById('sync-status').innerText = "SYNC: READY";
-    document.getElementById('sync-status').style.color = "var(--term-amber)";
-} catch (e) {
-    document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
-}
+import { app, auth, db, storage, isSyncEnabled, appId } from './firebaseConfig.js';
 
 // Initialize with seed data
 let apartmentMap = { ...initialMap };
@@ -114,7 +96,6 @@ if (isSyncEnabled) {
             UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen');
             refreshAllUI();
             
-            // FIX: Removed visual prompt argument so it checks for pinned images on boot
             triggerVisualUpdate();
         }
     });
@@ -215,7 +196,7 @@ export async function triggerVisualUpdate(overridePrompt = null) {
     // Standardize lookup to support both properties
     const basePrompt = overridePrompt || room.visualPrompt || room.visual_prompt || "A glitching void.";
     
-    // UI Feedback for Pinning States (Removed user.isAnonymous restriction)
+    // UI Feedback for Pinning States 
     if (user) {
         if (pinnedUrl) {
             UI.togglePinButton(true, "UNPIN VIEW", "normal");
@@ -241,7 +222,7 @@ export async function triggerVisualUpdate(overridePrompt = null) {
 }
 
 export async function togglePinView() {
-    if (!user) { // Removed user.isAnonymous restriction
+    if (!user) { 
         UI.addLog("[SYSTEM]: Identity verification required for reality anchoring.", "var(--term-red)");
         return;
     }
@@ -332,7 +313,6 @@ async function executeMovement(targetDir) {
         UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
         UI.printRoomDescription(nextRoom, false);
         
-        // FIX: Removed visual prompt argument so it checks for pinned images on movement
         triggerVisualUpdate();
         
         if (isSyncEnabled && user) {
