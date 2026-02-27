@@ -19,7 +19,8 @@ let localPlayer = {
     currentRoom: "bedroom", 
     stratum: "mundane",
     posture: "standing",
-    inventory: []
+    inventory: [],
+    hasGenerator: false
 };
 
 let localCharacters = []; 
@@ -31,6 +32,13 @@ let currentMapPath = null;
 
 const ARCHIVE_NODES = ['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet', 'character_room', 'hallway_archive'];
 const isArchiveRoom = (roomId) => ARCHIVE_NODES.includes(roomId);
+
+function getUserTier() {
+    if (!activeAvatar) return "VOID";
+    if (user && user.isAnonymous) return "GUEST";
+    if (user && user.email === 'matthewcarltyson@gmail.com') return "ARCHITECT";
+    return "RESONANT";
+}
 
 // --- HELPER WRAPPERS ---
 function shiftStratum(targetStratum) {
@@ -246,7 +254,12 @@ async function executeMovement(targetDir) {
         const nextRoomKey = typeof exitData === 'string' ? exitData : exitData.target;
         
         if (!activeAvatar && !isArchiveRoom(nextRoomKey)) {
-             UI.addLog("[SYSTEM]: Your phantom fingers pass through reality. You lack the Meaning to influence the Mundane.", "var(--term-amber)");
+             UI.addLog("[TANDY]: You cannot drift beyond the threshold. Anchor yourself in the Character Room first.");
+             return;
+        }
+
+        if (getUserTier() === "GUEST" && nextRoomKey === "hallway_public") {
+             UI.addLog("[TANDY]: Your vessel is unstable, Guest. If you step into the Shared Hallway now, you'll evaporate. Visit the Tandem Terminal in the Lore Room to 'Resonate' first.");
              return;
         }
 
@@ -264,6 +277,10 @@ async function executeMovement(targetDir) {
         
         triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         
+        if (nextRoomKey === 'closet' && !localPlayer.hasGenerator) {
+            UI.addLog("[TANDY]: The box is rattling. Something is fighting to exist inside. 'Investigate' it.");
+        }
+
         if (isSyncEnabled && user) {
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
             updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: `[${localPlayer.currentRoom}] User arrived from the ${targetDir}.`, timestamp: Date.now() }) });
@@ -330,14 +347,11 @@ if (input) {
 
         // --- AUTH & IDENTITY COMMANDS ---
         if (cmd === 'whoami') {
-            if (!user) {
-                UI.addLog("[SYSTEM]: No active connection.", "var(--term-red)");
-            } else if (user.isAnonymous) {
-                UI.addLog(`[SYSTEM]: Connected as GUEST (Anonymous). ID: ${user.uid}`, "var(--term-amber)");
-                UI.addLog(`Use 'register [email]' or 'log in [email]' to secure your identity.`, "var(--crayola-blue)");
-            } else {
-                UI.addLog(`[SYSTEM]: Connected as ARCHITECT. Email: ${user.email} | ID: ${user.uid}`, "var(--term-green)");
-            }
+            const tier = getUserTier();
+            const cohesion = !activeAvatar ? 'Fading Ripple' : 'Materialized Signature';
+            const uid = user ? user.uid.substring(0,8) : 'UNKNOWN';
+            UI.addLog(`[SYSTEM]: Identity: ${tier} | UID: ${uid}`, "var(--term-green)");
+            UI.addLog(`[SYSTEM]: Cohesion State: ${cohesion}`, "var(--term-green)");
             return;
         }
 
@@ -619,12 +633,28 @@ if (input) {
                     UI.addLog(`Picked up [${item.name}].`, "var(--term-green)");
                 }
                 return;
+            } else if (cmd === 'investigate') {
+                if (localPlayer.currentRoom === 'closet') {
+                    if (!localPlayer.hasGenerator) {
+                        UI.addLog("[NARRATOR]: You reach into the vibrating metal crate. The air crackles against your skin.");
+                        UI.addLog("[SYSTEM]: ITEM ACQUIRED: Hacked Schumman Resonance Generator.");
+                        localPlayer.hasGenerator = true;
+                        localPlayer.inventory.push({ name: "Hacked Schumman Resonance Generator", type: "Key Item", description: "A device tuned to the earth's heartbeat." });
+                        refreshAllUI();
+                        UI.addLog("[TANDY]: This is the key. It matches the earth's heartbeat, but it's been tuned for the Technate. Go to the Tandem Terminal in the Lore Room. We can use this to 'Resonate' your soul.");
+                    } else {
+                        UI.addLog("[TANDY]: Nothing but ozone left here.");
+                    }
+                } else {
+                    UI.addLog("[SYSTEM]: Nothing to investigate here.", "var(--term-amber)");
+                }
+                return;
             } else if (cmd === 'inv' || cmd === 'inventory') {
             if (localPlayer.inventory.length === 0) UI.addLog("Inventory empty.", "var(--term-amber)");
             else localPlayer.inventory.forEach(item => UI.addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
             return;
         } else if (cmd === 'help') {
-            UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT.", "var(--term-amber)");
+            UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT, INVESTIGATE.", "var(--term-amber)");
             return;
         }
 

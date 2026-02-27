@@ -64,11 +64,18 @@ export function updateCommandPrompt(user, activeAvatar, roomShort) {
         return;
     }
 
-    if (user && !user.isAnonymous) {
+    let tier = "RESONANT";
+    if (user && user.isAnonymous) tier = "GUEST";
+    else if (user && user.email === 'matthewcarltyson@gmail.com') tier = "ARCHITECT";
+
+    if (tier === "ARCHITECT") {
         const identity = user.email ? user.email.split('@')[0] : user.uid.substring(0, 5);
         prefixEl.innerHTML = `<span class="text-blue-400 font-bold">ARCHITECT[${identity}]@${roomShort}:~$</span>&nbsp;`;
-    } else {
+    } else if (tier === "GUEST") {
         prefixEl.innerHTML = `<span class="text-gray-500">GUEST@${roomShort}:~$</span>&nbsp;`;
+    } else {
+        const identity = user.email ? user.email.split('@')[0] : user.uid.substring(0, 5);
+        prefixEl.innerHTML = `<span class="text-amber-500 font-bold">RESONANT[${identity}]@${roomShort}:~$</span>&nbsp;`;
     }
 }
 
@@ -335,6 +342,13 @@ export function renderMapHUD(apartmentMap, currentRoomKey, stratum) {
 export function addLog(text, color = 'var(--term-green)') {
     const log = document.getElementById('log');
     const p = document.createElement('div');
+    
+    if (color === 'var(--term-green)') {
+        if (text.startsWith('[TANDY]')) color = '#b084e8';
+        else if (text.startsWith('[SYSTEM]')) color = '#f59e0b';
+        else if (text.startsWith('[NARRATOR]')) color = '#888888';
+    }
+
     p.style.color = color;
     p.className = 'mb-1';
     p.innerHTML = `> ${text}`;
