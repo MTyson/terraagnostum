@@ -93,7 +93,7 @@ if (isSyncEnabled) {
             shiftStratum(localPlayer.stratum);
             
             const currentRoom = apartmentMap[localPlayer.currentRoom] || apartmentMap["lore1"];
-            UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen');
+            UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen', apartmentMap);
             refreshAllUI();
             
             triggerVisualUpdate();
@@ -191,12 +191,9 @@ export async function triggerVisualUpdate(overridePrompt = null) {
     
     currentBase64 = null;
     
-    // Check for pinned view if no manual override is passed (like a GM spell effect)
     const pinnedUrl = (!overridePrompt && room.pinnedView) ? room.pinnedView : null;
-    // Standardize lookup to support both properties
     const basePrompt = overridePrompt || room.visualPrompt || room.visual_prompt || "A glitching void.";
     
-    // UI Feedback for Pinning States 
     if (user) {
         if (pinnedUrl) {
             UI.togglePinButton(true, "UNPIN VIEW", "normal");
@@ -209,14 +206,13 @@ export async function triggerVisualUpdate(overridePrompt = null) {
     
     currentBase64 = await projectVisual(basePrompt, localPlayer.stratum, UI.addLog, pinnedUrl);
     
-    // Update button text after generation is complete
     if (user) {
         if (pinnedUrl) {
             UI.togglePinButton(true, "UNPIN VIEW", "normal");
         } else if (currentBase64) {
             UI.togglePinButton(true, "PIN VIEW", "normal");
         } else {
-            UI.togglePinButton(false); // Hide only if generation totally failed
+            UI.togglePinButton(false);
         }
     }
 }
@@ -231,7 +227,6 @@ export async function togglePinView() {
     const room = apartmentMap[roomId] || {};
 
     if (room.pinnedView) {
-        // --- UNPIN LOGIC ---
         UI.togglePinButton(true, "UNPINNING...", "uploading");
         try {
             const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
@@ -239,14 +234,13 @@ export async function togglePinView() {
             apartmentMap[roomId].pinnedView = null;
             
             UI.addLog(`[SYSTEM]: Consensus reality anchor lifted. Space is fluid again.`, "var(--term-amber)");
-            triggerVisualUpdate(); // Regenerate a fresh view
+            triggerVisualUpdate(); 
         } catch (e) {
             console.error("Unpinning error:", e);
             UI.togglePinButton(true, "ERROR", "normal");
             UI.addLog(`[SYSTEM ERROR]: Failed to lift anchor.`, "var(--term-red)");
         }
     } else {
-        // --- PIN LOGIC ---
         if (!currentBase64) {
             UI.addLog("[SYSTEM]: No projection active to anchor.", "var(--term-amber)");
             return;
@@ -275,7 +269,6 @@ export async function togglePinView() {
     }
 }
 
-// Safely attach event listener
 const pinBtnEl = document.getElementById('pin-view-btn');
 if (pinBtnEl) {
     pinBtnEl.addEventListener('click', togglePinView);
@@ -297,13 +290,21 @@ async function executeMovement(targetDir) {
         refreshAllUI();
         
         UI.addLog(`[SYSTEM]: You traverse the ethereal currents to a new pocket of Faen.`, "var(--term-green)");
-        UI.printRoomDescription(apartmentMap[nextId], true);
+        UI.printRoomDescription(apartmentMap[nextId], true, apartmentMap);
         triggerVisualUpdate();
         return;
     }
     
     if (currentRoom.exits && currentRoom.exits[targetDir]) {
-        const nextRoomKey = currentRoom.exits[targetDir];
+        const exitData = currentRoom.exits[targetDir];
+        
+        // CHECK FOR LOCKS
+        if (typeof exitData === 'object' && exitData.locked) {
+            UI.addLog(`[BLOCKED]: ${exitData.lockMsg || 'The path is barred.'}`, "var(--term-amber)");
+            return; // Abort movement
+        }
+
+        const nextRoomKey = typeof exitData === 'string' ? exitData : exitData.target;
         localPlayer.currentRoom = nextRoomKey;
         const nextRoom = apartmentMap[nextRoomKey];
         
@@ -311,7 +312,7 @@ async function executeMovement(targetDir) {
         refreshAllUI();
         
         UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
-        UI.printRoomDescription(nextRoom, false);
+        UI.printRoomDescription(nextRoom, false, apartmentMap);
         
         triggerVisualUpdate();
         
@@ -392,7 +393,7 @@ function handleWizardInput(val) {
             }
             
             UI.addLog(`[SYSTEM]: Sector successfully re-rendered. Old pins discarded.`, "var(--term-green)");
-            UI.printRoomDescription(apartmentMap[rKey], localPlayer.stratum === 'faen');
+            UI.printRoomDescription(apartmentMap[rKey], localPlayer.stratum === 'faen', apartmentMap);
             triggerVisualUpdate(apartmentMap[rKey].visualPrompt); // Force regeneration with new prompt
             
             refreshStatusUI();
@@ -511,7 +512,7 @@ function handleWizardInput(val) {
                             }
                             
                             UI.addLog(`[SYSTEM]: Sector successfully re-woven based on seed.`, "var(--term-green)");
-                            UI.printRoomDescription(apartmentMap[currentRoomKey], localPlayer.stratum === 'faen');
+                            UI.printRoomDescription(apartmentMap[currentRoomKey], localPlayer.stratum === 'faen', apartmentMap);
                             triggerVisualUpdate(apartmentMap[currentRoomKey].visualPrompt);
                             refreshStatusUI();
                             UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
@@ -658,6 +659,103 @@ function handleWizardInput(val) {
             wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
         }
     }
+    else if (wizardState.type === 'create_npc') {
+        if (wizardState.step === 1) {
+            if (!val) { UI.addLog(`[WIZARD]: Name cannot be empty.`, "var(--term-red)"); return; }
+            wizardState.pendingData.name = val;
+            UI.addLog(`[WIZARD]: Name set to '${val}'. Enter Archetype/Role (e.g., Cafe Owner, Bouncer):`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 2) {
+            wizardState.pendingData.archetype = val || 'Entity';
+            UI.addLog(`[WIZARD]: Archetype set. Describe their physical appearance:`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 3) {
+            wizardState.pendingData.visual_prompt = val || 'A shadowed figure.';
+            UI.addLog(`[WIZARD]: Appearance saved. Describe their autonomous personality/goals (e.g., "Protects the north door, suspicious of strangers"):`, "var(--term-amber)");
+            wizardState.step++;
+        } else if (wizardState.step === 4) {
+            wizardState.pendingData.personality = val || 'Stands silently.';
+            const roomKey = localPlayer.currentRoom;
+            const room = apartmentMap[roomKey];
+            if (!room.npcs) room.npcs = [];
+            
+            const newNPC = {
+                id: 'npc_' + Date.now(),
+                name: wizardState.pendingData.name,
+                archetype: wizardState.pendingData.archetype,
+                visual_prompt: wizardState.pendingData.visual_prompt,
+                image: null, 
+                personality: wizardState.pendingData.personality,
+                owner: user ? user.uid : 'system'
+            };
+            
+            room.npcs.push(newNPC);
+            
+            if (isSyncEnabled) {
+                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                updateDoc(mapRef, { [`nodes.${roomKey}.npcs`]: arrayUnion(newNPC) });
+            }
+            
+            UI.addLog(`[SYSTEM]: Entity [${newNPC.name}] instantiated into the sector. Generating portrait...`, "var(--term-green)");
+            refreshCommandPrompt();
+            UI.updateRoomEntitiesUI(room.npcs);
+            wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
+
+            // Generate portrait in background
+            (async () => {
+                try {
+                    const combinedPrompt = `Highly detailed character portrait, ${localPlayer.stratum} aesthetic, Magic the Gathering card art style: ${newNPC.visual_prompt}`;
+                    const imgRes = await fetch("/api/image", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ instances: [{ prompt: combinedPrompt }] })
+                    });
+                    const imgData = await imgRes.json();
+                    if (imgData.predictions?.[0]) {
+                        const cardImageSrc = `data:image/png;base64,${imgData.predictions[0].bytesBase64Encoded}`;
+                        const compressedImageSrc = await compressImage(cardImageSrc);
+                        
+                        const updatedRoom = apartmentMap[localPlayer.currentRoom];
+                        const npcIdx = updatedRoom.npcs.findIndex(n => n.id === newNPC.id);
+                        if (npcIdx > -1) {
+                            updatedRoom.npcs[npcIdx].image = compressedImageSrc;
+                            UI.updateRoomEntitiesUI(updatedRoom.npcs);
+                            if (isSyncEnabled) {
+                                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                                updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.npcs`]: updatedRoom.npcs });
+                            }
+                        }
+                    }
+                } catch (e) { console.error("NPC Image Gen Error", e); }
+            })();
+        }
+    }
+    else if (wizardState.type === 'lock_exit') {
+        if (wizardState.step === 1) {
+            wizardState.pendingData.lockMsg = val || 'The way is barred.';
+            const dir = wizardState.pendingData.direction;
+            const roomKey = localPlayer.currentRoom;
+            const room = apartmentMap[roomKey];
+            
+            let existingTarget = room.exits[dir];
+            let targetId = typeof existingTarget === 'string' ? existingTarget : existingTarget.target;
+            
+            room.exits[dir] = {
+                target: targetId,
+                locked: true,
+                lockMsg: wizardState.pendingData.lockMsg
+            };
+            
+            if (isSyncEnabled) {
+                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                updateDoc(mapRef, { [`nodes.${roomKey}.exits.${dir}`]: room.exits[dir] });
+            }
+            
+            UI.addLog(`[SYSTEM]: Sector ${dir.toUpperCase()} is now LOCKED.`, "var(--term-amber)");
+            refreshCommandPrompt();
+            wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
+        }
+    }
 }
 
 // --- COMMAND PARSER ---
@@ -737,7 +835,7 @@ if (input) {
                 return;
             }
 
-            if (!activeAvatar && !cmd.startsWith('help') && !cmd.startsWith('create avatar')) {
+            if (!activeAvatar && !cmd.startsWith('help') && !cmd.startsWith('create avatar') && !cmd.startsWith('assume')) {
                 if (localPlayer.currentRoom !== 'spare_room') {
                     UI.addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive to forge your form.`, "var(--term-amber)");
                 }
@@ -756,6 +854,33 @@ if (input) {
                 UI.setWizardPrompt("WIZARD@DEPLOY:~$");
                 UI.addLog(`[WIZARD]: Vessel Deployment Protocol. WARNING: You will forfeit control of this avatar.`, "var(--term-red)");
                 UI.addLog(`[WIZARD]: Describe its autonomous personality:`, "var(--term-amber)");
+                return;
+            }
+
+            if (cmd === 'create npc' || cmd === 'spawn npc') {
+                if (!activeAvatar) { UI.addLog("[SYSTEM]: Voids cannot spawn life.", "var(--term-red)"); return; }
+                wizardState = { active: true, type: 'create_npc', step: 1, pendingData: {}, existingData: {} };
+                UI.setWizardPrompt("WIZARD@NPC:~$");
+                UI.addLog(`[WIZARD]: NPC Spawning Protocol. Enter NPC Name:`, "var(--term-amber)");
+                return;
+            }
+
+            if (cmd.startsWith('lock ')) {
+                if (!activeAvatar) { UI.addLog("[SYSTEM]: Voids cannot manipulate locks.", "var(--term-red)"); return; }
+                const parts = cmd.split(' ');
+                const dirRaw = parts[1];
+                const expandMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west' };
+                const finalDir = expandMap[dirRaw] || dirRaw;
+                
+                if (!finalDir || !apartmentMap[localPlayer.currentRoom].exits || !apartmentMap[localPlayer.currentRoom].exits[finalDir]) {
+                    UI.addLog(`[SYSTEM]: Valid exit not found in that direction.`, "var(--term-amber)");
+                    return;
+                }
+                
+                wizardState = { active: true, type: 'lock_exit', step: 1, pendingData: { direction: finalDir }, existingData: {} };
+                UI.setWizardPrompt("WIZARD@LOCK:~$");
+                UI.addLog(`[WIZARD]: Lock Protocol Initiated for ${finalDir.toUpperCase()}.`, "var(--term-amber)");
+                UI.addLog(`Enter the blocking message (e.g., 'Max steps in front of you. "Hold it!"'):`, "var(--term-amber)");
                 return;
             }
 
@@ -863,7 +988,7 @@ if (input) {
                     if (finalDir === 'here') {
                         UI.addLog(`[WIZARD]: Auto-Weave Protocol Initiated. Provide a 1-line seed phrase to re-weave the current room:`, "var(--term-amber)");
                     } else {
-                        UI.addLog(`[WIZARD]: Auto-Weave Protocol Initiated. Provide a 1-line seed phrase for the new room (e.g., 'The Whistle Stop Cafe Main Room'):`, "var(--term-amber)");
+                        UI.addLog(`[WIZARD]: Auto-Weave Protocol Initiated. Provide a 1-line seed phrase for the new room:`, "var(--term-amber)");
                     }
                     return;
                 }
@@ -906,7 +1031,7 @@ if (input) {
                             });
                         }
                         UI.addLog(`[SYSTEM]: Sector successfully rendered.`, "var(--term-green)");
-                        UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen');
+                        UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap);
                         triggerVisualUpdate(res.visual_prompt);
                         refreshStatusUI();
                         UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
@@ -927,7 +1052,7 @@ if (input) {
                 else UI.addLog("[SYSTEM]: View is not pinned.", "var(--term-amber)");
                 return;
             } else if (cmd === 'look' || cmd === 'l') {
-                UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen'); 
+                UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap); 
                 triggerVisualUpdate(); return;
             } else if (cmd === 'stat' || cmd === 'stats') {
                 if (!activeAvatar) return;
@@ -955,7 +1080,7 @@ if (input) {
             else localPlayer.inventory.forEach(item => UI.addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
             return;
         } else if (cmd === 'help') {
-            UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT.", "var(--term-amber)");
+            UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT.", "var(--term-amber)");
             return;
         }
 
@@ -968,11 +1093,36 @@ if (input) {
                 const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
                 const npcText = (currentRoomData.npcs || []).map(n => `[NPC] ${n.name} - Personality: ${n.personality}`).join('\n') || "None";
                 
+                // Build string representing current exits and their lock status
+                const exitStrs = [];
+                const adjacentNpcs = []; // Track NPCs in adjacent rooms for GM Context
+                for (let [dir, data] of Object.entries(currentRoomData.exits || {})) {
+                    const targetId = typeof data === 'object' ? data.target : data;
+                    if (typeof data === 'object' && data.locked) {
+                        exitStrs.push(`${dir.toUpperCase()} (LOCKED: ${data.lockMsg})`);
+                    } else {
+                        exitStrs.push(dir.toUpperCase());
+                    }
+                    
+                    // Peek into the adjacent room for visible entities
+                    const targetRoom = apartmentMap[targetId];
+                    if (targetRoom && targetRoom.npcs && targetRoom.npcs.length > 0) {
+                        targetRoom.npcs.forEach(n => {
+                            adjacentNpcs.push(`[NPC to the ${dir.toUpperCase()}] ${n.name} - Personality: ${n.personality}`);
+                        });
+                    }
+                }
+                const exitText = exitStrs.length > 0 ? exitStrs.join(', ') : "None";
+                const adjacentNpcText = adjacentNpcs.length > 0 ? adjacentNpcs.join('\n') : "None";
+                
                 const sysPrompt = `You are Tandy, the GM of Terra Agnostum. 
                 Context: ${currentRoomData.name} (${localPlayer.stratum.toUpperCase()}). ${currentRoomData.description}.
-                Entities: ${npcText}. Inventory: ${inventoryNames}.
+                Entities Present: ${npcText}. Inventory: ${inventoryNames}.
+                Adjacent Entities (Visible through doorways/counters): ${adjacentNpcText}.
+                Exits: ${exitText}.
                 IMPORTANT: A 'faen_jump' can ONLY happen if the user is in 'Schrödinger's Closet' (CLOSET) or explicitly uses specific 'Aethal' code.
-                IMPORTANT: Only use 'trigger_teleport' for magical/forced warping, NEVER for standard movement.
+                IMPORTANT: If a user attempts to interact with an Adjacent Entity across a counter or doorway, you may roleplay their response based on their personality.
+                IMPORTANT: If a user attempts to go through a LOCKED exit, and they successfully persuade, bribe, or trick the guarding Adjacent Entity, you may set world_edit type to 'unlock_exit' and provide the direction.
                 Respond STRICTLY in JSON:
                 {
                   "speaker": "NARRATOR or NPC Name",
@@ -982,7 +1132,7 @@ if (input) {
                   "faen_jump": boolean,
                   "trigger_stratum_shift": null or 'mundane', 'faen', 'technate',
                   "trigger_teleport": null or { "new_room_id": "id", "name": "Name", "description": "Desc", "visual_prompt": "Prompt" },
-                  "world_edit": null or {"type": "add_marginalia", "text": "text"},
+                  "world_edit": null or {"type": "add_marginalia", "text": "text"} or {"type": "unlock_exit", "direction": "north"},
                   "trigger_respawn": false
                 }`;
                 
@@ -1040,11 +1190,20 @@ if (input) {
                 const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
                 UI.addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
                 
-                if (res.world_edit && res.world_edit.type === 'add_marginalia') {
+                if (res.world_edit) {
                     const room = apartmentMap[localPlayer.currentRoom];
-                    if (!room.marginalia) room.marginalia = [];
-                    room.marginalia.push(res.world_edit.text);
-                    if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.marginalia`]: arrayUnion(res.world_edit.text) });
+                    if (res.world_edit.type === 'add_marginalia') {
+                        if (!room.marginalia) room.marginalia = [];
+                        room.marginalia.push(res.world_edit.text);
+                        if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.marginalia`]: arrayUnion(res.world_edit.text) });
+                    } else if (res.world_edit.type === 'unlock_exit') {
+                        const unlockDir = res.world_edit.direction.toLowerCase();
+                        if (room.exits[unlockDir] && typeof room.exits[unlockDir] === 'object') {
+                            room.exits[unlockDir].locked = false;
+                            if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.exits.${unlockDir}.locked`]: false });
+                            UI.addLog(`[SYSTEM]: The path ${unlockDir.toUpperCase()} has been opened.`, "var(--term-green)");
+                        }
+                    }
                 }
                 
                 if (res.trigger_visual && !res.trigger_respawn && !res.trigger_teleport) {
