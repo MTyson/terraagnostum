@@ -455,51 +455,94 @@ function handleWizardInput(val) {
             wizardState = { active: false, type: null, step: 0, pendingData: {}, existingData: {} };
             refreshCommandPrompt();
             
-            UI.addLog(`<span id="thinking-indicator" class="italic" style="color: var(--gm-purple)">WEAVING ADJACENT REALITY BASED ON SEED: "${seedPhrase}"...</span>`);
+            if (dir === 'here') {
+                UI.addLog(`<span id="thinking-indicator" class="italic" style="color: var(--gm-purple)">RE-WEAVING LOCAL REALITY BASED ON SEED: "${seedPhrase}"...</span>`);
+            } else {
+                UI.addLog(`<span id="thinking-indicator" class="italic" style="color: var(--gm-purple)">WEAVING ADJACENT REALITY BASED ON SEED: "${seedPhrase}"...</span>`);
+            }
             
             (async () => {
                 try {
-                    const sysPrompt = `You are the Architect of Terra Agnostum. 
-                    Generate a thematic new room located to the ${dir.toUpperCase()} of the current room.
-                    Current Stratum: ${localPlayer.stratum.toUpperCase()}.
-                    Current Room Context: ${currentRoom.name} - ${currentRoom.description}.
-                    User's Seed Idea for New Room: "${seedPhrase}".
-                    Expand on this seed idea to create a rich, atmospheric room.
-                    Respond STRICTLY in JSON:
-                    {
-                      "name": "Evocative Name",
-                      "description": "Atmospheric narrative description",
-                      "visual_prompt": "Detailed prompt for image generation"
-                    }`;
+                    const sysPrompt = dir === 'here' ? 
+                        `You are the Architect of Terra Agnostum. 
+                        Redesign the current room based on the user's seed idea.
+                        Current Stratum: ${localPlayer.stratum.toUpperCase()}.
+                        Old Room Context: ${currentRoom.name} - ${currentRoom.description}.
+                        User's Seed Idea for Room: "${seedPhrase}".
+                        Expand on this seed idea to create a rich, atmospheric room.
+                        Respond STRICTLY in JSON:
+                        {
+                          "name": "Evocative Name",
+                          "description": "Atmospheric narrative description",
+                          "visual_prompt": "Detailed prompt for image generation"
+                        }` :
+                        `You are the Architect of Terra Agnostum. 
+                        Generate a thematic new room located to the ${dir.toUpperCase()} of the current room.
+                        Current Stratum: ${localPlayer.stratum.toUpperCase()}.
+                        Current Room Context: ${currentRoom.name} - ${currentRoom.description}.
+                        User's Seed Idea for New Room: "${seedPhrase}".
+                        Expand on this seed idea to create a rich, atmospheric room.
+                        Respond STRICTLY in JSON:
+                        {
+                          "name": "Evocative Name",
+                          "description": "Atmospheric narrative description",
+                          "visual_prompt": "Detailed prompt for image generation"
+                        }`;
+
                     const res = await callGemini("Generate an adjacent room from seed.", sysPrompt);
                     
                     if (res && res.name && res.description) {
-                        const newRoomId = 'node_' + Date.now();
-                        const reverseDir = { 'north':'south', 'south':'north', 'east':'west', 'west':'east' }[dir];
-                        
-                        const newNode = {
-                            name: res.name,
-                            shortName: res.name.substring(0, 7).toUpperCase(),
-                            description: res.description,
-                            visualPrompt: res.visual_prompt || res.visualPrompt,
-                            exits: { [reverseDir]: currentRoomKey },
-                            pinnedView: null, items: [], marginalia: [], npcs: []
-                        };
-                        
-                        apartmentMap[newRoomId] = newNode;
-                        if (!apartmentMap[currentRoomKey].exits) apartmentMap[currentRoomKey].exits = {};
-                        apartmentMap[currentRoomKey].exits[dir] = newRoomId;
-                        
-                        if (isSyncEnabled) {
-                            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-                            await updateDoc(mapRef, {
-                                [`nodes.${currentRoomKey}.exits.${dir}`]: newRoomId,
-                                [`nodes.${newRoomId}`]: newNode
-                            });
+                        if (dir === 'here') {
+                            apartmentMap[currentRoomKey].name = res.name;
+                            apartmentMap[currentRoomKey].shortName = res.name.substring(0, 7).toUpperCase();
+                            apartmentMap[currentRoomKey].description = res.description;
+                            apartmentMap[currentRoomKey].visualPrompt = res.visual_prompt || res.visualPrompt;
+                            apartmentMap[currentRoomKey].pinnedView = null; // Clear old pin
+                            
+                            if (isSyncEnabled) {
+                                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                                await updateDoc(mapRef, {
+                                    [`nodes.${currentRoomKey}.name`]: res.name,
+                                    [`nodes.${currentRoomKey}.shortName`]: apartmentMap[currentRoomKey].shortName,
+                                    [`nodes.${currentRoomKey}.description`]: res.description,
+                                    [`nodes.${currentRoomKey}.visualPrompt`]: res.visual_prompt || res.visualPrompt,
+                                    [`nodes.${currentRoomKey}.pinnedView`]: null
+                                });
+                            }
+                            
+                            UI.addLog(`[SYSTEM]: Sector successfully re-woven based on seed.`, "var(--term-green)");
+                            UI.printRoomDescription(apartmentMap[currentRoomKey], localPlayer.stratum === 'faen');
+                            triggerVisualUpdate(apartmentMap[currentRoomKey].visualPrompt);
+                            refreshStatusUI();
+                            UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
+                        } else {
+                            const newRoomId = 'node_' + Date.now();
+                            const reverseDir = { 'north':'south', 'south':'north', 'east':'west', 'west':'east' }[dir];
+                            
+                            const newNode = {
+                                name: res.name,
+                                shortName: res.name.substring(0, 7).toUpperCase(),
+                                description: res.description,
+                                visualPrompt: res.visual_prompt || res.visualPrompt,
+                                exits: { [reverseDir]: currentRoomKey },
+                                pinnedView: null, items: [], marginalia: [], npcs: []
+                            };
+                            
+                            apartmentMap[newRoomId] = newNode;
+                            if (!apartmentMap[currentRoomKey].exits) apartmentMap[currentRoomKey].exits = {};
+                            apartmentMap[currentRoomKey].exits[dir] = newRoomId;
+                            
+                            if (isSyncEnabled) {
+                                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                                await updateDoc(mapRef, {
+                                    [`nodes.${currentRoomKey}.exits.${dir}`]: newRoomId,
+                                    [`nodes.${newRoomId}`]: newNode
+                                });
+                            }
+                            
+                            UI.addLog(`[SYSTEM]: Auto-sector materialization complete. Path to the ${dir.toUpperCase()} is now open to [${res.name}].`, "var(--term-green)");
+                            UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
                         }
-                        
-                        UI.addLog(`[SYSTEM]: Auto-sector materialization complete. Path to the ${dir.toUpperCase()} is now open to [${res.name}].`, "var(--term-green)");
-                        UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
                     }
                 } catch (err) {
                     UI.addLog("[SYSTEM ERROR]: Reality weave failed.", "var(--term-red)");
@@ -803,14 +846,25 @@ if (input) {
                 // Allow "build auto north" or "build north auto" or abbreviations like "build n auto"
                 const dirRaw = parts.find(p => ['north', 'south', 'east', 'west', 'n', 's', 'e', 'w'].includes(p));
                 const expandMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west' };
-                const finalDir = expandMap[dirRaw] || dirRaw;
+                let finalDir = expandMap[dirRaw] || dirRaw;
                 
-                if (!finalDir) { UI.addLog(`Use 'build north/south/east/west [auto]'.`, "var(--term-amber)"); return; }
+                if (!finalDir) { 
+                    if (isAuto && parts.length === 2) {
+                        finalDir = 'here'; // User just typed 'build auto'
+                    } else {
+                        UI.addLog(`Use 'build north/south/east/west [auto]', or 'build auto' to re-weave current room.`, "var(--term-amber)"); 
+                        return; 
+                    }
+                }
                 
                 if (isAuto) {
                     wizardState = { active: true, type: 'auto_expand', step: 1, pendingData: { direction: finalDir }, existingData: {} };
                     UI.setWizardPrompt("WIZARD@AUTO-WEAVE:~$");
-                    UI.addLog(`[WIZARD]: Auto-Weave Protocol Initiated. Provide a 1-line seed phrase or concept for the new room (e.g., 'The Whistle Stop Cafe Main Room'):`, "var(--term-amber)");
+                    if (finalDir === 'here') {
+                        UI.addLog(`[WIZARD]: Auto-Weave Protocol Initiated. Provide a 1-line seed phrase to re-weave the current room:`, "var(--term-amber)");
+                    } else {
+                        UI.addLog(`[WIZARD]: Auto-Weave Protocol Initiated. Provide a 1-line seed phrase for the new room (e.g., 'The Whistle Stop Cafe Main Room'):`, "var(--term-amber)");
+                    }
                     return;
                 }
 
