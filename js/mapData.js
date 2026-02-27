@@ -15,7 +15,7 @@ export const apartmentMap = {
         shortName: "LORE2",
         description: "The eastern half of the main living area, acting as a central nexus connecting the apartment.",
         visualPrompt: "A cyberpunk apartment living room, dim lighting, worn retro-futuristic couch, cables running along the floor.",
-        exits: { west: "lore1", north: "kitchen", east: "spare_room", south: "hallway" },
+        exits: { west: "lore1", north: "kitchen", east: "character_room", south: "hallway" },
         pinnedView: null,
         items: [],
         marginalia: [],
