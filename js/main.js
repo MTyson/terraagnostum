@@ -679,6 +679,70 @@ if (input) {
                 return;
             }
 
+            const assumeMatch = cmd.match(/^(?:assume|possess)\s+(.+)$/i);
+            if (assumeMatch) {
+                if (activeAvatar) {
+                    UI.addLog(`[SYSTEM]: You must LEAVE VESSEL before assuming a new form.`, "var(--term-amber)");
+                    return;
+                }
+
+                const targetName = assumeMatch[1].toLowerCase();
+                const room = apartmentMap[localPlayer.currentRoom];
+                const npcs = room.npcs || [];
+
+                const npcIndex = npcs.findIndex(n => n.name.toLowerCase().includes(targetName));
+
+                if (npcIndex > -1) {
+                    const npc = npcs[npcIndex];
+
+                    // 1. Remove from room
+                    npcs.splice(npcIndex, 1);
+                    if (isSyncEnabled) {
+                        const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
+                        updateDoc(mapRef, { [`nodes.${localPlayer.currentRoom}.npcs`]: arrayRemove(npc) });
+                    }
+
+                    // 2. Set as active avatar
+                    const newCharData = {
+                        name: npc.name,
+                        archetype: npc.archetype || "Unknown",
+                        visual_prompt: npc.visual_prompt || npc.visualPrompt || "A borrowed form.",
+                        image: npc.image || null,
+                        stats: npc.stats || { WILL: 20, CONS: 20, PHYS: 20 },
+                        deceased: false,
+                        deployed: false,
+                        timestamp: Date.now()
+                    };
+
+                    UI.addLog(`[SYSTEM]: You have assumed control of [${npc.name}].`, "var(--term-green)");
+
+                    if (user && !user.isAnonymous) {
+                        try {
+                            const charCol = collection(db, 'artifacts', appId, 'users', user.uid, 'characters');
+                            addDoc(charCol, newCharData).then(docRef => {
+                                newCharData.id = docRef.id;
+                                activeAvatar = newCharData;
+                                localCharacters.push(newCharData);
+                                UI.updateAvatarUI(activeAvatar);
+                                refreshCommandPrompt();
+                            });
+                        } catch (e) {
+                            console.error("Failed to save assumed avatar to DB", e);
+                        }
+                    } else {
+                        activeAvatar = newCharData;
+                        localCharacters.push(newCharData);
+                        UI.updateAvatarUI(activeAvatar);
+                        refreshCommandPrompt();
+                    }
+
+                    UI.updateRoomEntitiesUI(room.npcs);
+                } else {
+                    UI.addLog(`[SYSTEM]: No unoccupied vessel matching '${assumeMatch[1]}' found here.`, "var(--term-amber)");
+                }
+                return;
+            }
+
             if (cmd === 'create' || cmd === 'create item') {
                 if (!activeAvatar) { UI.addLog("[SYSTEM]: Only materialized beings can create.", "var(--term-red)"); return; }
                 wizardState = { active: true, type: 'item', step: 1, pendingData: {}, existingData: {} };
@@ -785,7 +849,7 @@ if (input) {
             else localPlayer.inventory.forEach(item => UI.addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
             return;
         } else if (cmd === 'help') {
-            UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, CREATE ITEM, EDIT ROOM, BUILD [DIR], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT.", "var(--term-amber)");
+            UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE ITEM, EDIT ROOM, BUILD [DIR], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT.", "var(--term-amber)");
             return;
         }
 
