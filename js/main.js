@@ -8,12 +8,12 @@ import { apartmentMap as initialMap } from './mapData.js';
 import { callGemini, projectVisual, compressImage } from './apiService.js';
 import * as UI from './ui.js';
 
-// Configuration for your specific Firebase Project
+// Configuration for your specific Firebase Project - REVERTED TO WORKING STATE
 const firebaseConfig = {
     apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
-    authDomain: "topical-305318.firebaseapp.com",
-    projectId: "topical-305318",
-    storageBucket: "topical-305318.appspot.com", 
+    authDomain: "terra-agnostum.firebaseapp.com",
+    projectId: "terra-agnostum",
+    storageBucket: "terra-agnostum.firebasestorage.app", 
     messagingSenderId: "809154092201",
     appId: "1:809154092201:web:95aaddd47c6ce021cf1db8"
 };
