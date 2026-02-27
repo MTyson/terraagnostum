@@ -1,39 +1,12 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+import { signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+import { auth, db, storage, isSyncEnabled, appId } from './firebaseConfig.js';
 
 // IMPORT DECOMPOSED DATA & SERVICES
 import { apartmentMap as initialMap } from './mapData.js';
 import { callGemini, projectVisual, compressImage } from './apiService.js';
 import * as UI from './ui.js';
-
-// Configuration for your specific Firebase Project
-const firebaseConfig = {
-    apiKey: "AIzaSyDtWZdtC-IeKDVyFqcwuqa_tn0hoH91dtc",
-    authDomain: "terra-agnostum.firebaseapp.com",
-    projectId: "terra-agnostum",
-    storageBucket: "terra-agnostum.firebasestorage.app", 
-    messagingSenderId: "809154092201",
-    appId: "1:809154092201:web:95aaddd47c6ce021cf1db8"
-};
-
-const appId = 'terra-agnostum-shared';
-
-let app, auth, db, storage;
-let isSyncEnabled = false;
-
-try {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    storage = getStorage(app);
-    isSyncEnabled = true;
-    document.getElementById('sync-status').innerText = "SYNC: READY";
-    document.getElementById('sync-status').style.color = "var(--term-amber)";
-} catch (e) {
-    document.getElementById('sync-status').innerText = "SYNC: OFFLINE";
-}
 
 // Initialize with seed data
 let apartmentMap = { ...initialMap };
