@@ -26,6 +26,8 @@ let localCharacters = [];
 let activeAvatar = null;  
 let user = null;
 let hasInitialized = false;
+let mapUnsubscribe = null;
+let currentMapPath = null;
 
 // --- HELPER WRAPPERS ---
 function shiftStratum(targetStratum) {
@@ -46,6 +48,11 @@ function refreshStatusUI() {
 }
 
 function refreshAllUI() {
+    if (!activeAvatar) {
+        document.body.classList.add('void-mode');
+    } else {
+        document.body.classList.remove('void-mode');
+    }
     refreshCommandPrompt();
     refreshStatusUI();
     UI.updateAvatarUI(activeAvatar);
@@ -86,14 +93,14 @@ if (isSyncEnabled) {
             UI.addLog(`${userType} LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
             
             setupWorldListener();
-            setupMapListener();
+            updateMapListener();
             await loadPlayerState(); 
             await loadUserCharacters();
             
             shiftStratum(localPlayer.stratum);
             
             const currentRoom = apartmentMap[localPlayer.currentRoom] || apartmentMap["lore1"];
-            UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen', apartmentMap);
+            UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen', apartmentMap, activeAvatar);
             refreshAllUI();
             
             triggerVisualUpdate(null, localPlayer, apartmentMap, user);
@@ -109,10 +116,24 @@ function setupWorldListener() {
     });
 }
 
-function setupMapListener() {
+function updateMapListener() {
     if (!db) return;
-    const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-    onSnapshot(mapRef, (snap) => {
+
+    const privateRooms = ['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet'];
+    const isPrivate = privateRooms.includes(localPlayer.currentRoom);
+    
+    // Determine path based on room
+    const newPath = isPrivate && user
+        ? `artifacts/${appId}/users/${user.uid}/instance/apartment_nodes`
+        : `artifacts/${appId}/public/data/maps/apartment_graph_live`;
+
+    if (currentMapPath === newPath) return; // No change needed
+    if (mapUnsubscribe) mapUnsubscribe(); // Unsubscribe previous
+
+    currentMapPath = newPath;
+    const mapRef = doc(db, newPath.split('/').slice(0, -1).join('/'), newPath.split('/').pop());
+    
+    mapUnsubscribe = onSnapshot(mapRef, (snap) => {
         if (!snap.exists()) {
             setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
         } else {
@@ -201,7 +222,7 @@ async function executeMovement(targetDir) {
         refreshAllUI();
         
         UI.addLog(`[SYSTEM]: You traverse the ethereal currents to a new pocket of Faen.`, "var(--term-green)");
-        UI.printRoomDescription(apartmentMap[nextId], true, apartmentMap);
+        UI.printRoomDescription(apartmentMap[nextId], true, apartmentMap, activeAvatar);
         triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         return;
     }
@@ -223,7 +244,8 @@ async function executeMovement(targetDir) {
         refreshAllUI();
         
         UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
-        UI.printRoomDescription(nextRoom, false, apartmentMap);
+        UI.printRoomDescription(nextRoom, false, apartmentMap, activeAvatar);
+        updateMapListener(); // Check if we need to switch map instances
         
         triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         
@@ -272,7 +294,10 @@ if (input) {
                     { 
                         refreshCommandPrompt, 
                         refreshStatusUI, 
-                        setActiveAvatar: (v) => { activeAvatar = v; },
+                        setActiveAvatar: (v) => { 
+                            activeAvatar = v; 
+                            if (v) UI.materializeEffect();
+                        },
                         addLocalCharacter: (c) => { localCharacters.push(c); },
                         setIsProcessing: (v) => { isProcessing = v; }
                     }
@@ -332,6 +357,11 @@ if (input) {
                 if (localPlayer.currentRoom !== 'spare_room') {
                     UI.addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive to forge your form.`, "var(--term-amber)");
                 }
+            }
+
+            if (!activeAvatar && ['take', 'get', 'pick up', 'use'].some(verb => cmd.startsWith(verb))) {
+                UI.addLog("[SYSTEM]: Your phantom fingers pass through reality. You lack the Meaning to influence the Mundane.", "var(--term-amber)");
+                return;
             }
 
             const dirMatch = cmd.match(/^(?:go\s+(?:to\s+(?:the\s+)?)?|move\s+|walk\s+|head\s+)?(north|south|east|west|n|s|e|w)$/);
@@ -524,7 +554,7 @@ if (input) {
                             });
                         }
                         UI.addLog(`[SYSTEM]: Sector successfully rendered.`, "var(--term-green)");
-                        UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap);
+                        UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap, activeAvatar);
                         triggerVisualUpdate(res.visual_prompt, localPlayer, apartmentMap, user);
                         refreshStatusUI();
                         UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
@@ -545,7 +575,7 @@ if (input) {
                 else UI.addLog("[SYSTEM]: View is not pinned.", "var(--term-amber)");
                 return;
             } else if (cmd === 'look' || cmd === 'l') {
-                UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap); 
+                UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap, activeAvatar); 
                 triggerVisualUpdate(null, localPlayer, apartmentMap, user); return;
             } else if (cmd === 'stat' || cmd === 'stats') {
                 if (!activeAvatar) return;

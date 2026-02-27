@@ -2,6 +2,14 @@
 // Purpose: Handles all DOM manipulation, canvas rendering, and CSS theme transitions.
 // It manages no global state, relying entirely on the main game engine to pass the correct data.
 
+// Inject Void Mode CSS
+const style = document.createElement('style');
+style.innerHTML = `
+.void-mode img { filter: grayscale(1) contrast(1.2); }
+.void-mode #log div { color: var(--gm-purple) !important; }
+`;
+document.head.appendChild(style);
+
 export function applyStratumTheme(stratum, isTransitioningToFaen) {
     const root = document.documentElement;
     const stratDisp = document.getElementById('stratum-display');
@@ -146,7 +154,7 @@ export function updateRoomEntitiesUI(npcs) {
     `).join('');
 }
 
-export function printRoomDescription(room, isFaen, fullMap = null) {
+export function printRoomDescription(room, isFaen, fullMap = null, activeAvatar = null) {
     addLog(`[NARRATOR]: ${room.description}`, "#888");
     if (room.marginalia && room.marginalia.length > 0) {
         room.marginalia.forEach(note => {
@@ -184,6 +192,10 @@ export function printRoomDescription(room, isFaen, fullMap = null) {
         addLog(`Obvious Exits: ${exits || 'NONE'}`, "#555");
     } else {
         addLog(`The ethereal plane stretches infinitely.`, "var(--faen-pink)");
+    }
+
+    if (!activeAvatar) {
+        addLog(`[TANDY]: Is someone there? I feel a ripple... Ian? No, the signature is different. But you're in his room. You're too thin, Wanderer. Find the Character Room (Spare Bedroom) and sketch a life.`, "var(--gm-purple)");
     }
 }
 
@@ -382,4 +394,9 @@ export function togglePinButton(isVisible, text = "PIN VIEW", state = "normal") 
         pinBtn.classList.remove('bg-green-600', 'border-green-400');
         pinBtn.disabled = false;
     }
+}
+
+export function materializeEffect() {
+    document.body.classList.remove('void-mode');
+    addLog("[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.", "var(--term-green)");
 }
