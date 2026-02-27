@@ -29,8 +29,8 @@ let hasInitialized = false;
 let mapUnsubscribe = null;
 let currentMapPath = null;
 
-const privateRooms = ['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet'];
-const isArchiveRoom = (roomId) => privateRooms.includes(roomId);
+const ARCHIVE_NODES = ['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet', 'character_room', 'hallway_archive'];
+const isArchiveRoom = (roomId) => ARCHIVE_NODES.includes(roomId);
 
 // --- HELPER WRAPPERS ---
 function shiftStratum(targetStratum) {
@@ -119,6 +119,13 @@ function setupWorldListener() {
     });
 }
 
+function mergeAndRefreshMap(fetchedNodes = {}) {
+    apartmentMap = { ...initialMap, ...fetchedNodes };
+    UI.updateRoomItemsUI(apartmentMap[localPlayer.currentRoom]?.items);
+    UI.updateRoomEntitiesUI(apartmentMap[localPlayer.currentRoom]?.npcs);
+    UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
+}
+
 function updateMapListener() {
     if (!db) return;
 
@@ -141,10 +148,7 @@ function updateMapListener() {
         } else {
             const data = snap.data();
             if (data.nodes) {
-                apartmentMap = data.nodes;
-                UI.updateRoomItemsUI(apartmentMap[localPlayer.currentRoom]?.items);
-                UI.updateRoomEntitiesUI(apartmentMap[localPlayer.currentRoom]?.npcs);
-                UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
+                mergeAndRefreshMap(data.nodes);
             }
         }
     });
@@ -211,6 +215,7 @@ if (pinBtnEl) {
 // --- NARRATIVE MOVEMENT ENGINE ---
 async function executeMovement(targetDir) {
     const currentRoom = apartmentMap[localPlayer.currentRoom];
+    if (!currentRoom) { console.warn('Movement: Current room not found'); return; }
     if (localPlayer.stratum === 'faen') {
         const nextId = 'faen_' + Date.now();
         apartmentMap[nextId] = {
@@ -239,8 +244,16 @@ async function executeMovement(targetDir) {
         }
 
         const nextRoomKey = typeof exitData === 'string' ? exitData : exitData.target;
-        localPlayer.currentRoom = nextRoomKey;
+        
+        if (!activeAvatar && !isArchiveRoom(nextRoomKey)) {
+             UI.addLog("[SYSTEM]: Your phantom fingers pass through reality. You lack the Meaning to influence the Mundane.", "var(--term-amber)");
+             return;
+        }
+
         const nextRoom = apartmentMap[nextRoomKey];
+        if (!nextRoom) { UI.addLog('[ERROR]: Reality sector missing.'); return; }
+
+        localPlayer.currentRoom = nextRoomKey;
         
         savePlayerState(); 
         refreshAllUI();

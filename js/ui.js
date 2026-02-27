@@ -157,6 +157,7 @@ export function updateRoomEntitiesUI(npcs) {
 }
 
 export function printRoomDescription(room, isFaen, fullMap = null, activeAvatar = null) {
+    if (!room) { console.error('UI: Room is undefined'); return; }
     addLog(`[NARRATOR]: ${room.description}`, "#888");
     if (room.marginalia && room.marginalia.length > 0) {
         room.marginalia.forEach(note => {
