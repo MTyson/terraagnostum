@@ -364,8 +364,8 @@ if (input) {
 
         // CORE SYSTEM COMMANDS
         if (cmd === 'create avatar' || cmd === 'forge form' || cmd === 'make avatar') {
-                if (localPlayer.currentRoom !== 'spare_room') {
-                    UI.addLog(`[SYSTEM]: You must be in the Archive (Spare Room) to forge a form.`, "var(--term-amber)");
+                if (localPlayer.currentRoom !== 'character_room' && localPlayer.currentRoom !== 'spare_room') {
+                    UI.addLog(`[SYSTEM]: You must be in the Archive (Character Room) to forge a form.`, "var(--term-amber)");
                     return;
                 }
                 startWizard('avatar');
@@ -375,7 +375,7 @@ if (input) {
             }
 
             if (!activeAvatar && !cmd.startsWith('help') && !cmd.startsWith('create avatar') && !cmd.startsWith('assume')) {
-                if (localPlayer.currentRoom !== 'spare_room') {
+                if (localPlayer.currentRoom !== 'character_room' && localPlayer.currentRoom !== 'spare_room') {
                     UI.addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive to forge your form.`, "var(--term-amber)");
                 }
             }
