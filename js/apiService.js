@@ -100,3 +100,24 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
     }
     return null;
 }
+
+export async function generatePortrait(prompt, stratum) {
+    const combinedPrompt = `Highly detailed character portrait, ${stratum} aesthetic, Magic the Gathering card art style: ${prompt}`;
+    try {
+        const res = await fetch(API_IMAGE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instances: [{ prompt: combinedPrompt }] })
+        });
+        
+        if (!res.ok) throw new Error(`Image API returned status ${res.status}`);
+
+        const data = await res.json();
+        if (data.predictions && data.predictions[0]) {
+            return data.predictions[0].bytesBase64Encoded;
+        }
+    } catch (e) { 
+        console.error("Portrait Generation Error:", e);
+    }
+    return null;
+}

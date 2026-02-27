@@ -1,10 +1,10 @@
 import { signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
 // IMPORT DECOMPOSED DATA & SERVICES
 import { apartmentMap as initialMap } from './mapData.js';
-import { callGemini, projectVisual, compressImage } from './apiService.js';
+import { callGemini, compressImage, generatePortrait } from './apiService.js';
+import { triggerVisualUpdate, togglePinView } from './visualSystem.js';
 import * as UI from './ui.js';
 import { app, auth, db, storage, isSyncEnabled, appId } from './firebaseConfig.js';
 
@@ -24,7 +24,6 @@ let localCharacters = [];
 let activeAvatar = null;  
 let user = null;
 let hasInitialized = false;
-let currentBase64 = null;
 
 // Expanded Creation Wizard State
 let wizardState = {
@@ -104,7 +103,7 @@ if (isSyncEnabled) {
             UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen', apartmentMap);
             refreshAllUI();
             
-            triggerVisualUpdate();
+            triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         }
     });
 }
@@ -188,94 +187,9 @@ async function loadUserCharacters() {
     }
 }
 
-// --- VISUAL & PINNING SYSTEM ---
-export async function triggerVisualUpdate(overridePrompt = null) {
-    const roomId = localPlayer.currentRoom;
-    const room = apartmentMap[roomId] || {};
-    
-    currentBase64 = null;
-    
-    const pinnedUrl = (!overridePrompt && room.pinnedView) ? room.pinnedView : null;
-    const basePrompt = overridePrompt || room.visualPrompt || room.visual_prompt || "A glitching void.";
-    
-    if (user && !user.isAnonymous) {
-        if (pinnedUrl) {
-            UI.togglePinButton(true, "UNPIN VIEW", "normal");
-        } else {
-            UI.togglePinButton(true, "GENERATING...", "uploading");
-        }
-    } else {
-        UI.togglePinButton(false);
-    }
-    
-    currentBase64 = await projectVisual(basePrompt, localPlayer.stratum, UI.addLog, pinnedUrl);
-    
-    if (user && !user.isAnonymous) {
-        if (pinnedUrl) {
-            UI.togglePinButton(true, "UNPIN VIEW", "normal");
-        } else if (currentBase64) {
-            UI.togglePinButton(true, "PIN VIEW", "normal");
-        } else {
-            UI.togglePinButton(false);
-        }
-    }
-}
-
-export async function togglePinView() {
-    if (!user || user.isAnonymous) { 
-        UI.addLog("[SYSTEM]: Identity verification required for reality anchoring.", "var(--term-red)");
-        return;
-    }
-    
-    const roomId = localPlayer.currentRoom;
-    const room = apartmentMap[roomId] || {};
-
-    if (room.pinnedView) {
-        UI.togglePinButton(true, "UNPINNING...", "uploading");
-        try {
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-            await updateDoc(mapRef, { [`nodes.${roomId}.pinnedView`]: null });
-            apartmentMap[roomId].pinnedView = null;
-            
-            UI.addLog(`[SYSTEM]: Consensus reality anchor lifted. Space is fluid again.`, "var(--term-amber)");
-            triggerVisualUpdate(); 
-        } catch (e) {
-            console.error("Unpinning error:", e);
-            UI.togglePinButton(true, "ERROR", "normal");
-            UI.addLog(`[SYSTEM ERROR]: Failed to lift anchor.`, "var(--term-red)");
-        }
-    } else {
-        if (!currentBase64) {
-            UI.addLog("[SYSTEM]: No projection active to anchor.", "var(--term-amber)");
-            return;
-        }
-        
-        UI.togglePinButton(true, "UPLOADING...", "uploading");
-        try {
-            const dataUrl = `data:image/png;base64,${currentBase64}`;
-            const fileRef = ref(storage, `maps/${appId}/${roomId}_pinned_${Date.now()}.png`);
-            await uploadString(fileRef, dataUrl, 'data_url');
-            const downloadUrl = await getDownloadURL(fileRef);
-            
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-            await updateDoc(mapRef, { [`nodes.${roomId}.pinnedView`]: downloadUrl });
-            apartmentMap[roomId].pinnedView = downloadUrl;
-            
-            UI.togglePinButton(true, "PINNED!", "pinned");
-            UI.addLog(`[SYSTEM]: Consensus reality locked. The visual projection of ${apartmentMap[roomId].name || 'this sector'} is now canonical.`, "var(--gm-purple)");
-            
-            setTimeout(() => { UI.togglePinButton(true, "UNPIN VIEW", "normal"); }, 2000);
-        } catch (e) {
-            console.error("Pinning error:", e);
-            UI.togglePinButton(true, "ERROR", "normal");
-            UI.addLog(`[SYSTEM ERROR]: Failed to anchor memory to the cloud.`, "var(--term-red)");
-        }
-    }
-}
-
 const pinBtnEl = document.getElementById('pin-view-btn');
 if (pinBtnEl) {
-    pinBtnEl.addEventListener('click', togglePinView);
+    pinBtnEl.addEventListener('click', () => togglePinView(localPlayer, apartmentMap, user));
 }
 
 // --- NARRATIVE MOVEMENT ENGINE ---
@@ -295,7 +209,7 @@ async function executeMovement(targetDir) {
         
         UI.addLog(`[SYSTEM]: You traverse the ethereal currents to a new pocket of Faen.`, "var(--term-green)");
         UI.printRoomDescription(apartmentMap[nextId], true, apartmentMap);
-        triggerVisualUpdate();
+        triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         return;
     }
     
@@ -318,7 +232,7 @@ async function executeMovement(targetDir) {
         UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
         UI.printRoomDescription(nextRoom, false, apartmentMap);
         
-        triggerVisualUpdate();
+        triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         
         if (isSyncEnabled && user) {
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
@@ -327,7 +241,7 @@ async function executeMovement(targetDir) {
     } else {
         refreshStatusUI();
         UI.addLog(`[SYSTEM]: You cannot go that way.`, "var(--term-amber)");
-        triggerVisualUpdate();
+        triggerVisualUpdate(null, localPlayer, apartmentMap, user);
     }
 }
 
@@ -398,7 +312,7 @@ function handleWizardInput(val) {
             
             UI.addLog(`[SYSTEM]: Sector successfully re-rendered. Old pins discarded.`, "var(--term-green)");
             UI.printRoomDescription(apartmentMap[rKey], localPlayer.stratum === 'faen', apartmentMap);
-            triggerVisualUpdate(apartmentMap[rKey].visualPrompt); // Force regeneration with new prompt
+            triggerVisualUpdate(apartmentMap[rKey].visualPrompt, localPlayer, apartmentMap, user); // Force regeneration with new prompt
             
             refreshStatusUI();
             UI.renderMapHUD(apartmentMap, rKey, localPlayer.stratum);
@@ -517,7 +431,7 @@ function handleWizardInput(val) {
                             
                             UI.addLog(`[SYSTEM]: Sector successfully re-woven based on seed.`, "var(--term-green)");
                             UI.printRoomDescription(apartmentMap[currentRoomKey], localPlayer.stratum === 'faen', apartmentMap);
-                            triggerVisualUpdate(apartmentMap[currentRoomKey].visualPrompt);
+                            triggerVisualUpdate(apartmentMap[currentRoomKey].visualPrompt, localPlayer, apartmentMap, user);
                             refreshStatusUI();
                             UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
                         } else {
@@ -586,15 +500,9 @@ function handleWizardInput(val) {
                 let cardImageSrc = "";
                 let compressedImageSrc = "";
                 try {
-                    const combinedPrompt = `Highly detailed character portrait, ${localPlayer.stratum} aesthetic, Magic the Gathering card art style: ${charData.visual_prompt}`;
-                    const imgRes = await fetch("/api/image", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ instances: [{ prompt: combinedPrompt }] })
-                    });
-                    const imgData = await imgRes.json();
-                    if (imgData.predictions?.[0]) {
-                        cardImageSrc = `data:image/png;base64,${imgData.predictions[0].bytesBase64Encoded}`;
+                    const b64 = await generatePortrait(charData.visual_prompt, localPlayer.stratum);
+                    if (b64) {
+                        cardImageSrc = `data:image/png;base64,${b64}`;
                         compressedImageSrc = await compressImage(cardImageSrc);
                     }
                 } catch (e) {
@@ -708,15 +616,9 @@ function handleWizardInput(val) {
             // Generate portrait in background
             (async () => {
                 try {
-                    const combinedPrompt = `Highly detailed character portrait, ${localPlayer.stratum} aesthetic, Magic the Gathering card art style: ${newNPC.visual_prompt}`;
-                    const imgRes = await fetch("/api/image", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ instances: [{ prompt: combinedPrompt }] })
-                    });
-                    const imgData = await imgRes.json();
-                    if (imgData.predictions?.[0]) {
-                        const cardImageSrc = `data:image/png;base64,${imgData.predictions[0].bytesBase64Encoded}`;
+                    const b64 = await generatePortrait(newNPC.visual_prompt, localPlayer.stratum);
+                    if (b64) {
+                        const cardImageSrc = `data:image/png;base64,${b64}`;
                         const compressedImageSrc = await compressImage(cardImageSrc);
                         
                         const updatedRoom = apartmentMap[localPlayer.currentRoom];
@@ -1036,7 +938,7 @@ if (input) {
                         }
                         UI.addLog(`[SYSTEM]: Sector successfully rendered.`, "var(--term-green)");
                         UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap);
-                        triggerVisualUpdate(res.visual_prompt);
+                        triggerVisualUpdate(res.visual_prompt, localPlayer, apartmentMap, user);
                         refreshStatusUI();
                         UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
                     }
@@ -1048,16 +950,16 @@ if (input) {
                 }
                 return;
             } else if (cmd === 'pin' || cmd === 'pin view') {
-                if (!apartmentMap[localPlayer.currentRoom].pinnedView) togglePinView();
+                if (!apartmentMap[localPlayer.currentRoom].pinnedView) togglePinView(localPlayer, apartmentMap, user);
                 else UI.addLog("[SYSTEM]: View is already pinned. Use 'unpin' to clear.", "var(--term-amber)");
                 return;
             } else if (cmd === 'unpin' || cmd === 'unpin view') {
-                if (apartmentMap[localPlayer.currentRoom].pinnedView) togglePinView();
+                if (apartmentMap[localPlayer.currentRoom].pinnedView) togglePinView(localPlayer, apartmentMap, user);
                 else UI.addLog("[SYSTEM]: View is not pinned.", "var(--term-amber)");
                 return;
             } else if (cmd === 'look' || cmd === 'l') {
                 UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap); 
-                triggerVisualUpdate(); return;
+                triggerVisualUpdate(null, localPlayer, apartmentMap, user); return;
             } else if (cmd === 'stat' || cmd === 'stats') {
                 if (!activeAvatar) return;
                 UI.addLog(`IDENTITY: ${activeAvatar.name} | CLASS: ${activeAvatar.archetype}`, "var(--term-green)");
@@ -1211,9 +1113,9 @@ if (input) {
                 }
                 
                 if (res.trigger_visual && !res.trigger_respawn && !res.trigger_teleport) {
-                    triggerVisualUpdate(res.trigger_visual); // GM Override passed here!
+                    triggerVisualUpdate(res.trigger_visual, localPlayer, apartmentMap, user); // GM Override passed here!
                 } else if (res.trigger_stratum_shift || res.trigger_teleport || res.faen_jump) {
-                    triggerVisualUpdate(); // No override passed
+                    triggerVisualUpdate(null, localPlayer, apartmentMap, user); // No override passed
                 }
             } catch (err) { 
                 UI.addLog("SYSTEM EVALUATION FAILED!", "var(--term-red)"); 
