@@ -10,6 +10,8 @@ import { wizardState, handleWizardInput, startWizard } from './wizardSystem.js';
 import * as UI from './ui.js';
 import { app, auth, db, storage, isSyncEnabled, appId } from './firebaseConfig.js';
 
+// PUSH TEST
+
 // Initialize with seed data
 let apartmentMap = { ...initialMap };
 let activeTerminal = false;
