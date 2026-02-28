@@ -100,12 +100,10 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             let finalImage = null;
             try {
                 UI.addLog(`[SYSTEM]: Rendering vessel matrix...`, "var(--term-amber)");
-                // Use generatePortrait instead of projectVisual for avatars
                 const b64 = await generatePortrait(wizardState.pendingData.visual_prompt, localPlayer.stratum);
                 
                 if (b64) {
                     UI.addLog(`[SYSTEM]: Optimizing visual signature for stability...`, "var(--term-amber)");
-                    // Format correctly so the compressor actually fires
                     const dataUrl = `data:image/png;base64,${b64}`;
                     finalImage = await compressImage(dataUrl, 512, 0.7);
                 }
@@ -131,6 +129,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                     if (addLocalCharacter) addLocalCharacter(finalData);
                     UI.materializeEffect(); 
                     UI.addLog(`[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.`, "var(--term-green)");
+                    UI.addLog(`[TANDY]: You have a shape now. Good. But your signature is fragile... a stiff breeze could scatter you. Go to the Lore Archive and use the Tandem Terminal to 'login'. Anchor yourself.`, "#b084e8");
                     endWizard();
                 }).catch(e => {
                     UI.addLog("[SYSTEM ERROR]: Failed to persist vessel.", "var(--term-red)");
@@ -268,7 +267,6 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             
             let npcImg = null;
             try {
-                // Fix for NPCs as well
                 const b64 = await generatePortrait(wizardState.pendingData.visualPrompt, localPlayer.stratum);
                 if (b64) {
                     const dataUrl = `data:image/png;base64,${b64}`;

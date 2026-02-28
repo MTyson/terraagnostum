@@ -286,7 +286,7 @@ async function handleCommand(val) {
 
     if (cmd === 'logout') {
         UI.addLog("[SYSTEM]: Severing connection to the Technate...", "var(--term-amber)");
-        signOut(auth).then(() => window.location.reload());
+        signOut(auth).then(() => window.location.href = window.location.pathname);
         return;
     }
 
