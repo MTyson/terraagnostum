@@ -1,4 +1,4 @@
-import { signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, serverTimestamp, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // IMPORT DECOMPOSED DATA & SERVICES
@@ -21,7 +21,7 @@ let localPlayer = {
     stratum: "mundane",
     posture: "standing",
     inventory: [],
-    hasGenerator: false,
+    closetDoorClosed: false,
     isArchitect: false
 };
 
@@ -37,7 +37,7 @@ const isArchiveRoom = (roomId) => ARCHIVE_NODES.includes(roomId);
 
 function getUserTier() {
     if (!activeAvatar) return "VOID";
-    if (localPlayer.isArchitect) return "ARCHITECT";
+    if (localPlayer.isArchitect || (user && user.email === 'matthewcarltyson@gmail.com')) return "ARCHITECT";
     if (user && user.isAnonymous) return "GUEST";
     return "RESONANT";
 }
@@ -52,7 +52,8 @@ function shiftStratum(targetStratum) {
 
 function refreshCommandPrompt() {
     const roomShort = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
-    UI.updateCommandPrompt(getUserTier(), roomShort, activeTerminal, wizardState.active);
+    const wizardPlaceholder = wizardState.active ? (wizardState.type === 'login' ? '[ AWAITING EMAIL... ]' : '[ AWAITING INPUT... ]') : null;
+    UI.updateCommandPrompt(getUserTier(), roomShort, activeTerminal, wizardPlaceholder, activeAvatar);
 }
 
 function refreshStatusUI() {
@@ -250,6 +251,16 @@ async function executeMovement(targetDir) {
     
     if (currentRoom.exits && currentRoom.exits[targetDir]) {
         const exitData = currentRoom.exits[targetDir];
+
+        if (localPlayer.currentRoom === 'closet' && localPlayer.closetDoorClosed) {
+            if (targetDir === 'out') {
+                localPlayer.closetDoorClosed = false;
+                UI.addLog("[NARRATOR]: You push the heavy reinforced door open and step out.", "#888");
+            } else {
+                UI.addLog("[SYSTEM]: The door is closed. You cannot move.", "var(--term-amber)");
+                return;
+            }
+        }
         
         // CHECK FOR LOCKS
         if (typeof exitData === 'object' && exitData.locked) {
@@ -351,7 +362,7 @@ if (input) {
                         wizardState.step = 0;
                         wizardState.pendingData = {};
                         const currentRoom = apartmentMap[localPlayer.currentRoom];
-                        UI.updateCommandPrompt(getUserTier(), currentRoom.shortName || "LORE", activeTerminal, false);
+                        UI.updateCommandPrompt(user, activeAvatar, currentRoom.shortName || "LORE", activeTerminal);
                     }
                     return;
                 }
@@ -367,7 +378,7 @@ if (input) {
                             if (v) {
                                 UI.materializeEffect();
                                 UI.addLog("[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.", "var(--term-green)");
-                                UI.addLog("[TANDY]: Your form is anchored. You have weight now. Explore the Archive, but remember—your vessel is temporary until you 'resonate' at the terminal in the Lore room.");
+                                UI.addLog("[TANDY]: Your form is anchored. You have weight now. Explore the Archive, but remember—your vessel is temporary until you 'login' at the terminal in the Lore room.");
                                 refreshAllUI();
                             }
                         },
@@ -380,6 +391,14 @@ if (input) {
             }
         
         const cmd = val.toLowerCase();
+
+        if (cmd === 'logout') {
+            UI.addLog("[SYSTEM]: Severing connection to the Technate...", "var(--term-amber)");
+            signOut(auth).then(() => {
+                window.location.reload();
+            }).catch(err => UI.addLog(`[ERROR]: ${err.message}`, "var(--term-red)"));
+            return;
+        }
 
         if (cmd === 'architect') {
             localPlayer.isArchitect = !localPlayer.isArchitect;
@@ -395,10 +414,10 @@ if (input) {
             return;
         }
 
-        if (cmd === 'use terminal' || cmd === 'terminal') {
+        if (cmd.match(/^(use|access|hack)\s+(terminal|tandem|console)/)) {
             if (localPlayer.currentRoom === 'lore1') {
                 activeTerminal = true;
-                UI.addLog("[SYSTEM]: TANDEM INTERFACE ACTIVE. TYPE 'resonate' TO BIND SIGNATURE OR 'exit' TO DISCONNECT.", "var(--term-green)");
+                UI.addLog("[SYSTEM]: TANDEM INTERFACE ACTIVE. TYPE 'login' TO BIND SIGNATURE OR 'exit' TO DISCONNECT.", "var(--term-green)");
                 refreshAllUI();
                 return;
             }
@@ -427,24 +446,57 @@ if (input) {
         }
 
         if (cmd === 'login') {
-            if (localPlayer.currentRoom === 'lore1') {
-                activeTerminal = true;
-                wizardState.active = true;
-                wizardState.type = 'login';
-                wizardState.step = 1;
-                wizardState.pendingData = {};
+            UI.addLog("[SYSTEM]: You must access the Tandem Terminal in the Lore Room to login.", "var(--term-amber)");
+            return;
+        }
 
-                if (!activeAvatar) {
-                    UI.addLog("[TANDY]: I sense a returning signature. Enter your email to pull your vessel from the Archive.", "#b084e8");
-                } else {
-                    UI.addLog("[TANDY]: To anchor this vessel permanently, the Technate requires a frequency signature. An email address will do.", "#b084e8");
-                }
-
-                UI.setWizardPrompt("TANDEM@LOGIN:~$");
-                refreshAllUI();
+        if (cmd === 'list avatars' || cmd === 'avatars') {
+            if (localCharacters.length === 0) {
+                UI.addLog("[SYSTEM]: No persistent vessels found.", "var(--term-amber)");
                 return;
-            } else {
-                UI.addLog("[SYSTEM]: You must access the Tandem Terminal in the Lore Room to login.", "var(--term-amber)");
+            }
+            UI.addLog("[SYSTEM]: --- AVAILABLE VESSELS ---", "var(--term-green)");
+            localCharacters.forEach((char, index) => {
+                const isAct = activeAvatar && activeAvatar.id === char.id ? "(ACTIVE)" : "";
+                UI.addLog(`[${index + 1}] ${char.name} - ${char.archetype} ${isAct}`, "var(--term-green)");
+            });
+            UI.addLog("[SYSTEM]: Type 'swap avatar [number]' to change vessels.", "#888");
+            return;
+        }
+        if (cmd.startsWith('swap avatar ')) {
+            const num = parseInt(cmd.replace('swap avatar ', '').trim());
+            if (isNaN(num) || num < 1 || num > localCharacters.length) {
+                UI.addLog("[SYSTEM]: Invalid vessel designation.", "var(--term-red)");
+                return;
+            }
+            activeAvatar = localCharacters[num - 1];
+            UI.addLog(`[SYSTEM]: Consciousness transferred to ${activeAvatar.name}.`, "var(--term-green)");
+            refreshAllUI();
+            return;
+        }
+
+        if (cmd === 'close door' && localPlayer.currentRoom === 'closet') {
+            localPlayer.closetDoorClosed = true;
+            UI.addLog("[NARRATOR]: You pull the heavy door shut. The hum of the metal crate amplifies, vibrating in your teeth.", "#888");
+            return;
+        }
+        if (cmd === 'open door' && localPlayer.currentRoom === 'closet') {
+            localPlayer.closetDoorClosed = false;
+            UI.addLog("[NARRATOR]: You open the door, letting the stale air of the hallway back in.", "#888");
+            return;
+        }
+        if (cmd.match(/^(use|tune|activate)\s+(resonator|generator|machine|box)/)) {
+            if (localPlayer.currentRoom === 'closet') {
+                if (!localPlayer.closetDoorClosed) {
+                    UI.addLog("[SYSTEM]: The machine whirs to life, but its energy bleeds out the open door. The Schrödinger state cannot be achieved.", "var(--term-amber)");
+                    return;
+                }
+                UI.addLog("[SYSTEM]: RESONANCE ACHIEVED. QUANTUM STATE COLLAPSING...", "var(--term-green)");
+                UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Ethereal Plane.", "#888");
+
+                localPlayer.stratum = 'weave';
+                if (typeof UI.applyStratumTheme === 'function') UI.applyStratumTheme('weave');
+                refreshAllUI();
                 return;
             }
         }
