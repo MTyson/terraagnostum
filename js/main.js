@@ -3,8 +3,8 @@ import { doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, se
 
 // IMPORT DECOMPOSED DATA & SERVICES
 import { apartmentMap as initialMap } from './mapData.js';
-import { callGemini } from './apiService.js';
-import { triggerVisualUpdate, togglePinView, projectVisual } from './visualSystem.js';
+import { callGemini, projectVisual } from './apiService.js';
+import { triggerVisualUpdate, togglePinView } from './visualSystem.js';
 import { handleGMIntent } from './gmEngine.js';
 import { wizardState, handleWizardInput, startWizard } from './wizardSystem.js';
 import * as UI from './ui.js';
