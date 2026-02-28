@@ -103,7 +103,7 @@ Or is it: what is the nature of reality?
 In either case, it is consciousness which persists, and consciousness which must be addressed, directly.
 
 
-<img width="1373" height="323" alt="image" src="https://github.com/user-attachments/assets/4ba6fd9e-848e-47db-95b8-b9ad17559b21" />
+<img width="621" height="333" alt="image" src="https://github.com/user-attachments/assets/40c11d11-d804-46b6-962e-10fcaff29de0" />
 
 
 ---
