@@ -38,6 +38,8 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, apartment
     }
 }
 
+// TEST git
+
 export async function togglePinView(localPlayer, apartmentMap, user) {
     if (!user || user.isAnonymous) { 
         UI.addLog("[SYSTEM]: Identity verification required for reality anchoring.", "var(--term-red)");
