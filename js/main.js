@@ -3,8 +3,8 @@ import { doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, se
 
 // IMPORT DECOMPOSED DATA & SERVICES
 import { apartmentMap as initialMap } from './mapData.js';
-import { callGemini, projectVisual } from './apiService.js';
-import { triggerVisualUpdate, togglePinView } from './visualSystem.js';
+import { callGemini } from './apiService.js';
+import { triggerVisualUpdate, togglePinView, projectVisual } from './visualSystem.js';
 import { handleGMIntent } from './gmEngine.js';
 import { wizardState, handleWizardInput, startWizard } from './wizardSystem.js';
 import * as UI from './ui.js';
@@ -53,7 +53,7 @@ function shiftStratum(targetStratum) {
 function refreshCommandPrompt() {
     const roomShort = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
     const wizardPlaceholder = wizardState.active ? (wizardState.type === 'login' ? '[ AWAITING EMAIL... ]' : '[ AWAITING INPUT... ]') : null;
-    UI.updateCommandPrompt(getUserTier(), roomShort, activeTerminal, wizardPlaceholder, activeAvatar);
+    UI.updateCommandPrompt(getUserTier(), roomShort, typeof activeTerminal !== 'undefined' ? activeTerminal : false, wizardPlaceholder, activeAvatar);
 }
 
 function refreshStatusUI() {
@@ -215,6 +215,9 @@ async function loadUserCharacters() {
         if (localCharacters.length > 0) {
             UI.addLog(`[SYSTEM]: Retrieved ${localCharacters.length} saved avatar(s) from your private archive.`, "var(--term-green)");
         }
+        if (!activeAvatar && localCharacters.length > 0) {
+            activeAvatar = localCharacters[0];
+        }
         UI.updateAvatarUI(activeAvatar);
         refreshCommandPrompt();
     } catch (error) {
@@ -290,10 +293,6 @@ async function executeMovement(targetDir) {
         
         triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         
-        if (nextRoomKey === 'closet' && !localPlayer.hasGenerator) {
-            UI.addLog("[TANDY]: The box is rattling. Something is fighting to exist inside. 'Investigate' it.");
-        }
-
         if (isSyncEnabled && user) {
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
             updateDoc(roomRef, { manifestations: arrayUnion({ author: user.uid, text: `[${localPlayer.currentRoom}] User arrived from the ${targetDir}.`, timestamp: Date.now() }) });
@@ -333,60 +332,110 @@ if (input) {
             if (isProcessing) return;
             if (val) UI.addLog(val, "#ffffff");
             if (wizardState.active) { 
-                if (wizardState.type === 'login') {
-                    if (wizardState.step === 1) {
-                        const email = val.trim();
+                async function handleWizardInput(val) {
+                    let currentVal = val.trim();
+                
+                    // HANDLE LOGIN WIZARD
+                    if (wizardState.type === 'login') {
+                        const email = currentVal;
                         if (!email.includes('@')) {
-                            UI.addLog("[SYSTEM]: Invalid signature format.", "var(--term-red)");
+                            UI.addLog("[SYSTEM]: Invalid signature format. Login aborted.", "var(--term-red)");
+                            wizardState = { active: false, type: null, step: 0, pendingData: {} };
+                            refreshAllUI();
                             return;
                         }
                         
                         UI.addLog(`[SYSTEM]: Transmitting anchoring frequency to ${email}...`, "var(--term-amber)");
+                        const actionCodeSettings = { url: window.location.href, handleCodeInApp: true };
                         
-                        const actionCodeSettings = {
-                            url: window.location.href,
-                            handleCodeInApp: true
-                        };
-                        
-                        sendSignInLinkToEmail(auth, email, actionCodeSettings)
-                            .then(() => {
-                                window.localStorage.setItem('emailForSignIn', email);
-                                UI.addLog("[TANDY]: I've sent a pulse to your inbox. Click the link inside to fuse your signature with the Technate. You can close this terminal or wait here.", "#b084e8");
-                            })
-                            .catch((error) => {
-                                UI.addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
-                            });
+                        try {
+                            const { sendSignInLinkToEmail } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
+                            await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+                            window.localStorage.setItem('emailForSignIn', email);
+                            UI.addLog("[TANDY]: Pulse sent. Check your inbox to fuse your signature.", "#b084e8");
+                        } catch (error) {
+                            UI.addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)");
+                        }
                             
-                        wizardState.active = false;
-                        wizardState.type = null;
-                        wizardState.step = 0;
-                        wizardState.pendingData = {};
-                        const currentRoom = apartmentMap[localPlayer.currentRoom];
-                        UI.updateCommandPrompt(user, activeAvatar, currentRoom.shortName || "LORE", activeTerminal);
+                        wizardState = { active: false, type: null, step: 0, pendingData: {} };
+                        refreshAllUI();
+                        return;
                     }
-                    return;
-                }
-                handleWizardInput(
-                    val, 
-                    { apartmentMap, localPlayer, user, activeAvatar },
-                    { 
-                        refreshCommandPrompt, 
-                        refreshStatusUI, 
-                        refreshAllUI,
-                        setActiveAvatar: (v) => { 
-                            activeAvatar = v; 
-                            if (v) {
-                                UI.materializeEffect();
-                                UI.addLog("[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.", "var(--term-green)");
-                                UI.addLog("[TANDY]: Your form is anchored. You have weight now. Explore the Archive, but remember—your vessel is temporary until you 'login' at the terminal in the Lore room.");
-                                refreshAllUI();
+                
+                    // HANDLE AVATAR CREATION WIZARD
+                    if (wizardState.type === 'avatar') {
+                        if (wizardState.step === 1) {
+                            // STEP 1: NAME
+                            if (!currentVal) {
+                                UI.addLog("[SYSTEM]: Querying Archive for a forgotten designation...", "var(--term-amber)");
+                                try {
+                                    const aiResponse = await callGemini("Generate a single, cool cyberpunk character name. Only return the name.");
+                                    currentVal = aiResponse.trim();
+                                } catch (e) { currentVal = "Unknown Entity"; }
+                                UI.addLog(`[ARCHIVE]: Suggesting name: ${currentVal}`, "#b084e8");
                             }
-                        },
-                        addLocalCharacter: (c) => { localCharacters.push(c); },
-                        setIsProcessing: (v) => { isProcessing = v; },
-                        isArchiveRoom
+                            wizardState.pendingData.name = currentVal;
+                            UI.addLog(`[WIZARD]: Identity confirmed: '${currentVal}'. Enter Archetype or press ENTER for suggestion:`, "var(--term-amber)");
+                            wizardState.step++;
+                        } 
+                        else if (wizardState.step === 2) {
+                            // STEP 2: ARCHETYPE
+                            if (!currentVal) {
+                                UI.addLog("[SYSTEM]: Querying Archive for functional archetype...", "var(--term-amber)");
+                                try {
+                                    const aiResponse = await callGemini(`Suggest a unique cyberpunk archetype for ${wizardState.pendingData.name}. (e.g. Neon-Ghost). Return 1-2 words only.`);
+                                    currentVal = aiResponse.replace(/["']/g, '').trim();
+                                } catch (e) { currentVal = "Wanderer"; }
+                                UI.addLog(`[ARCHIVE]: Suggesting archetype: ${currentVal}`, "#b084e8");
+                            }
+                            wizardState.pendingData.archetype = currentVal;
+                            UI.addLog(`[WIZARD]: Archetype logged. Press ENTER for an AI visual imprint or describe your look:`, "var(--term-amber)");
+                            wizardState.step++;
+                        } 
+                        else if (wizardState.step === 3) {
+                            // STEP 3: VISUALS & FINALIZATION
+                            if (!currentVal) {
+                                UI.addLog("[SYSTEM]: Extrapolating visual imprint from Archive data...", "var(--term-amber)");
+                                try {
+                                    currentVal = await callGemini(`Write a 1-sentence cinematic visual description of ${wizardState.pendingData.name}, a ${wizardState.pendingData.archetype} in a cyberpunk world.`);
+                                } catch (e) { currentVal = "A shadowed cyberpunk figure."; }
+                                UI.addLog(`[ARCHIVE]: Visual imprint generated.`, "#b084e8");
+                            }
+                            
+                            wizardState.pendingData.visual_prompt = currentVal;
+                            UI.addLog(`[SYSTEM]: Collapsing quantum state... Rendering vessel...`, "var(--gm-purple)");
+                            
+                            let generatedImage = null;
+                            try {
+                                // Ensure projectVisual is correctly imported from apiService.js
+                                generatedImage = await projectVisual(wizardState.pendingData.visual_prompt);
+                            } catch (e) { console.error("Img Gen Error:", e); }
+                            
+                            const finalData = {
+                                name: wizardState.pendingData.name,
+                                archetype: wizardState.pendingData.archetype,
+                                visual_prompt: wizardState.pendingData.visual_prompt,
+                                image: generatedImage,
+                                stats: { WILL: 20, CONS: 20, PHYS: 20 },
+                                deceased: false, deployed: false, timestamp: Date.now()
+                            };
+                
+                            const { addDoc, collection } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                            const docRef = await addDoc(collection(db, 'artifacts', appId, 'users', auth.currentUser.uid, 'characters'), finalData);
+                            
+                            // Set as active
+                            activeAvatar = { id: docRef.id, ...finalData };
+                            localCharacters.push(activeAvatar);
+                            
+                            if (typeof UI.materializeEffect === 'function') UI.materializeEffect(); 
+                            UI.addLog(`[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.`, "var(--term-green)");
+                            wizardState = { active: false, type: null, step: 0, pendingData: {} };
+                            refreshAllUI();
+                        }
+                        return;
                     }
-                ); 
+                }
+                handleWizardInput(val);
                 return; 
             }
         
@@ -394,15 +443,15 @@ if (input) {
 
         if (cmd === 'logout') {
             UI.addLog("[SYSTEM]: Severing connection to the Technate...", "var(--term-amber)");
-            signOut(auth).then(() => {
-                window.location.reload();
-            }).catch(err => UI.addLog(`[ERROR]: ${err.message}`, "var(--term-red)"));
+            import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js").then(({ signOut }) => {
+                signOut(auth).then(() => window.location.reload());
+            });
             return;
         }
-
+    
         if (cmd === 'architect') {
             localPlayer.isArchitect = !localPlayer.isArchitect;
-            UI.addLog(`[SYSTEM]: Architect mode ${localPlayer.isArchitect ? 'ENABLED' : 'DISABLED'}.`, "var(--term-amber)");
+            UI.addLog(`[SYSTEM]: Architect flag: ${localPlayer.isArchitect ? 'ENABLED' : 'DISABLED'}`, "var(--term-amber)");
             refreshAllUI();
             return;
         }
@@ -431,12 +480,21 @@ if (input) {
                 return;
             }
             if (cmd === 'login') {
+                if (getUserTier() === "ENTITY" || getUserTier() === "ARCHITECT") {
+                    UI.addLog("[SYSTEM]: You are already bound to the Technate.", "var(--term-amber)");
+                    return;
+                }
                 wizardState.active = true;
                 wizardState.type = 'login';
                 wizardState.step = 1;
                 wizardState.pendingData = {};
-                UI.addLog("[TANDY]: To anchor this vessel permanently, the Technate requires a frequency signature. An email address will do.", "#b084e8");
-                UI.setWizardPrompt("TANDEM@LOGIN:~$");
+                if (localPlayer.currentRoom === 'lore1') {
+                    activeTerminal = true;
+                    UI.addLog("[TANDY]: To anchor this vessel permanently, the Technate requires a frequency signature. An email address will do.", "#b084e8");
+                } else {
+                    UI.addLog("[SYSTEM]: INITIATING REMOTE LOGIN. Enter your email address:", "var(--term-green)");
+                }
+                refreshAllUI();
                 return;
             }
 
@@ -446,7 +504,18 @@ if (input) {
         }
 
         if (cmd === 'login') {
-            UI.addLog("[SYSTEM]: You must access the Tandem Terminal in the Lore Room to login.", "var(--term-amber)");
+            if (getUserTier() === "ENTITY" || getUserTier() === "ARCHITECT") {
+                UI.addLog("[SYSTEM]: You are already bound to the Technate.", "var(--term-amber)");
+                return;
+            }
+            wizardState = { active: true, type: 'login', step: 1, pendingData: {} };
+            if (localPlayer.currentRoom === 'lore1') {
+                activeTerminal = true;
+                UI.addLog("[TANDY]: To anchor this vessel permanently, the Technate requires a frequency signature. An email address will do.", "#b084e8");
+            } else {
+                UI.addLog("[SYSTEM]: INITIATING REMOTE LOGIN. Enter your email address:", "var(--term-green)");
+            }
+            refreshAllUI();
             return;
         }
 
@@ -475,27 +544,39 @@ if (input) {
             return;
         }
 
-        if (cmd === 'close door' && localPlayer.currentRoom === 'closet') {
-            localPlayer.closetDoorClosed = true;
-            UI.addLog("[NARRATOR]: You pull the heavy door shut. The hum of the metal crate amplifies, vibrating in your teeth.", "#888");
-            return;
-        }
-        if (cmd === 'open door' && localPlayer.currentRoom === 'closet') {
-            localPlayer.closetDoorClosed = false;
-            UI.addLog("[NARRATOR]: You open the door, letting the stale air of the hallway back in.", "#888");
-            return;
-        }
-        if (cmd.match(/^(use|tune|activate)\s+(resonator|generator|machine|box)/)) {
-            if (localPlayer.currentRoom === 'closet') {
+        if (localPlayer.currentRoom === 'closet') {
+            if (cmd === 'investigate') {
+                UI.addLog("[NARRATOR]: A heavy, metallic crate hums in the center of the room. It is hardwired into the floor and radiates a low-frequency pulse.", "#888");
+                if (!localPlayer.closetDoorClosed) {
+                    UI.addLog("[TANDY]: The energy is bleeding out into the hallway. You'll need to 'close the door' to isolate the quantum field.", "#b084e8");
+                } else {
+                    UI.addLog("[TANDY]: The field is isolated. You can 'turn on the machine' now.", "#b084e8");
+                }
+                return;
+            }
+            if (cmd === 'close door' || cmd === 'shut door') {
+                localPlayer.closetDoorClosed = true;
+                UI.addLog("[NARRATOR]: You pull the heavy door shut. The hum of the metal crate amplifies, vibrating in your teeth.", "#888");
+                return;
+            }
+            if (cmd === 'open door') {
+                localPlayer.closetDoorClosed = false;
+                UI.addLog("[NARRATOR]: You open the door, letting the stale air of the hallway back in.", "#888");
+                return;
+            }
+            if (cmd.match(/^(use|tune|activate|turn on)\s+(resonator|generator|machine|box)/)) {
                 if (!localPlayer.closetDoorClosed) {
                     UI.addLog("[SYSTEM]: The machine whirs to life, but its energy bleeds out the open door. The Schrödinger state cannot be achieved.", "var(--term-amber)");
                     return;
                 }
                 UI.addLog("[SYSTEM]: RESONANCE ACHIEVED. QUANTUM STATE COLLAPSING...", "var(--term-green)");
-                UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Ethereal Plane.", "#888");
 
                 localPlayer.stratum = 'weave';
                 if (typeof UI.applyStratumTheme === 'function') UI.applyStratumTheme('weave');
+
+                const currentRoom = apartmentMap[localPlayer.currentRoom];
+                UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Ethereal Plane.", "#888");
+                UI.printRoomDescription(currentRoom, true, apartmentMap, activeAvatar);
                 refreshAllUI();
                 return;
             }
@@ -787,23 +868,6 @@ if (input) {
                     UI.updateInventoryUI(localPlayer.inventory); 
                     UI.updateRoomItemsUI(room.items);
                     UI.addLog(`Picked up [${item.name}].`, "var(--term-green)");
-                }
-                return;
-            } else if (cmd === 'investigate') {
-                if (localPlayer.currentRoom === 'closet') {
-                    if (!localPlayer.hasGenerator) {
-                        UI.addLog("[NARRATOR]: You reach into the vibrating metal crate. The air crackles against your skin.");
-                        UI.addLog("[SYSTEM]: ACQUIRED [1x Hacked Schumman Resonance Generator]. Added to inventory.", "var(--term-green)");
-                        localPlayer.hasGenerator = true;
-                        UI.flashInventory();
-                        localPlayer.inventory.push({ name: "Hacked Schumman Resonance Generator", type: "Key Item", description: "A device tuned to the earth's heartbeat." });
-                        refreshAllUI();
-                        UI.addLog("[TANDY]: This is the key. It matches the earth's heartbeat, but it's been tuned for the Technate. Go to the Tandem Terminal in the Lore Room. We can use this to 'Resonate' your soul.");
-                    } else {
-                        UI.addLog("[TANDY]: Nothing but ozone left here.");
-                    }
-                } else {
-                    UI.addLog("[SYSTEM]: Nothing to investigate here.", "var(--term-amber)");
                 }
                 return;
             } else if (cmd === 'inv' || cmd === 'inventory') {
