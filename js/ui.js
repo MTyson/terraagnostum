@@ -233,7 +233,26 @@ export function renderMapHUD(apartmentMap, currentRoomKey, stratum) {
     existingZones.forEach(zone => zone.remove());
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    if (stratum === 'faen') return;
+    if (stratum === 'astral' || stratum === 'faen') {
+        // DRAW STATIC
+        const imageData = ctx.createImageData(canvas.width, canvas.height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            const val = Math.random() * 255;
+            data[i] = val;     // R
+            data[i + 1] = val; // G
+            data[i + 2] = val; // B
+            data[i + 3] = 50;  // A (semi-transparent)
+        }
+        ctx.putImageData(imageData, 0, 0);
+        
+        ctx.fillStyle = "var(--term-green)";
+        ctx.font = "bold 12px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("SIGNAL LOST", canvas.width / 2, canvas.height / 2);
+        ctx.fillText("ASTRAL INTERFERENCE", canvas.width / 2, canvas.height / 2 + 15);
+        return;
+    }
 
     const computedStyle = getComputedStyle(document.body);
     const termGreen = computedStyle.getPropertyValue('--term-green').trim() || '#00ff41';

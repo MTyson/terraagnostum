@@ -46,7 +46,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     
     // Unpack the state passed from main.js
     const { apartmentMap, localPlayer, user, activeAvatar } = context;
-    const { refreshAllUI, updateMapListener, setActiveAvatar, addLocalCharacter } = callbacks;
+    const { refreshAllUI, updateMapListener, setActiveAvatar, addLocalCharacter, shiftStratum } = callbacks;
 
     const endWizard = () => {
         resetWizard();
@@ -330,15 +330,18 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 if (response.success) {
                     UI.addLog(`[SYSTEM]: ANOMALY RESOLVED. REWARD DISTRIBUTED.`, "var(--term-green)");
                     localPlayer.inventory.push({ 
-                        name: "Resonance Key", 
+                        name: "Resonant Key", 
                         type: "Key Item", 
                         description: "A fractal shard of crystallized Meaning. It hums with the frequency of the front door." 
                     });
-                    UI.addLog(`[TANDY]: You did it. You synthesized a Resonance Key. Now get to the kitchen and use it to open the front door.`, "#b084e8");
+                    UI.addLog(`[TANDY]: You did it. You synthesized a Resonant Key. Returning you to mundane reality now. Go to the front door in the hallway and use the key to exit.`, "#b084e8");
                 } else {
                     UI.addLog(`[SYSTEM]: ANOMALY UNRESOLVED. YOU WERE EJECTED FROM THE ASTRAL PLANE.`, "var(--term-red)");
                     UI.addLog(`[TANDY]: That was close. The field collapsed. You'll need to tune the generator and try again when you're ready.`, "#b084e8");
                 }
+                
+                // Return to Mundane Stratum
+                if (shiftStratum) shiftStratum('mundane');
                 
                 // Update the inventory UI
                 if (refreshAllUI) refreshAllUI();

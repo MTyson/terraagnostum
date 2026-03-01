@@ -250,6 +250,21 @@ async function executeMovement(targetDir) {
 
         const nextRoomKey = typeof exitData === 'string' ? exitData : exitData.target;
         
+        // --- QUEST LOCK: FRONT DOOR ---
+        if (localPlayer.currentRoom === 'hallway' && targetDir === 'south' && nextRoomKey === 'outside') {
+            const keyIdx = localPlayer.inventory.findIndex(i => i.name === "Resonant Key");
+            if (keyIdx === -1) {
+                UI.addLog("[BLOCKED]: The front door is locked with a quantum seal. It requires a 'Resonant Key' to open.", "var(--term-amber)");
+                UI.addLog("[TANDY]: You'll need to go to the closet and tune the generator to the Astral Plane to synthesize a key.", "#b084e8");
+                return;
+            } else {
+                UI.addLog("[SUCCESS]: You press the Resonant Key against the seal. It vibrates, then dissolves into light as the door unlatches.", "var(--term-green)");
+                localPlayer.inventory.splice(keyIdx, 1);
+                UI.updateInventoryUI(localPlayer.inventory);
+                savePlayerState();
+            }
+        }
+
         const tier = getUserTier();
         if ((tier === "VOID" || tier === "GUEST") && !isArchiveRoom(nextRoomKey)) {
             UI.addLog(`[TANDY]: You cannot leave the Archive yet. Your vessel will evaporate. Go to the Tandem Terminal in the Lore Room and type 'login'.`, "#b084e8");
@@ -416,9 +431,16 @@ async function handleCommand(val) {
             UI.addLog("[SYSTEM]: RESONANCE ACHIEVED. QUANTUM STATE COLLAPSING...", "var(--term-green)");
             shiftStratum('astral');
             
+            startWizard('tutorial_cyoa');
+            UI.setWizardPrompt("ASTRAL@CYOA:~$");
+
             const currentRoom = apartmentMap[localPlayer.currentRoom];
             UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Astral Plane.", "#888");
+            UI.addLog("[TANDY]: You're in. The Astral Plane is a reflection of your intent. To gain the Resonant Key and escape the apartment, you must first stabilize this pocket of reality.", "#b084e8");
+            UI.addLog("[WIZARD]: The space around you is a swirl of neon static and half-formed memories. A fragmented entity blocks your path. What do you do?", "var(--term-amber)");
+            
             UI.printRoomDescription(currentRoom, true, apartmentMap, activeAvatar);
+            triggerVisualUpdate("Strange non-euclidean geometries, swirling lightforms of neon purple and gold, a mind-bending cosmic nexus where reality dissolves into abstract patterns.", localPlayer, apartmentMap, user);
             refreshAllUI();
             return;
         }
@@ -756,6 +778,7 @@ if (input) {
                     { 
                         refreshAllUI, 
                         updateMapListener, 
+                        shiftStratum,
                         setActiveAvatar: (v) => { activeAvatar = v; }, 
                         addLocalCharacter: (c) => { localCharacters.push(c); } 
                     }
