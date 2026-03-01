@@ -36,7 +36,7 @@ Generative Visual Projections: The terminal doesn't just describe reality; it pr
 
 *The Torlight at Corovon*
 
-[ SYSTEM CAPABILITIES ]
+## [ SYSTEM CAPABILITIES ]
 
 AI-Mediated Reality (TANDEM aka Tandy): A dynamic, LLM-powered Game Master persona that evaluates user intent, generates real-time narrative responses, and enforces the physical and metaphysical laws of the render.
 
@@ -46,7 +46,7 @@ Multi-Vector Sync: Real-time, multiplayer state synchronization. When you alter 
 
 Somatic Glitch Engine: Push too much "Amn" (meaning) into the render, and the system will push back. High-stakes actions run the risk of desaturating the user's environment or triggering localized narrative loops.
 
-[ ARCHITECTURE ]
+## [ ARCHITECTURE ]
 
 The terminal is built to be lightweight, resilient, and highly decentralized to avoid detection by the Technate.
 
@@ -58,7 +58,7 @@ State Sync (The "Amniosis Fluids"): Firebase (Firestore & Auth)
 
 Cognitive Engine (The "Ghost Filter"): Gemini 2.5 Flash Lite (Narrative) & Gemini 2.0 Flash Exp (Visuals)
 
-[ INITIALIZING THE NODE ]
+## [ INITIALIZING THE NODE ]
 
 To establish a local instance of the Terminal, execute the following directives in your command line:
 
@@ -85,7 +85,7 @@ vercel dev
 
 The Node will materialize at http://localhost:3000.
 
-[ PHILOSOPHICAL FOUNDATIONS ]
+## [ PHILOSOPHICAL FOUNDATIONS ]
 
 "O Rama, whatever you do, know that it is nothing but pure consciousness."
 
@@ -114,4 +114,4 @@ But lest we wander too far, let us just say that the absolute reality and the re
 
 <img width="621" height="333" alt="image" src="https://github.com/user-attachments/assets/40c11d11-d804-46b6-962e-10fcaff29de0" />
 
-Developed By: MINDFRAME GAMES ⬡
+*[MINDFRAME GAMES ⬡](https://www.mindframegames.com)*
