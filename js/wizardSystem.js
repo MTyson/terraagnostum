@@ -353,6 +353,52 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         return;
     }
 
+    // === 5. ASTRAL VOYAGE WIZARD (Procedural Map Generation) ===
+    if (wizardState.type === 'astral_voyage') {
+        if (!currentVal) return;
+        const dir = wizardState.pendingData.direction;
+        const fromId = wizardState.pendingData.fromId;
+
+        UI.addLog(`[SYSTEM]: Committing your vision to the Astral Plane...`, "var(--gm-purple)");
+        
+        try {
+            const prompt = `The player is navigating the Astral Plane. They move ${dir.toUpperCase()} and describe seeing: "${currentVal}". 
+            Generate a thematic room definition based on this vision. 
+            Respond STRICTLY in JSON: {"name": "Evocative Name", "description": "Atmospheric narrative description", "visual_prompt": "Detailed prompt for image generation"}`;
+            
+            const res = await callGemini("Generate Astral Room", prompt);
+            if (res && res.name) {
+                const newRoomId = 'astral_' + Date.now();
+                const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
+                
+                apartmentMap[newRoomId] = {
+                    name: res.name,
+                    shortName: res.name.substring(0, 7).toUpperCase(),
+                    description: res.description,
+                    visualPrompt: res.visual_prompt,
+                    exits: { [getOpposite(dir)]: fromId },
+                    items: [], marginalia: [], npcs: []
+                };
+                
+                apartmentMap[fromId].exits = apartmentMap[fromId].exits || {};
+                apartmentMap[fromId].exits[dir] = newRoomId;
+
+                localPlayer.currentRoom = newRoomId;
+                UI.addLog(`[SYSTEM]: Sector successfully manifested.`, "var(--term-green)");
+                UI.printRoomDescription(apartmentMap[newRoomId], true, apartmentMap, activeAvatar);
+                
+                // Trigger visual update
+                const { triggerVisualUpdate } = await import('./visualSystem.js');
+                triggerVisualUpdate(res.visual_prompt, localPlayer, apartmentMap, user);
+            }
+        } catch(e) { 
+            UI.addLog("[SYSTEM ERROR]: Astral manifestation failed. Reality collapsed back to nexus.", "var(--term-red)");
+            console.error(e);
+        }
+        endWizard();
+        return;
+    }
+
     // Fallback cancel
     UI.addLog("[WIZARD]: Protocol terminated.", "var(--term-amber)");
     endWizard();

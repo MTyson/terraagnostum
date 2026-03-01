@@ -14,6 +14,7 @@ import { app, auth, db, storage, isSyncEnabled, appId } from './firebaseConfig.j
 const CHAR_COLLECTION = 'v3_characters'; // Bypasses the 1MB corrupted data
 
 let apartmentMap = { ...initialMap };
+let astralMap = {}; // Separate graph for procedural Astral Plane
 let activeTerminal = false;
 
 // Player State
@@ -45,21 +46,27 @@ function getUserTier() {
 }
 
 // --- HELPER WRAPPERS ---
+function getActiveMap() {
+    return (localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
+}
+
 function shiftStratum(targetStratum) {
     const isTransitioningToFaen = targetStratum === 'faen' && localPlayer.stratum !== 'faen';
     UI.applyStratumTheme(targetStratum, isTransitioningToFaen);
     localPlayer.stratum = targetStratum;
-    UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
+    UI.renderMapHUD(getActiveMap(), localPlayer.currentRoom, localPlayer.stratum);
 }
 
 function refreshCommandPrompt() {
-    const roomShort = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
+    const activeMap = getActiveMap();
+    const roomShort = activeMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
     const wizardPlaceholder = wizardState.active ? (wizardState.type === 'login' ? '[ AWAITING EMAIL... ]' : '[ AWAITING INPUT... ]') : null;
     UI.updateCommandPrompt(getUserTier(), roomShort, typeof activeTerminal !== 'undefined' ? activeTerminal : false, wizardPlaceholder, activeAvatar);
 }
 
 function refreshStatusUI() {
-    const roomShort = apartmentMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
+    const activeMap = getActiveMap();
+    const roomShort = activeMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
     UI.updateStatusUI(localPlayer.posture, roomShort);
 }
 
@@ -69,13 +76,15 @@ function refreshAllUI() {
     } else {
         document.body.classList.remove('void-mode');
     }
+    const activeMap = getActiveMap();
+    
     refreshCommandPrompt();
     refreshStatusUI();
     UI.updateAvatarUI(activeAvatar);
     UI.updateInventoryUI(localPlayer.inventory);
-    UI.updateRoomItemsUI(apartmentMap[localPlayer.currentRoom]?.items);
-    UI.updateRoomEntitiesUI(apartmentMap[localPlayer.currentRoom]?.npcs);
-    UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
+    UI.updateRoomItemsUI(activeMap[localPlayer.currentRoom]?.items);
+    UI.updateRoomEntitiesUI(activeMap[localPlayer.currentRoom]?.npcs);
+    UI.renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
 }
 
 // --- AUTHENTICATION & SYNC ---
@@ -215,28 +224,37 @@ async function loadUserCharacters() {
 
 const pinBtnEl = document.getElementById('pin-view-btn');
 if (pinBtnEl) {
-    pinBtnEl.addEventListener('click', () => togglePinView(localPlayer, apartmentMap, user));
+    pinBtnEl.addEventListener('click', () => togglePinView(localPlayer, getActiveMap(), user));
 }
 
 // --- NARRATIVE MOVEMENT ENGINE ---
 async function executeMovement(targetDir) {
-    const currentRoom = apartmentMap[localPlayer.currentRoom];
+    const activeMap = getActiveMap();
+    const currentRoom = activeMap[localPlayer.currentRoom];
     if (!currentRoom) { console.warn('Movement: Current room not found'); return; }
     if (localPlayer.stratum === 'astral') {
-        const nextId = 'astral_' + Date.now();
-        apartmentMap[nextId] = {
-            name: "Procedural Astral Pocket", shortName: "ASTRAL",
-            description: "A surreal, ever-shifting landscape of translucent light and geometric fractals. Directions have no meaning here.",
-            visualPrompt: "Abstract astral (ethereal) plane, glowing cyan and pink geometric structures, floating light particles.",
-            exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
-        };
-        localPlayer.currentRoom = nextId;
-        savePlayerState(); 
-        refreshAllUI();
+        const currentMap = (localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
+        const currentRoom = currentMap[localPlayer.currentRoom];
         
-        UI.addLog(`[SYSTEM]: You traverse the astral currents to a new pocket of the Astral Plane.`, "var(--term-green)");
-        UI.printRoomDescription(apartmentMap[nextId], true, apartmentMap, activeAvatar);
-        triggerVisualUpdate(null, localPlayer, apartmentMap, user);
+        if (currentRoom.exits && currentRoom.exits[targetDir]) {
+            const nextId = typeof currentRoom.exits[targetDir] === 'string' ? currentRoom.exits[targetDir] : currentRoom.exits[targetDir].target;
+            const nextRoom = astralMap[nextId];
+            if (nextRoom) {
+                localPlayer.currentRoom = nextId;
+                savePlayerState();
+                refreshAllUI();
+                UI.addLog(`[SYSTEM]: You traverse the astral currents to ${nextRoom.name}.`, "var(--term-green)");
+                UI.printRoomDescription(nextRoom, true, astralMap, activeAvatar);
+                triggerVisualUpdate(null, localPlayer, astralMap, user);
+                return;
+            }
+        }
+
+        // No exit exists yet, start the generation sequence
+        startWizard('astral_voyage', { direction: targetDir, fromId: localPlayer.currentRoom });
+        UI.setWizardPrompt("ASTRAL@VOYAGE:~$");
+        UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()} into the kaleidoscopic void.`, "var(--term-green)");
+        UI.addLog(`[WIZARD]: As the colors shift and reality warps, what do you see manifesting before you? (Describe the next sector)`, "var(--term-amber)");
         return;
     }
     
@@ -271,7 +289,7 @@ async function executeMovement(targetDir) {
             return;
         }
 
-        const nextRoom = apartmentMap[nextRoomKey];
+        const nextRoom = activeMap[nextRoomKey];
         if (!nextRoom) { UI.addLog('[ERROR]: Reality sector missing.'); return; }
 
         localPlayer.currentRoom = nextRoomKey;
@@ -279,9 +297,9 @@ async function executeMovement(targetDir) {
         refreshAllUI();
         
         UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
-        UI.printRoomDescription(nextRoom, false, apartmentMap, activeAvatar);
+        UI.printRoomDescription(nextRoom, localPlayer.stratum === 'astral', activeMap, activeAvatar);
         updateMapListener(); 
-        triggerVisualUpdate(null, localPlayer, apartmentMap, user);
+        triggerVisualUpdate(null, localPlayer, activeMap, user);
         
         if (isSyncEnabled && user) {
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
@@ -431,16 +449,27 @@ async function handleCommand(val) {
             UI.addLog("[SYSTEM]: RESONANCE ACHIEVED. QUANTUM STATE COLLAPSING...", "var(--term-green)");
             shiftStratum('astral');
             
-            startWizard('tutorial_cyoa');
-            UI.setWizardPrompt("ASTRAL@CYOA:~$");
+            // Initialize Astral Map
+            const entryId = 'astral_entry';
+            astralMap[entryId] = {
+                name: "Astral Nexus", shortName: "NEXUS",
+                description: "A mind-bending cosmic nexus where reality dissolves into abstract patterns. The space is a swirl of neon static and half-formed memories.",
+                visualPrompt: "Strange non-euclidean geometries, swirling lightforms of neon purple and gold, a mind-bending cosmic nexus.",
+                exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
+            };
+            localPlayer.currentRoom = entryId;
 
-            const currentRoom = apartmentMap[localPlayer.currentRoom];
             UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Astral Plane.", "#888");
-            UI.addLog("[TANDY]: You're in. The Astral Plane is a reflection of your intent. To gain the Resonant Key and escape the apartment, you must first stabilize this pocket of reality.", "#b084e8");
-            UI.addLog("[WIZARD]: The space around you is a swirl of neon static and half-formed memories. A fragmented entity blocks your path. What do you do?", "var(--term-amber)");
+            UI.addLog("[TANDY]: You're in. The Astral Plane is a reflection of your intent. To escape the apartment, you must find a way to synthesize a Resonant Key here.", "#b084e8");
             
-            UI.printRoomDescription(currentRoom, true, apartmentMap, activeAvatar);
-            triggerVisualUpdate("Strange non-euclidean geometries, swirling lightforms of neon purple and gold, a mind-bending cosmic nexus where reality dissolves into abstract patterns.", localPlayer, apartmentMap, user);
+            // Let the AI take initiative
+            handleGMIntent("Describe the strange astral nexus and present an initial challenge to gain the Resonant Key.", 
+                { apartmentMap: astralMap, localPlayer, user, activeAvatar, isSyncEnabled, db, appId },
+                { shiftStratum, savePlayerState, refreshStatusUI, renderMapHUD: UI.renderMapHUD, setActiveAvatar: (v) => { activeAvatar = v; } }
+            );
+
+            UI.printRoomDescription(astralMap[entryId], true, astralMap, activeAvatar);
+            triggerVisualUpdate(astralMap[entryId].visualPrompt, localPlayer, astralMap, user);
             refreshAllUI();
             return;
         }
@@ -647,34 +676,35 @@ async function handleCommand(val) {
         return;
     } else if (cmd === 'generate room' || cmd === 'render sector') {
         if (!activeAvatar) { UI.addLog("[SYSTEM]: Only materialized beings can command the loom of reality.", "var(--term-red)"); return; }
-        const currentRoom = apartmentMap[localPlayer.currentRoom];
+        const activeMap = getActiveMap();
+        const currentRoom = activeMap[localPlayer.currentRoom];
         isProcessing = true;
         UI.addLog(`<span id="thinking-indicator" class="italic" style="color: var(--gm-purple)">COLLAPSING PROBABILITY FIELDS...</span>`);
         try {
             const sysPrompt = `You are the Architect of Terra Agnostum. Generate a thematic room definition based on the current stratum: ${localPlayer.stratum.toUpperCase()}. The current context is: ${currentRoom.name} - ${currentRoom.description}. Respond STRICTLY in JSON: {"name": "Evocative Name", "description": "Atmospheric narrative description", "visual_prompt": "Detailed prompt for image generation"}`;
             const res = await callGemini("Generate a full room definition.", sysPrompt);
             if (res && res.name && res.description) {
-                apartmentMap[localPlayer.currentRoom].name = res.name;
-                apartmentMap[localPlayer.currentRoom].shortName = res.name.substring(0, 7).toUpperCase();
-                apartmentMap[localPlayer.currentRoom].description = res.description;
-                apartmentMap[localPlayer.currentRoom].visualPrompt = res.visual_prompt;
-                apartmentMap[localPlayer.currentRoom].pinnedView = null; 
+                currentRoom.name = res.name;
+                currentRoom.shortName = res.name.substring(0, 7).toUpperCase();
+                currentRoom.description = res.description;
+                currentRoom.visualPrompt = res.visual_prompt;
+                currentRoom.pinnedView = null; 
                 
-                if (isSyncEnabled) {
+                if (isSyncEnabled && !localPlayer.currentRoom.startsWith('astral_')) {
                     const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
                     await updateDoc(mapRef, {
                         [`nodes.${localPlayer.currentRoom}.name`]: res.name,
-                        [`nodes.${localPlayer.currentRoom}.shortName`]: apartmentMap[localPlayer.currentRoom].shortName,
+                        [`nodes.${localPlayer.currentRoom}.shortName`]: currentRoom.shortName,
                         [`nodes.${localPlayer.currentRoom}.description`]: res.description,
                         [`nodes.${localPlayer.currentRoom}.visualPrompt`]: res.visual_prompt,
                         [`nodes.${localPlayer.currentRoom}.pinnedView`]: null
                     });
                 }
                 UI.addLog(`[SYSTEM]: Sector successfully rendered.`, "var(--term-green)");
-                UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap, activeAvatar);
-                triggerVisualUpdate(res.visual_prompt, localPlayer, apartmentMap, user);
+                UI.printRoomDescription(currentRoom, localPlayer.stratum === 'astral', activeMap, activeAvatar);
+                triggerVisualUpdate(res.visual_prompt, localPlayer, activeMap, user);
                 refreshStatusUI();
-                UI.renderMapHUD(apartmentMap, localPlayer.currentRoom, localPlayer.stratum);
+                UI.renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
             }
         } catch (err) {
             UI.addLog("[SYSTEM ERROR]: Reality collapse failed.", "var(--term-red)");
@@ -684,16 +714,19 @@ async function handleCommand(val) {
         }
         return;
     } else if (cmd === 'pin' || cmd === 'pin view') {
-        if (!apartmentMap[localPlayer.currentRoom].pinnedView) togglePinView(localPlayer, apartmentMap, user);
+        const activeMap = getActiveMap();
+        if (!activeMap[localPlayer.currentRoom].pinnedView) togglePinView(localPlayer, activeMap, user);
         else UI.addLog("[SYSTEM]: View is already pinned. Use 'unpin' to clear.", "var(--term-amber)");
         return;
     } else if (cmd === 'unpin' || cmd === 'unpin view') {
-        if (apartmentMap[localPlayer.currentRoom].pinnedView) togglePinView(localPlayer, apartmentMap, user);
+        const activeMap = getActiveMap();
+        if (activeMap[localPlayer.currentRoom].pinnedView) togglePinView(localPlayer, activeMap, user);
         else UI.addLog("[SYSTEM]: View is not pinned.", "var(--term-amber)");
         return;
     } else if (cmd === 'look' || cmd === 'l') {
-        UI.printRoomDescription(apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'faen', apartmentMap, activeAvatar); 
-        triggerVisualUpdate(null, localPlayer, apartmentMap, user); return;
+        const activeMap = getActiveMap();
+        UI.printRoomDescription(activeMap[localPlayer.currentRoom], localPlayer.stratum === 'astral', activeMap, activeAvatar); 
+        triggerVisualUpdate(null, localPlayer, activeMap, user); return;
     } else if (cmd === 'stat' || cmd === 'stats') {
         if (!activeAvatar) return;
         UI.addLog(`IDENTITY: ${activeAvatar.name} | CLASS: ${activeAvatar.archetype}`, "var(--term-green)");
@@ -703,12 +736,15 @@ async function handleCommand(val) {
         UI.addLog(`[SYSTEM]: Topology map live on HUD.`, "var(--term-green)"); return;
     } else if (cmd.startsWith('take ') || cmd.startsWith('get ') || cmd.startsWith('pick up ')) {
         const itemName = cmd.replace(/^(take|get|pick up)\s+/, '').toLowerCase();
-        const room = apartmentMap[localPlayer.currentRoom];
+        const activeMap = getActiveMap();
+        const room = activeMap[localPlayer.currentRoom];
         const itemIdx = (room.items || []).findIndex(i => i.name.toLowerCase().includes(itemName));
         if (itemIdx > -1) {
             const item = room.items.splice(itemIdx, 1)[0];
             localPlayer.inventory.push(item);
-            if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.items`]: arrayRemove(item) });
+            if (isSyncEnabled && !localPlayer.currentRoom.startsWith('astral_')) {
+                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.items`]: arrayRemove(item) });
+            }
             savePlayerState(); 
             UI.updateInventoryUI(localPlayer.inventory); 
             UI.updateRoomItemsUI(room.items);
@@ -726,10 +762,11 @@ async function handleCommand(val) {
 
     // --- THE UNIVERSAL GM INTENT ENGINE ---
     isProcessing = true;
+    const activeMap = (localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
     try {
         await handleGMIntent(
             val,
-            { apartmentMap, localPlayer, user, activeAvatar, isSyncEnabled, db, appId },
+            { apartmentMap: activeMap, localPlayer, user, activeAvatar, isSyncEnabled, db, appId },
             { 
                 shiftStratum, 
                 savePlayerState, 
@@ -773,8 +810,9 @@ if (input) {
             
             // CLEAN ROUTING: Hand state over to wizardSystem with callbacks!
             if (wizardState.active) { 
+                const activeMap = (localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
                 await handleWizardInput(val, 
-                    { apartmentMap, localPlayer, user, activeAvatar },
+                    { apartmentMap: activeMap, localPlayer, user, activeAvatar },
                     { 
                         refreshAllUI, 
                         updateMapListener, 

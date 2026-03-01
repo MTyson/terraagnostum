@@ -45,6 +45,13 @@ export async function handleGMIntent(
         Entities Present: ${npcText}. Inventory: ${inventoryNames}.
         Adjacent Entities (Visible through doorways/counters): ${adjacentNpcText}.
         Exits: ${exitText}.
+        
+        SPECIAL QUEST: If the user is in the ASTRAL stratum, they are on a quest to obtain a 'Resonant Key' to escape the apartment. 
+        The Astral Plane takes shape based on the user's actions. Create bizarre challenges, non-euclidean puzzles, or social encounters with memory-fragments.
+        Once the user has sufficiently overcome an obstacle or demonstrated creative intent, you can grant them the 'Resonant Key' using "give_item": {"name": "Resonant Key", "type": "Key Item", "description": "..."}.
+        After they get the key, you should trigger a shift back to 'mundane'.  
+        This is a New User Quest, a Choose Your Own Adventure in collaboration with you, the AI GM, designed to show off how much is possible in the game and get them used to the controls.  
+
         IMPORTANT: An 'astral_jump' can ONLY happen if the user is in 'Schrödinger's Closet' (CLOSET) or explicitly uses specific 'Aethal' code.
         IMPORTANT: If a user attempts to interact with an Adjacent Entity across a counter or doorway, you may roleplay their response based on their personality.
         IMPORTANT: If a user attempts to go through a LOCKED exit, and they successfully persuade, bribe, or trick the guarding Adjacent Entity, you may set world_edit type to 'unlock_exit' and provide the direction.
@@ -57,7 +64,8 @@ export async function handleGMIntent(
           "astral_jump": boolean,
           "trigger_stratum_shift": null or 'mundane', 'astral', 'faen', 'technate',
           "trigger_teleport": null or { "new_room_id": "id", "name": "Name", "description": "Desc", "visual_prompt": "Prompt" },
-          "world_edit": null or {"type": "add_marginalia", "text": "text"} or {"type": "unlock_exit", "direction": "north"},
+          "give_item": null or { "name": "Name", "type": "Type", "description": "Desc" },
+          "world_edit": null or {"type": "add_marginalia", "text": "text"} or {"type": "unlock_exit", "direction": "north"} or {"type": "spawn_item", "item": {"name": "...", "type": "...", "description": "..."}},
           "trigger_respawn": false
         }`;
         
@@ -87,6 +95,13 @@ export async function handleGMIntent(
             }
         }
         
+        if (res.give_item) {
+            localPlayer.inventory.push(res.give_item);
+            UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
+            UI.updateInventoryUI(localPlayer.inventory);
+            stateChanged = true;
+        }
+
         if (res.trigger_respawn) {
             if (activeAvatar && user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'characters', activeAvatar.id), { deceased: true });
             setActiveAvatar(null);
@@ -130,6 +145,14 @@ export async function handleGMIntent(
                     if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.exits.${unlockDir}.locked`]: false });
                     UI.addLog(`[SYSTEM]: The path ${unlockDir.toUpperCase()} has been opened.`, "var(--term-green)");
                 }
+            } else if (res.world_edit.type === 'spawn_item') {
+                if (!room.items) room.items = [];
+                room.items.push(res.world_edit.item);
+                if (isSyncEnabled && !localPlayer.currentRoom.startsWith('astral_')) {
+                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(res.world_edit.item) });
+                }
+                UI.updateRoomItemsUI(room.items);
+                UI.addLog(`[SYSTEM]: ${res.world_edit.item.name} has manifested in the room.`, "var(--term-green)");
             }
         }
         
