@@ -32,7 +32,7 @@ Generative Visual Projections: The terminal doesn't just describe reality; it pr
 
 <img width="2816" height="1504" alt="Gemini_Generated_Image_4hnl8t4hnl8t4hnl" src="https://github.com/user-attachments/assets/bb308d23-632b-4ec6-9fcc-33139f7e983a" />
 
-The Torlight at Corovon
+*The Torlight at Corovon*
 
 [ SYSTEM CAPABILITIES ]
 
