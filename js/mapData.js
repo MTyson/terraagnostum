@@ -2,8 +2,8 @@ export const apartmentMap = {
     "lore1": {
         name: "Lore Room (West)",
         shortName: "LORE1",
-        description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall.",
-        visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.",
+        description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall. The console hums with a strange energy, and the air feels thick with forgotten secrets. A closet door to the north is scrawled on with black marker 'Schrödinger's Closet'.",
+        visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.  A closet door to the north is scrawled on with black marker 'Schrödinger's Closet'.  There is a hint of esoteric quantum light spilling out of the edges of the closet.",
         exits: { east: "lore2", north: "closet", south: "bedroom" },
         pinnedView: null,
         items: [],
@@ -24,8 +24,8 @@ export const apartmentMap = {
     "closet": {
         name: "Schrödinger's Closet",
         shortName: "CLOSET",
-        description: "A heavily reinforced closet door north of the main console. It hums with quantum uncertainty.",
-        visualPrompt: "A heavy steel vault door in a mundane apartment hallway, glowing with strange quantum energy around the edges.",
+        description: "The inside of a typical apartment closet. The door is covered in cryptic occult and scientific diagrams and notes scrawled in different color marker. It is empty except for a strange device, a Hacked Schumman Resonance Generator, arcing with potential energy.  The device has dials and knobs for tuning different realities.",
+        visualPrompt: "The inside of a typical apartment closet. The door is covered in cryptic occult and scientific diagrams and notes scrawled in different color marker. It is empty except for a strange device, a Hacked Schumman Resonance Generator, arcing with potential energy.  The device has dials and knobs for tuning different realities.",
         exits: { south: "lore1" },
         pinnedView: null,
         items: [],

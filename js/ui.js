@@ -33,7 +33,7 @@ export function applyStratumTheme(stratum, isTransitioningToFaen) {
         document.body.classList.remove('faen-mode');
     }
 
-    if (stratum === 'faen' || stratum === 'weave') {
+    if (stratum === 'faen' || stratum === 'astral') {
         root.style.setProperty('--term-green', '#e2b714');
         root.style.setProperty('--term-amber', '#ff9d00');
         root.style.setProperty('--term-red', '#e53935'); 
@@ -216,7 +216,7 @@ export function printRoomDescription(room, isFaen, fullMap = null, activeAvatar 
         const exits = Object.keys(room.exits || {}).map(e => e.toUpperCase()).join(', ');
         addLog(`Obvious Exits: ${exits || 'NONE'}`, "#555");
     } else {
-        addLog(`The ethereal plane stretches infinitely.`, "var(--faen-pink)");
+        addLog(`The astral plane stretches infinitely.`, "var(--faen-pink)");
     }
 
     if (!activeAvatar) {

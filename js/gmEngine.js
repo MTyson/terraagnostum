@@ -45,7 +45,7 @@ export async function handleGMIntent(
         Entities Present: ${npcText}. Inventory: ${inventoryNames}.
         Adjacent Entities (Visible through doorways/counters): ${adjacentNpcText}.
         Exits: ${exitText}.
-        IMPORTANT: A 'faen_jump' can ONLY happen if the user is in 'Schrödinger's Closet' (CLOSET) or explicitly uses specific 'Aethal' code.
+        IMPORTANT: An 'astral_jump' can ONLY happen if the user is in 'Schrödinger's Closet' (CLOSET) or explicitly uses specific 'Aethal' code.
         IMPORTANT: If a user attempts to interact with an Adjacent Entity across a counter or doorway, you may roleplay their response based on their personality.
         IMPORTANT: If a user attempts to go through a LOCKED exit, and they successfully persuade, bribe, or trick the guarding Adjacent Entity, you may set world_edit type to 'unlock_exit' and provide the direction.
         Respond STRICTLY in JSON:
@@ -54,8 +54,8 @@ export async function handleGMIntent(
           "narrative": "outcome",
           "color": "hex",
           "trigger_visual": "prompt or null",
-          "faen_jump": boolean,
-          "trigger_stratum_shift": null or 'mundane', 'faen', 'technate',
+          "astral_jump": boolean,
+          "trigger_stratum_shift": null or 'mundane', 'astral', 'faen', 'technate',
           "trigger_teleport": null or { "new_room_id": "id", "name": "Name", "description": "Desc", "visual_prompt": "Prompt" },
           "world_edit": null or {"type": "add_marginalia", "text": "text"} or {"type": "unlock_exit", "direction": "north"},
           "trigger_respawn": false
@@ -64,18 +64,18 @@ export async function handleGMIntent(
         const res = await callGemini(`User: ${val}`, sysPrompt);
         let stateChanged = false;
         
-        if (res.faen_jump && localPlayer.stratum !== 'faen') {
+        if (res.astral_jump && localPlayer.stratum !== 'astral') {
             if (localPlayer.currentRoom === 'closet' || val.toLowerCase().includes('aethal')) {
-                shiftStratum('faen');
-                localPlayer.currentRoom = 'faen_entry';
-                apartmentMap['faen_entry'] = {
-                    name: "Faen Nexus", shortName: "NEXUS",
-                    description: "The entry point to the ethereal plane. Space is fluid and glowing.",
-                    visualPrompt: "Glowing ethereal nexus portal.",
+                shiftStratum('astral');
+                localPlayer.currentRoom = 'astral_entry';
+                apartmentMap['astral_entry'] = {
+                    name: "Astral Nexus", shortName: "NEXUS",
+                    description: "The entry point to the astral plane. Space is fluid and glowing.",
+                    visualPrompt: "Glowing astral nexus portal.",
                     exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
                 };
                 stateChanged = true;
-                UI.addLog(`[SYSTEM]: Conventional geometry discarded. Welcome to Faen.`, "var(--faen-pink)");
+                UI.addLog(`[SYSTEM]: Conventional geometry discarded. Welcome to the Astral Plane.`, "var(--faen-pink)");
             } else {
                 UI.addLog("[SYSTEM]: Dimensional shift failed. Anchors too strong in this node.", "var(--term-red)");
             }
@@ -135,7 +135,7 @@ export async function handleGMIntent(
         
         if (res.trigger_visual && !res.trigger_respawn && !res.trigger_teleport) {
             triggerVisualUpdate(res.trigger_visual, localPlayer, apartmentMap, user); // GM Override passed here!
-        } else if (res.trigger_stratum_shift || res.trigger_teleport || res.faen_jump) {
+        } else if (res.trigger_stratum_shift || res.trigger_teleport || res.astral_jump) {
             triggerVisualUpdate(null, localPlayer, apartmentMap, user); // No override passed
         }
     } catch (err) { 

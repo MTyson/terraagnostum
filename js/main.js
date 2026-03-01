@@ -222,19 +222,19 @@ if (pinBtnEl) {
 async function executeMovement(targetDir) {
     const currentRoom = apartmentMap[localPlayer.currentRoom];
     if (!currentRoom) { console.warn('Movement: Current room not found'); return; }
-    if (localPlayer.stratum === 'faen') {
-        const nextId = 'faen_' + Date.now();
+    if (localPlayer.stratum === 'astral') {
+        const nextId = 'astral_' + Date.now();
         apartmentMap[nextId] = {
-            name: "Procedural Faen Pocket", shortName: "FAEN",
+            name: "Procedural Astral Pocket", shortName: "ASTRAL",
             description: "A surreal, ever-shifting landscape of translucent light and geometric fractals. Directions have no meaning here.",
-            visualPrompt: "Abstract ethereal plane, glowing cyan and pink geometric structures, floating light particles.",
+            visualPrompt: "Abstract astral (ethereal) plane, glowing cyan and pink geometric structures, floating light particles.",
             exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
         };
         localPlayer.currentRoom = nextId;
         savePlayerState(); 
         refreshAllUI();
         
-        UI.addLog(`[SYSTEM]: You traverse the ethereal currents to a new pocket of Faen.`, "var(--term-green)");
+        UI.addLog(`[SYSTEM]: You traverse the astral currents to a new pocket of the Astral Plane.`, "var(--term-green)");
         UI.printRoomDescription(apartmentMap[nextId], true, apartmentMap, activeAvatar);
         triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         return;
@@ -243,48 +243,6 @@ async function executeMovement(targetDir) {
     if (currentRoom.exits && currentRoom.exits[targetDir]) {
         const exitData = currentRoom.exits[targetDir];
 
-        if (localPlayer.currentRoom === 'closet') {
-            if (cmd === 'investigate') {
-                UI.addLog("[NARRATOR]: A heavy, metallic Schumann Generator sits in the center of the room. It is currently unplugged, its quantum field destabilized.", "#888");
-                if (!localPlayer.generatorPlugged) {
-                    UI.addLog("[TANDY]: It needs power. You'll need to 'plug in generator' to isolate the quantum field.", "#b084e8");
-                }
-                return;
-            }
-
-            if (cmd === 'plug in generator' || cmd === 'plug in machine') {
-                // Check if they are a Void!
-                if (!activeAvatar) {
-                    UI.addLog("[SYSTEM]: Your phantom hands pass right through the heavy power cable. You lack the physical cohesion to move it.", "var(--term-red)");
-                    return;
-                }
-
-                localPlayer.generatorPlugged = true;
-                UI.addLog("[NARRATOR]: You heave the heavy power cable into the floor receptacle. The generator whirs to life, vibrating the floorboards.", "#888");
-                UI.addLog("[TANDY]: Good. The field is isolated. Now, 'tune generator to faen' to bridge the strata.", "#b084e8");
-                savePlayerState();
-                return;
-            }
-
-            if (cmd === 'tune generator to faen' || cmd === 'tune generator') {
-                if (!localPlayer.generatorPlugged) {
-                    UI.addLog("[SYSTEM]: The machine is dead. It must be plugged in first.", "var(--term-amber)");
-                    return;
-                }
-
-                UI.addLog("[SYSTEM]: FREQUENCY LOCKED. QUANTUM STATE COLLAPSING...", "var(--term-green)");
-
-                // Shift the world!
-                shiftStratum('faen');
-
-                const currentRoom = apartmentMap[localPlayer.currentRoom];
-                UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Ethereal Plane.", "#888");
-                UI.printRoomDescription(currentRoom, true, apartmentMap, activeAvatar);
-                refreshAllUI();
-                return;
-            }
-        }
-        
         if (typeof exitData === 'object' && exitData.locked) {
             UI.addLog(`[BLOCKED]: ${exitData.lockMsg || 'The path is barred.'}`, "var(--term-amber)");
             return; 
@@ -422,36 +380,44 @@ async function handleCommand(val) {
 
     if (localPlayer.currentRoom === 'closet') {
         if (cmd === 'investigate') {
-            UI.addLog("[NARRATOR]: A heavy, metallic crate hums in the center of the room. It is hardwired into the floor and radiates a low-frequency pulse.", "#888");
+            UI.addLog("[NARRATOR]: An exotic Hacked Schumann Generator sits in the center of the room. Its quantum field is destabilized.", "#888");
             if (!localPlayer.closetDoorClosed) {
                 UI.addLog("[TANDY]: The energy is bleeding out into the hallway. You'll need to 'close the door' to isolate the quantum field.", "#b084e8");
             } else {
-                UI.addLog("[TANDY]: The field is isolated. You can 'turn on the machine' now.", "#b084e8");
+                UI.addLog("[TANDY]: The field is isolated. You can 'use the generator' now.", "#b084e8");
             }
             return;
         }
+
         if (cmd === 'close door' || cmd === 'shut door') {
             localPlayer.closetDoorClosed = true;
             UI.addLog("[NARRATOR]: You pull the heavy door shut. The hum of the metal crate amplifies, vibrating in your teeth.", "#888");
+            savePlayerState();
             return;
         }
+
         if (cmd === 'open door') {
             localPlayer.closetDoorClosed = false;
             UI.addLog("[NARRATOR]: You open the door, letting the stale air of the hallway back in.", "#888");
+            savePlayerState();
             return;
         }
-        if (cmd.match(/^(use|tune|activate|turn on)\s+(resonator|generator|machine|box)/)) {
+
+        if (cmd.match(/^(use|tune|activate|turn on|engage|start)\s+(resonator|generator|machine|box|device)/) || cmd === 'use generator') {
+            if (!activeAvatar) {
+                UI.addLog("[SYSTEM]: Your phantom hands pass right through the controls. You lack the physical cohesion to engage the machine.", "var(--term-red)");
+                return;
+            }
             if (!localPlayer.closetDoorClosed) {
                 UI.addLog("[SYSTEM]: The machine whirs to life, but its energy bleeds out the open door. The Schrödinger state cannot be achieved.", "var(--term-amber)");
                 return;
             }
+
             UI.addLog("[SYSTEM]: RESONANCE ACHIEVED. QUANTUM STATE COLLAPSING...", "var(--term-green)");
-
-            localPlayer.stratum = 'weave';
-            if (typeof UI.applyStratumTheme === 'function') UI.applyStratumTheme('weave');
-
+            shiftStratum('astral');
+            
             const currentRoom = apartmentMap[localPlayer.currentRoom];
-            UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Ethereal Plane.", "#888");
+            UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Astral Plane.", "#888");
             UI.printRoomDescription(currentRoom, true, apartmentMap, activeAvatar);
             refreshAllUI();
             return;

@@ -304,8 +304,8 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     if (wizardState.type === 'tutorial_cyoa') {
         if (wizardState.step === 1) {
             if (!currentVal) return;
-            UI.addLog(`[SYSTEM]: Processing your action in the Ethereal Plane...`, "var(--gm-purple)");
-            const prompt = `The player is in the Ethereal Plane (Faen stratum) in a cyberpunk world. They are facing a fragmented memory-entity. They decided to: "${currentVal}". Describe the atmospheric outcome in 2-3 sentences, and present ONE final obstacle or choice before they can stabilize their connection. Respond in plain text.`;
+            UI.addLog(`[SYSTEM]: Processing your action in the Astral Plane...`, "var(--gm-purple)");
+            const prompt = `The player is in the Astral Plane (Astral stratum) in a cyberpunk world. They are facing a fragmented memory-entity. They decided to: "${currentVal}". Describe the atmospheric outcome in 2-3 sentences, and present ONE final obstacle or choice before they can stabilize their connection. Respond in plain text.`;
             try {
                 const response = await callGemini("Process CYOA turn 1", prompt);
                 UI.addLog(`[NARRATOR]: ${response}`, "#888");
@@ -317,7 +317,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         } else if (wizardState.step === 2) {
             if (!currentVal) return;
             UI.addLog(`[SYSTEM]: Resolving final quantum state...`, "var(--gm-purple)");
-            const prompt = `The player is completing a cyberpunk ethereal plane tutorial. Their final action is: "${currentVal}". Determine if they succeed. Respond STRICTLY in JSON: { "narrative": "A 2-sentence atmospheric conclusion.", "success": true or false }`;
+            const prompt = `The player is completing a cyberpunk astral plane tutorial. Their final action is: "${currentVal}". Determine if they succeed. Respond STRICTLY in JSON: { "narrative": "A 2-sentence atmospheric conclusion.", "success": true or false }`;
             try {
                 const responseStr = await callGemini("Process CYOA turn 2", prompt);
                 
@@ -336,7 +336,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                     });
                     UI.addLog(`[TANDY]: You did it. You synthesized a Resonance Key. Now get to the kitchen and use it to open the front door.`, "#b084e8");
                 } else {
-                    UI.addLog(`[SYSTEM]: ANOMALY UNRESOLVED. YOU WERE EJECTED FROM THE ETHER.`, "var(--term-red)");
+                    UI.addLog(`[SYSTEM]: ANOMALY UNRESOLVED. YOU WERE EJECTED FROM THE ASTRAL PLANE.`, "var(--term-red)");
                     UI.addLog(`[TANDY]: That was close. The field collapsed. You'll need to tune the generator and try again when you're ready.`, "#b084e8");
                 }
                 
