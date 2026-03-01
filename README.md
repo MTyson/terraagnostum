@@ -7,10 +7,12 @@
 <img width="1174" height="925" alt="unnamed" src="https://github.com/user-attachments/assets/333163ec-23a2-4e92-9262-3e06ebb0deb5" />
 
 >> SYSTEM STATE: LIVE
+ 
 >> NODE: SECURE
+
 >> RENDER MODE: CONSENSUS
 
-Welcome to the Archive.
+*Welcome to the Archive.*
 
 This repository contains the source code for the Terra Agnostum Shared Reality Terminal. To the uninitiated in the Mundane, this appears to be a web-based, AI-mediated MUD (Multi-User Dungeon). In truth, it is a bridge.
 
@@ -18,7 +20,7 @@ The UI is a pure function of state. Reality is not a fixed construct you merely 
 
 "Whatever the consciousness conceives of as the order of nature (niyati) in that universe, that comes to be established there."
 
-[ THE UNIVERSE & CORE FEATURES ]
+## [ THE UNIVERSE & CORE FEATURES ]
 
 Vast, Extensible Lore: Explore a tri-layered reality. Navigate the sterile, transhumanist utopia of The Technate, the ethereal and infinite magic plane of Faen, and the grounding anchor of the Mundane. The lore is deep, but the borders are undefined—waiting for you to render them.
 
