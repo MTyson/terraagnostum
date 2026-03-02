@@ -189,8 +189,11 @@ export async function handleGMIntent(
                         }
                         
                         if (localPlayer.stratum !== 'mundane') {
+                            localPlayer.currentRoom = 'closet';
                             shiftStratum('mundane');
                             if (!isSilent) UI.addLog(`[SYSTEM]: Harmonic resonance achieved. Shifting back to mundane stratum...`, "var(--term-green)");
+                            // Trigger visual update for the closet
+                            triggerVisualUpdate(null, localPlayer, activeMap, user);
                         }
                     }
                 }
@@ -237,16 +240,23 @@ export async function handleGMIntent(
             shiftStratum('mundane');
         }
         
-        if (res.trigger_teleport && !res.trigger_respawn) {
-            const t = res.trigger_teleport;
-            if (!activeMap[t.new_room_id]) {
-                activeMap[t.new_room_id] = { ...t, shortName: t.name.substring(0, 7).toUpperCase(), exits: {}, pinnedView: null, items: [], marginalia: [], npcs: [] };
-                if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${t.new_room_id}`]: activeMap[t.new_room_id] });
+            if (res.trigger_teleport && !res.trigger_respawn) {
+                const t = res.trigger_teleport;
+                if (!activeMap[t.new_room_id]) {
+                    activeMap[t.new_room_id] = { ...t, shortName: t.name.substring(0, 7).toUpperCase(), exits: {}, pinnedView: null, items: [], marginalia: [], npcs: [] };
+                    if (isSyncEnabled) {
+                        if (t.new_room_id.startsWith('astral_')) {
+                            const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
+                            updateDoc(astralRef, { [`nodes.${t.new_room_id}`]: activeMap[t.new_room_id] });
+                        } else {
+                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${t.new_room_id}`]: activeMap[t.new_room_id] });
+                        }
+                    }
+                }
+                localPlayer.currentRoom = t.new_room_id; 
+                stateChanged = true; 
+                if (!isSilent) UI.addLog(`Reality warp successful.`, "var(--gm-purple)");
             }
-            localPlayer.currentRoom = t.new_room_id; 
-            stateChanged = true; 
-            if (!isSilent) UI.addLog(`Reality warp successful.`, "var(--gm-purple)");
-        }
         
         if (stateChanged) { 
             refreshStatusUI(); 
@@ -265,19 +275,38 @@ export async function handleGMIntent(
             if (res.world_edit.type === 'add_marginalia') {
                 if (!room.marginalia) room.marginalia = [];
                 room.marginalia.push(res.world_edit.text);
-                if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.marginalia`]: arrayUnion(res.world_edit.text) });
+                if (isSyncEnabled) {
+                    if (localPlayer.currentRoom.startsWith('astral_')) {
+                        const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
+                        updateDoc(astralRef, { [`nodes.${localPlayer.currentRoom}.marginalia`]: arrayUnion(res.world_edit.text) });
+                    } else {
+                        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.marginalia`]: arrayUnion(res.world_edit.text) });
+                    }
+                }
             } else if (res.world_edit.type === 'unlock_exit') {
                 const unlockDir = res.world_edit.direction.toLowerCase();
                 if (room.exits[unlockDir] && typeof room.exits[unlockDir] === 'object') {
                     room.exits[unlockDir].locked = false;
-                    if (isSyncEnabled) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.exits.${unlockDir}.locked`]: false });
+                    if (isSyncEnabled) {
+                        if (localPlayer.currentRoom.startsWith('astral_')) {
+                            const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
+                            updateDoc(astralRef, { [`nodes.${localPlayer.currentRoom}.exits.${unlockDir}.locked`]: false });
+                        } else {
+                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.exits.${unlockDir}.locked`]: false });
+                        }
+                    }
                     if (!isSilent) UI.addLog(`[SYSTEM]: The path ${unlockDir.toUpperCase()} has been opened.`, "var(--term-green)");
                 }
             } else if (res.world_edit.type === 'spawn_item') {
                 if (!room.items) room.items = [];
                 room.items.push(res.world_edit.item);
-                if (isSyncEnabled && !localPlayer.currentRoom.startsWith('astral_')) {
-                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(res.world_edit.item) });
+                if (isSyncEnabled) {
+                    if (localPlayer.currentRoom.startsWith('astral_')) {
+                        const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
+                        updateDoc(astralRef, { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(res.world_edit.item) });
+                    } else {
+                        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.items`]: arrayUnion(res.world_edit.item) });
+                    }
                 }
                 UI.updateRoomItemsUI(room.items);
                 if (!isSilent) UI.addLog(`[SYSTEM]: ${res.world_edit.item.name} has manifested in the room.`, "var(--term-green)");
@@ -313,8 +342,14 @@ export async function handleGMIntent(
                 } else {
                     room.npcs.push(npcData);
                 }
-                if (isSyncEnabled && !localPlayer.currentRoom.startsWith('astral_')) {
-                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.npcs`]: room.npcs });
+                if (isSyncEnabled) {
+                    if (localPlayer.currentRoom.startsWith('astral_')) {
+                        // Sync astral nodes to the user's private path
+                        const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
+                        updateDoc(astralRef, { [`nodes.${localPlayer.currentRoom}.npcs`]: room.npcs });
+                    } else {
+                        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.npcs`]: room.npcs });
+                    }
                 }
                 UI.updateRoomEntitiesUI(room.npcs);
                 if (!isSilent) UI.addLog(`[SYSTEM]: A new presence detected: ${npcData.name}.`, "var(--term-amber)");

@@ -175,6 +175,7 @@ if (isSyncEnabled) {
             setupWorldListener();
             updateMapListener();
             await loadPlayerState(); 
+            await loadAstralMap();
             await loadUserCharacters();
             
             shiftStratum(localPlayer.stratum);
@@ -208,7 +209,12 @@ function setupWorldListener() {
 
 function mergeAndRefreshMap(fetchedNodes = {}) {
     apartmentMap = { ...initialMap, ...fetchedNodes };
-    if (!apartmentMap[localPlayer.currentRoom]) {
+    
+    // Check if the current room is in either the apartment map or the astral map
+    const isInApartmentMap = !!apartmentMap[localPlayer.currentRoom];
+    const isInAstralMap = !!astralMap[localPlayer.currentRoom];
+    
+    if (!isInApartmentMap && !isInAstralMap) {
         localPlayer.currentRoom = "bedroom";
     }
     refreshAllUI();
@@ -263,8 +269,30 @@ async function savePlayerState() {
     if (!db || !user) return;
     try {
         const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
-        await setDoc(stateRef, localPlayer);
+        // Include the current active avatar ID to restore it on refresh
+        const stateToSave = { 
+            ...localPlayer, 
+            activeAvatarId: activeAvatar ? activeAvatar.id : null 
+        };
+        await setDoc(stateRef, stateToSave);
+        
+        // Save the astral map if we're in the astral plane
+        if (Object.keys(astralMap).length > 0) {
+            const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
+            await setDoc(astralRef, { nodes: astralMap, lastUpdated: serverTimestamp() });
+        }
     } catch (e) { console.error("Failed to save player state:", e); }
+}
+
+async function loadAstralMap() {
+    if (!db || !user) return;
+    try {
+        const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
+        const snap = await getDoc(astralRef);
+        if (snap.exists()) {
+            astralMap = snap.data().nodes || {};
+        }
+    } catch (e) { console.error("Failed to load astral map:", e); }
 }
 
 async function loadUserCharacters() {
@@ -281,6 +309,11 @@ async function loadUserCharacters() {
         });
         if (localCharacters.length > 0) {
             UI.addLog(`[SYSTEM]: Retrieved ${localCharacters.length} saved avatar(s) from your private archive.`, "var(--term-green)");
+        }
+        
+        // Restore specific active avatar if saved, otherwise pick the first valid one
+        if (localPlayer.activeAvatarId) {
+            activeAvatar = localCharacters.find(c => c.id === localPlayer.activeAvatarId);
         }
         if (!activeAvatar && localCharacters.length > 0) activeAvatar = localCharacters[0];
         
