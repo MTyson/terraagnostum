@@ -103,6 +103,12 @@ function updateContextualSuggestions(aigmSuggestions = []) {
         });
     }
 
+    // 2.5 COMBAT ACTIONS
+    if (localPlayer.combat.active) {
+        suggestions.push("ATTACK WITH WILL FORCE");
+        suggestions.push("CREATE ASTRAL WEAPON");
+    }
+
     // 3. MERGE AIGM SUGGESTIONS
     const safeAigm = Array.isArray(aigmSuggestions) ? aigmSuggestions : [];
     suggestions = [...suggestions, ...safeAigm];

@@ -288,3 +288,12 @@
         .context-chip:active {
             transform: scale(0.95);
         }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        .anim-pulse {
+            animation: pulse 1s infinite ease-in-out;
+        }

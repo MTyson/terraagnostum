@@ -63,7 +63,7 @@ export async function handleGMIntent(
         GUIDELINES FOR SUGGESTIONS:
         - If the player's Auth Tier is GUEST or VOID, and there is a computer console, terminal, or Tandem device mentioned in the room description, you MUST strongly suggest "Login".
         - If the player is a VOID (no avatar) and in a room that mentions character sheets, archives of forms, or vessel forging, strongly suggest "Create Avatar".
-        - In Schrödinger's Closet (or any room with the Resonance Generator):
+        - In Schrödinger's Closet (or any room with the Resonance Generator) AND stratum is MUNDANE:
             - If the 'closetDoorClosed' flag is FALSE, you MUST suggest "Close Door".
             - If the 'closetDoorClosed' flag is TRUE, you MUST suggest "Use Resonator".
         - If NPCs are present and the player is a VOID, suggest "Assume [NPC Name]".
@@ -75,18 +75,23 @@ export async function handleGMIntent(
         ASTRAL ENCOUNTER: If the user is in the ASTRAL stratum and there is NO 'Shadow Avatar' (or a shadow reflection NPC) currently present in the 'Entities Present' list, you MUST immediately manifest one using "spawn_npc". 
         The Shadow Avatar is a dark, flickering reflection of the user's current avatar. It should challenge the player's identity or purpose. 
         Create a 'visual_prompt' for it that is a dark, glitchy, debased, sci-fi/fantasy bad guy version of the player character's description.
-        Required Action if NPC missing: "world_edit": {"type": "spawn_npc", "npc": {"name": "Shadow ${activeAvatar ? activeAvatar.name : 'Self'}", "archetype": "Glitch Reflection", "personality": "Challenging and cryptic", "visual_prompt": "A dark, glitching shadow silhouette of the player character, digital corruption artifacts, eerie astral plane background, glowing eyes, highly detailed."}}
+        Required Action if NPC missing: "world_edit": {"type": "spawn_npc", "npc": {"name": "Shadow ${activeAvatar ? activeAvatar.name : 'Self'}", "archetype": "Glitch Reflection", "personality": "Challenging and cryptic", "stats": {"WILL": 5}, "visual_prompt": "A dark, glitching shadow silhouette of the player character, digital corruption artifacts, eerie astral plane background, glowing eyes, highly detailed."}}
         
         BATTLE OF WILLS: If the Shadow Avatar is present, it will eventually attack the player. 
         - When combat is active, the player will attempt narrative actions. 
-        - You must resolve the player's action and then describe the Shadow's counter-attack.
-        - The Shadow's attack ALWAYS deals 1 WILL damage to the player if it hits.
+        - You must resolve the player's action and then describe the Shadow's counter-attack in the 'narrative' field.
+        - The Shadow's attack ALWAYS deals 1 WILL damage to the player if it hits. 
+        - IMPORTANT: If combat is active, you MUST set "damage_to_player": 1 in your JSON response whenever the Shadow strikes (which should be almost every turn once combat starts).
+        - IMPORTANT: Describe the Shadow's attack in the narrative so the player knows they are being hit.
+        - The player's attacks (like 'ATTACK WITH WILL FORCE') deal damage to the Shadow's WILL.
         - You decide if the Shadow hits or if the player successfully resists/dodges based on their narrative.
         - If the player's WILL hits 0, they are defeated.
+        - If the Shadow's WILL hits 0, it is defeated and vanishes.
         - Set "combat_active": true to start or continue combat.
         - Set "damage_to_player": 1 if the Shadow successfully strikes the player's Will.
+        - Set "damage_to_npc": number if the player successfully strikes the Shadow's Will.
 
-        Once the user has sufficiently overcome an obstacle or demonstrated creative intent, you can grant them the 'Resonant Key' using "give_item": {"name": "Resonant Key", "type": "Key Item", "description": "..."}.
+        Once the user has sufficiently overcome an obstacle or demonstrated creative intent (or defeated the Shadow), you can grant them the 'Resonant Key' using "give_item": {"name": "Resonant Key", "type": "Key Item", "description": "..."}.
         After they get the key, you should trigger a shift back to 'mundane'.  
 
         IMPORTANT: An 'astral_jump' can ONLY happen if the user is in 'Schrödinger's Closet' (CLOSET) or explicitly uses specific 'Aethal' code.
@@ -106,6 +111,7 @@ export async function handleGMIntent(
           "trigger_respawn": false,
           "combat_active": boolean,
           "damage_to_player": number or null,
+          "damage_to_npc": number or null,
           "suggested_actions": ["Action string 1", "Action string 2"]
         }
         ${isSilent ? 'IMPORTANT: This is a silent context-check. Focus primarily on providing 3-5 high-quality, relevant "suggested_actions". Keep "narrative" brief as it will not be displayed.' : ''}`;
@@ -146,6 +152,48 @@ export async function handleGMIntent(
                 shiftStratum('mundane');
                 stateChanged = true;
                 if (!isSilent) UI.addLog(`[NARRATOR]: You gasp as you wake up in your bedroom, the astral nightmare fading into a cold sweat.`, "#888");
+            }
+        }
+
+        // Handle Damage to NPC (Battle of Wills)
+        if (res.damage_to_npc && localPlayer.combat.active) {
+            const room = activeMap[localPlayer.currentRoom];
+            const npc = room.npcs?.find(n => n.name === localPlayer.combat.opponent);
+            if (npc) {
+                if (!npc.stats) npc.stats = { WILL: 5, CONS: 20, PHYS: 20 };
+                npc.stats.WILL = Math.max(0, (npc.stats.WILL || 5) - res.damage_to_npc);
+                if (!isSilent) UI.addLog(`[COMBAT]: ${npc.name} took ${res.damage_to_npc} WILL damage!`, "var(--term-amber)");
+                
+                if (npc.stats.WILL <= 0) {
+                    if (!isSilent) UI.addLog(`[SYSTEM]: ${npc.name} has been dissipated. Victory!`, "var(--term-green)");
+                    
+                    // Remove NPC from room
+                    room.npcs = room.npcs.filter(n => n.name !== npc.name);
+                    if (isSyncEnabled && !localPlayer.currentRoom.startsWith('astral_')) {
+                        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.npcs`]: room.npcs });
+                    }
+                    UI.updateRoomEntitiesUI(room.npcs);
+
+                    // Reset Combat State
+                    localPlayer.combat.active = false;
+                    localPlayer.combat.opponent = null;
+                    stateChanged = true;
+
+                    // Auto-grant Resonant Key and Shift Stratum if Shadow is defeated
+                    if (npc.name.startsWith("Shadow")) {
+                        const key = { name: "Resonant Key", type: "Key Item", description: "A vibrating, semi-translucent key that resonates with the apartment's front door." };
+                        if (!localPlayer.inventory.some(i => i.name === key.name)) {
+                            localPlayer.inventory.push(key);
+                            if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${key.name}].`, "var(--term-green)");
+                            UI.updateInventoryUI(localPlayer.inventory);
+                        }
+                        
+                        if (localPlayer.stratum !== 'mundane') {
+                            shiftStratum('mundane');
+                            if (!isSilent) UI.addLog(`[SYSTEM]: Harmonic resonance achieved. Shifting back to mundane stratum...`, "var(--term-green)");
+                        }
+                    }
+                }
             }
         }
         
