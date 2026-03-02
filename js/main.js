@@ -14,7 +14,7 @@ import { app, auth, db, storage, isSyncEnabled, appId } from './firebaseConfig.j
 const CHAR_COLLECTION = 'v3_characters'; // Bypasses the 1MB corrupted data
 
 let apartmentMap = { ...initialMap };
-// astralMap removed for unified structure
+let astralMap = {};
 let activeTerminal = false;
 
 // Player State
@@ -47,7 +47,7 @@ function getUserTier() {
 
 // --- HELPER WRAPPERS ---
 function getActiveMap() {
-    return apartmentMap;
+    return (localPlayer.currentRoom && localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
 }
 
 function shiftStratum(targetStratum) {
@@ -121,11 +121,12 @@ if (isSyncEnabled) {
             
             shiftStratum(localPlayer.stratum);
             
-            const currentRoom = apartmentMap[localPlayer.currentRoom] || apartmentMap["lore1"];
-            UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen', apartmentMap, activeAvatar);
+            const activeMap = getActiveMap();
+            const currentRoom = activeMap[localPlayer.currentRoom] || activeMap["lore1"];
+            UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen', activeMap, activeAvatar);
             refreshAllUI();
             
-            triggerVisualUpdate(null, localPlayer, apartmentMap, user);
+            triggerVisualUpdate(null, localPlayer, activeMap, user);
             
             // Check for new user hint flag after successful login
             if (!user.isAnonymous && localStorage.getItem('awaitingNewUserHint') === 'true') {
@@ -308,7 +309,7 @@ async function executeMovement(targetDir) {
     } else {
         refreshStatusUI();
         UI.addLog(`[SYSTEM]: You cannot go that way.`, "var(--term-amber)");
-        triggerVisualUpdate(null, localPlayer, apartmentMap, user);
+        triggerVisualUpdate(null, localPlayer, getActiveMap(), user);
     }
 }
 
@@ -462,15 +463,16 @@ async function handleCommand(val) {
             UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Astral Plane.", "#888");
             UI.addLog("[TANDY]: You're in. The Astral Plane is a reflection of your intent. To escape the apartment, you must find a way to synthesize a Resonant Key here.", "#b084e8");
             
+            const activeMap = getActiveMap();
+            UI.printRoomDescription(activeMap[entryId], true, activeMap, activeAvatar);
+            triggerVisualUpdate(activeMap[entryId].visualPrompt, localPlayer, activeMap, user);
+            refreshAllUI();
+
             // Let the AI take initiative
-            handleGMIntent("Describe the strange astral nexus and present an initial challenge to gain the Resonant Key.", 
+            await handleGMIntent("Describe the strange astral nexus and present an initial challenge to gain the Resonant Key.", 
                 { apartmentMap: astralMap, localPlayer, user, activeAvatar, isSyncEnabled, db, appId },
                 { shiftStratum, savePlayerState, refreshStatusUI, renderMapHUD: UI.renderMapHUD, setActiveAvatar: (v) => { activeAvatar = v; } }
             );
-
-            UI.printRoomDescription(astralMap[entryId], true, astralMap, activeAvatar);
-            triggerVisualUpdate(astralMap[entryId].visualPrompt, localPlayer, astralMap, user);
-            refreshAllUI();
             return;
         }
     }
@@ -557,7 +559,8 @@ async function handleCommand(val) {
         const expandMap = { 'n': 'north', 's': 'south', 'e': 'east', 'w': 'west' };
         const finalDir = expandMap[dirRaw] || dirRaw;
         
-        if (!finalDir || !apartmentMap[localPlayer.currentRoom].exits || !apartmentMap[localPlayer.currentRoom].exits[finalDir]) {
+        const activeMap = getActiveMap();
+        if (!finalDir || !activeMap[localPlayer.currentRoom].exits || !activeMap[localPlayer.currentRoom].exits[finalDir]) {
             UI.addLog(`[SYSTEM]: Valid exit not found in that direction.`, "var(--term-amber)");
             return;
         }
@@ -577,7 +580,7 @@ async function handleCommand(val) {
         }
 
         const targetName = assumeMatch[1].toLowerCase();
-        const room = apartmentMap[localPlayer.currentRoom];
+        const room = getActiveMap()[localPlayer.currentRoom];
         const npcs = room.npcs || [];
 
         const npcIndex = npcs.findIndex(n => n.name.toLowerCase().includes(targetName));
