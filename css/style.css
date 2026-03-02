@@ -243,3 +243,44 @@
         .map-clickable-zone:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
+
+        /* Contextual Commands Bar */
+        #context-bar {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        #context-bar::-webkit-scrollbar {
+            display: none;
+        }
+        .scroll-hide {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .scroll-hide::-webkit-scrollbar {
+            display: none;
+        }
+
+        .context-chip {
+            border: 1px solid var(--term-green);
+            color: var(--term-green);
+            background: transparent;
+            font-family: inherit;
+            font-size: 10px;
+            padding: 4px 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            transition: all 0.1s;
+            opacity: 0.8;
+            border-radius: 2px;
+        }
+        .context-chip:hover {
+            background: var(--term-green);
+            color: var(--term-bg);
+            opacity: 1;
+            box-shadow: 0 0 8px var(--term-green);
+        }
+        .context-chip:active {
+            transform: scale(0.95);
+        }

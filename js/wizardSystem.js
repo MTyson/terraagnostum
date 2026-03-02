@@ -63,6 +63,12 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     };
 
     // 1. LOGIN WIZARD
+    if (currentVal.toLowerCase() === 'exit wizard' || currentVal.toLowerCase() === 'cancel') {
+        UI.addLog("[WIZARD]: Protocol terminated by user.", "var(--term-amber)");
+        endWizard();
+        return;
+    }
+
     if (wizardState.type === 'login') {
         const email = currentVal;
         UI.addLog(`[SYSTEM]: Transmitting anchoring frequency to ${email}...`, "var(--term-amber)");

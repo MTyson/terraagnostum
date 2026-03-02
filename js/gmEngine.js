@@ -18,7 +18,7 @@ export async function handleGMIntent(
         if (!currentRoomData) {
             console.error("Room not found in map:", localPlayer.currentRoom);
             UI.addLog(`[SYSTEM ERROR]: Location data corrupted for ${localPlayer.currentRoom}.`, "var(--term-red)");
-            return;
+            return [];
         }
         const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
         const npcText = (currentRoomData.npcs || []).map(n => `[NPC] ${n.name} - Personality: ${n.personality}`).join('\n') || "None";
@@ -90,7 +90,8 @@ export async function handleGMIntent(
           "world_edit": null or {"type": "add_marginalia", "text": "text"} or {"type": "unlock_exit", "direction": "north"} or {"type": "spawn_item", "item": {"name": "...", "type": "...", "description": "..."}} or {"type": "spawn_npc", "npc": {"name": "...", "archetype": "...", "personality": "...", "visual_prompt": "..."}},
           "trigger_respawn": false,
           "combat_active": boolean,
-          "damage_to_player": number or null
+          "damage_to_player": number or null,
+          "suggested_actions": ["Action string 1", "Action string 2"]
         }`;
         
         const res = await callGemini(`User: ${val}`, sysPrompt);
@@ -275,9 +276,12 @@ export async function handleGMIntent(
         } else if (res.trigger_stratum_shift || res.trigger_teleport || res.astral_jump || (res.world_edit && res.world_edit.type === 'spawn_npc') || isLooking) {
             triggerVisualUpdate(null, localPlayer, activeMap, user);
         }
+
+        return res.suggested_actions || [];
     } catch (err) { 
         console.error(err);
         UI.addLog("SYSTEM EVALUATION FAILED!", "var(--term-red)"); 
+        return [];
     } finally { 
         document.getElementById('thinking-indicator')?.remove(); 
     }

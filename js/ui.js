@@ -466,3 +466,35 @@ export function flashInventory() {
         inv.classList.add('flash-inv');
     }
 }
+
+export function renderContextualCommands(commands) {
+    const bar = document.getElementById('context-bar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    
+    if (!commands || commands.length === 0) {
+        bar.classList.add('hidden');
+        return;
+    }
+    
+    bar.classList.remove('hidden');
+    commands.forEach(cmd => {
+        const btn = document.createElement('button');
+        btn.className = 'context-chip';
+        btn.innerText = cmd;
+        btn.onclick = (e) => {
+            e.preventDefault();
+            const input = document.getElementById('cmd-input');
+            if (input) {
+                input.value = cmd;
+                // Dispatch enter key to trigger the existing listener in main.js
+                input.dispatchEvent(new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    bubbles: true,
+                    cancelable: true
+                }));
+            }
+        };
+        bar.appendChild(btn);
+    });
+}

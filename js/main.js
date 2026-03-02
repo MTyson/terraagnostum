@@ -76,6 +76,48 @@ function refreshStatusUI() {
     UI.updateStatusUI(roomShort);
 }
 
+function updateContextualSuggestions(aigmSuggestions = []) {
+    if (wizardState.active) {
+        // Wizards might benefit from specific chips like 'Cancel'
+        UI.renderContextualCommands(['Exit Wizard']);
+        return;
+    }
+
+    const activeMap = getActiveMap();
+    const room = activeMap[localPlayer.currentRoom];
+    if (!room) return;
+
+    let suggestions = [];
+
+    // 1. DYNAMIC EXITS
+    if (room.exits) {
+        Object.keys(room.exits).forEach(dir => {
+            suggestions.push(`Go ${dir.charAt(0).toUpperCase() + dir.slice(1)}`);
+        });
+    }
+
+    // 2. NPC INTERACTIONS
+    if (room.npcs && room.npcs.length > 0) {
+        room.npcs.forEach(npc => {
+            suggestions.push(`Look at ${npc.name}`);
+        });
+    }
+
+    // 3. MERGE AIGM SUGGESTIONS
+    const safeAigm = Array.isArray(aigmSuggestions) ? aigmSuggestions : [];
+    suggestions = [...suggestions, ...safeAigm];
+
+    // 4. CORE SYSTEM DEFAULTS (if list is small)
+    if (suggestions.length < 4) {
+        suggestions.push("Look");
+        suggestions.push("Inventory");
+    }
+
+    // Deduplicate and Render
+    const uniqueSuggestions = [...new Set(suggestions)];
+    UI.renderContextualCommands(uniqueSuggestions);
+}
+
 function refreshAllUI() {
     if (!activeAvatar) {
         document.body.classList.add('void-mode');
@@ -91,6 +133,7 @@ function refreshAllUI() {
     UI.updateRoomItemsUI(activeMap[localPlayer.currentRoom]?.items);
     UI.updateRoomEntitiesUI(activeMap[localPlayer.currentRoom]?.npcs);
     UI.renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
+    updateContextualSuggestions();
 }
 
 // --- AUTHENTICATION & SYNC ---
@@ -785,7 +828,7 @@ async function handleCommand(val) {
     isProcessing = true;
     const activeMap = getActiveMap();
     try {
-        await handleGMIntent(
+        const suggestions = await handleGMIntent(
             val,
             { activeMap, localPlayer, user, activeAvatar, isSyncEnabled, db, appId },
             { 
@@ -798,6 +841,7 @@ async function handleCommand(val) {
             }
         );
         refreshAllUI();
+        updateContextualSuggestions(suggestions);
     } finally { 
         isProcessing = false; 
     }
