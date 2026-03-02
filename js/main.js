@@ -14,7 +14,7 @@ import { app, auth, db, storage, isSyncEnabled, appId } from './firebaseConfig.j
 const CHAR_COLLECTION = 'v3_characters'; // Bypasses the 1MB corrupted data
 
 let apartmentMap = { ...initialMap };
-let astralMap = {}; // Separate graph for procedural Astral Plane
+// astralMap removed for unified structure
 let activeTerminal = false;
 
 // Player State
@@ -47,7 +47,7 @@ function getUserTier() {
 
 // --- HELPER WRAPPERS ---
 function getActiveMap() {
-    return (localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
+    return apartmentMap;
 }
 
 function shiftStratum(targetStratum) {
@@ -762,7 +762,7 @@ async function handleCommand(val) {
 
     // --- THE UNIVERSAL GM INTENT ENGINE ---
     isProcessing = true;
-    const activeMap = (localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
+    const activeMap = getActiveMap();
     try {
         await handleGMIntent(
             val,
@@ -775,6 +775,7 @@ async function handleCommand(val) {
                 setActiveAvatar: (v) => { activeAvatar = v; }
             }
         );
+        refreshAllUI();
     } finally { 
         isProcessing = false; 
     }
@@ -810,15 +811,19 @@ if (input) {
             
             // CLEAN ROUTING: Hand state over to wizardSystem with callbacks!
             if (wizardState.active) { 
-                const activeMap = (localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
+                const activeMap = getActiveMap();
                 await handleWizardInput(val, 
-                    { apartmentMap: activeMap, localPlayer, user, activeAvatar },
+                    { apartmentMap: activeMap, localPlayer, user, activeAvatar, isSyncEnabled, db, appId },
                     { 
                         refreshAllUI, 
                         updateMapListener, 
                         shiftStratum,
+                        savePlayerState,
+                        refreshStatusUI,
+                        renderMapHUD: UI.renderMapHUD,
                         setActiveAvatar: (v) => { activeAvatar = v; }, 
-                        addLocalCharacter: (c) => { localCharacters.push(c); } 
+                        addLocalCharacter: (c) => { localCharacters.push(c); },
+                        handleGMIntent 
                     }
                 );
                 return; 

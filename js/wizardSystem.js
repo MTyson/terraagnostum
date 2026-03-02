@@ -45,8 +45,17 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     let currentVal = val.trim();
     
     // Unpack the state passed from main.js
-    const { apartmentMap, localPlayer, user, activeAvatar } = context;
-    const { refreshAllUI, updateMapListener, setActiveAvatar, addLocalCharacter, shiftStratum } = callbacks;
+    const { apartmentMap, localPlayer, user, activeAvatar, isSyncEnabled, db, appId } = context;
+    const { 
+        refreshAllUI, 
+        updateMapListener, 
+        setActiveAvatar, 
+        addLocalCharacter, 
+        shiftStratum, 
+        savePlayerState, 
+        refreshStatusUI, 
+        handleGMIntent 
+    } = callbacks;
 
     const endWizard = () => {
         resetWizard();
@@ -390,6 +399,15 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 // Trigger visual update
                 const { triggerVisualUpdate } = await import('./visualSystem.js');
                 triggerVisualUpdate(res.visual_prompt, localPlayer, apartmentMap, user);
+
+                // Force the AI GM to react to the player entering the new pocket
+                if (handleGMIntent) {
+                    handleGMIntent(
+                        "The player has just manifested and entered this new astral sector. Check your directives for the Glitchy Shadow Avatar and present a challenge.", 
+                        context, 
+                        callbacks
+                    );
+                }
             }
         } catch(e) { 
             UI.addLog("[SYSTEM ERROR]: Astral manifestation failed. Reality collapsed back to nexus.", "var(--term-red)");

@@ -1,5 +1,5 @@
 import { doc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { callGemini } from './apiService.js';
+import { callGemini, generatePortrait, compressImage } from './apiService.js';
 import { triggerVisualUpdate } from './visualSystem.js';
 import * as UI from './ui.js';
 
@@ -15,6 +15,11 @@ export async function handleGMIntent(
     
     try {
         const currentRoomData = apartmentMap[localPlayer.currentRoom];
+        if (!currentRoomData) {
+            console.error("Room not found in map:", localPlayer.currentRoom);
+            UI.addLog(`[SYSTEM ERROR]: Location data corrupted for ${localPlayer.currentRoom}.`, "var(--term-red)");
+            return;
+        }
         const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
         const npcText = (currentRoomData.npcs || []).map(n => `[NPC] ${n.name} - Personality: ${n.personality}`).join('\n') || "None";
         
@@ -50,9 +55,10 @@ export async function handleGMIntent(
         SPECIAL QUEST: If the user is in the ASTRAL stratum, they are on a quest to obtain a 'Resonant Key' to escape the apartment. 
         The Astral Plane takes shape based on the user's actions. Create bizarre challenges, non-euclidean puzzles, or social encounters with memory-fragments.
         
-        ASTRAL ENCOUNTER: After the user's first move into a procedural astral pocket (any room other than 'astral_entry'), you MUST manifest a 'Glitchy Shadow Avatar'. 
-        This is a dark, flickering reflection of the user's current avatar. It should challenge the player's identity or purpose. 
-        Use "world_edit": {"type": "spawn_npc", "npc": {"name": "Shadow ${activeAvatar ? activeAvatar.name : 'Self'}", "archetype": "Glitch Reflection", "personality": "Challenging and cryptic", "visual_prompt": "A dark, pixelated silhouette that mirrors the player's form, flickering with purple static."}}
+        ASTRAL ENCOUNTER: If the user is in the ASTRAL stratum and there is NO 'Shadow Avatar' (or a shadow reflection NPC) currently present in the 'Entities Present' list, you MUST immediately manifest one using "spawn_npc". 
+        The Shadow Avatar is a dark, flickering reflection of the user's current avatar. It should challenge the player's identity or purpose. 
+        Create a 'visual_prompt' for it that is a dark, glitchy, debased, sci-fi/fantasy bad guy version of the player character's description.
+        Required Action if NPC missing: "world_edit": {"type": "spawn_npc", "npc": {"name": "Shadow ${activeAvatar ? activeAvatar.name : 'Self'}", "archetype": "Glitch Reflection", "personality": "Challenging and cryptic", "visual_prompt": "..."}}
         
         Once the user has sufficiently overcome an obstacle or demonstrated creative intent, you can grant them the 'Resonant Key' using "give_item": {"name": "Resonant Key", "type": "Key Item", "description": "..."}.
         After they get the key, you should trigger a shift back to 'mundane'.  
@@ -139,6 +145,7 @@ export async function handleGMIntent(
         UI.addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
         
         if (res.world_edit) {
+            stateChanged = true;
             const room = apartmentMap[localPlayer.currentRoom];
             if (res.world_edit.type === 'add_marginalia') {
                 if (!room.marginalia) room.marginalia = [];
@@ -160,20 +167,65 @@ export async function handleGMIntent(
                 UI.updateRoomItemsUI(room.items);
                 UI.addLog(`[SYSTEM]: ${res.world_edit.item.name} has manifested in the room.`, "var(--term-green)");
             } else if (res.world_edit.type === 'spawn_npc') {
+                const npcData = res.world_edit.npc;
+                
+                // Generate portrait for NPC if visual_prompt provided and no image
+                if (npcData.visual_prompt && !npcData.image) {
+                    UI.addLog(`[SYSTEM]: Manifesting visual imprint for ${npcData.name}...`, "var(--term-amber)");
+                    try {
+                        const b64 = await generatePortrait(npcData.visual_prompt, localPlayer.stratum);
+                        if (b64) {
+                            const dataUrl = `data:image/png;base64,${b64}`;
+                            npcData.image = await compressImage(dataUrl, 400, 0.7);
+                            UI.addLog(`[SYSTEM]: Visual imprint successful for ${npcData.name}.`, "var(--term-green)");
+                        } else {
+                            UI.addLog(`[SYSTEM]: Visual manifestation failed for ${npcData.name}.`, "var(--term-red)");
+                        }
+                    } catch (e) {
+                        console.error("NPC Portrait generation error:", e);
+                        UI.addLog(`[SYSTEM ERROR]: Portrait generation failed.`, "var(--term-red)");
+                    }
+                }
+
                 if (!room.npcs) room.npcs = [];
-                room.npcs.push(res.world_edit.npc);
+                // Prevent duplicate NPCs if the GM keeps sending spawn_npc for the same entity
+                const existingIdx = room.npcs.findIndex(n => n.name === npcData.name);
+                if (existingIdx > -1) {
+                    // Update existing NPC data but preserve image if new data doesn't have one
+                    const oldNpc = room.npcs[existingIdx];
+                    if (!npcData.image && oldNpc.image) npcData.image = oldNpc.image;
+                    room.npcs[existingIdx] = npcData;
+                } else {
+                    room.npcs.push(npcData);
+                }
                 if (isSyncEnabled && !localPlayer.currentRoom.startsWith('astral_')) {
-                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.npcs`]: arrayUnion(res.world_edit.npc) });
+                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live'), { [`nodes.${localPlayer.currentRoom}.npcs`]: room.npcs });
                 }
                 UI.updateRoomEntitiesUI(room.npcs);
-                UI.addLog(`[SYSTEM]: A new presence detected: ${res.world_edit.npc.name}.`, "var(--term-amber)");
+                UI.addLog(`[SYSTEM]: A new presence detected: ${npcData.name}.`, "var(--term-amber)");
+            }
+        }
+        
+        const isLooking = val.toLowerCase().includes('look') || val.toLowerCase().includes('examine') || val.toLowerCase().includes('search');
+        
+        // AUTO-REPAIR MISSING NPC PORTRAITS ON LOOK
+        if (isLooking && currentRoomData.npcs) {
+            for (let npc of currentRoomData.npcs) {
+                if (npc.visual_prompt && !npc.image) {
+                    UI.addLog(`[REPAIR]: Re-weaving visual imprint for ${npc.name}...`, "var(--term-amber)");
+                    const b64 = await generatePortrait(npc.visual_prompt, localPlayer.stratum);
+                    if (b64) {
+                        npc.image = await compressImage(`data:image/png;base64,${b64}`, 400, 0.7);
+                        UI.updateRoomEntitiesUI(currentRoomData.npcs);
+                    }
+                }
             }
         }
         
         if (res.trigger_visual && !res.trigger_respawn && !res.trigger_teleport) {
-            triggerVisualUpdate(res.trigger_visual, localPlayer, apartmentMap, user); // GM Override passed here!
-        } else if (res.trigger_stratum_shift || res.trigger_teleport || res.astral_jump) {
-            triggerVisualUpdate(null, localPlayer, apartmentMap, user); // No override passed
+            triggerVisualUpdate(res.trigger_visual, localPlayer, apartmentMap, user);
+        } else if (res.trigger_stratum_shift || res.trigger_teleport || res.astral_jump || (res.world_edit && res.world_edit.type === 'spawn_npc') || isLooking) {
+            triggerVisualUpdate(null, localPlayer, apartmentMap, user);
         }
     } catch (err) { 
         console.error(err);

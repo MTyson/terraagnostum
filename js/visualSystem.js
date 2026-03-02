@@ -13,7 +13,13 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, apartment
     currentBase64 = null;
     
     const pinnedUrl = (!overridePrompt && room.pinnedView) ? room.pinnedView : null;
-    const basePrompt = overridePrompt || room.visualPrompt || room.visual_prompt || "A glitching void.";
+    let basePrompt = overridePrompt || room.visualPrompt || room.visual_prompt || "A glitching void.";
+    
+    // Enrich prompt with NPCs if no override and not pinned
+    if (!overridePrompt && !pinnedUrl && room.npcs && room.npcs.length > 0) {
+        const npcDesc = room.npcs.map(n => n.name).join(', ');
+        basePrompt += ` Also present in the scene: ${npcDesc}.`;
+    }
     
     if (user && !user.isAnonymous) {
         if (pinnedUrl) {
