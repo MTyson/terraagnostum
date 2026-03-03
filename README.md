@@ -116,4 +116,4 @@ But lest we wander too far, let us just say that the absolute reality and the re
 
 <img width="621" height="333" alt="image" src="https://github.com/user-attachments/assets/40c11d11-d804-46b6-962e-10fcaff29de0" />
 
-*[MINDFRAME GAMES ⬡](https://www.mindframegames.com)*
+*[⬡ MINDFRAME GAMES ⬡](https://www.mindframegames.com)*
