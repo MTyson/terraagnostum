@@ -204,7 +204,11 @@ if (isSyncEnabled) {
                 }
             }
 
-            const currentRoom = activeMap[localPlayer.currentRoom] || activeMap["lore1"];
+            // Ensure localPlayer.currentRoom is actually valid before printing
+            if (!activeMap[localPlayer.currentRoom]) {
+                localPlayer.currentRoom = "bedroom";
+            }
+            const currentRoom = activeMap[localPlayer.currentRoom];
             UI.printRoomDescription(currentRoom, localPlayer.stratum === 'faen', activeMap, activeAvatar);
             refreshAllUI();
             
@@ -296,6 +300,14 @@ async function loadPlayerState() {
             const data = snap.data();
             localPlayer = { ...localPlayer, ...data, inventory: data.inventory || [], stratum: data.stratum || "mundane" };
             if (localPlayer.currentRoom === 'main_room') localPlayer.currentRoom = 'lore1';
+            
+            // Validate location immediately
+            const activeMap = getActiveMap();
+            if (!activeMap[localPlayer.currentRoom]) {
+                console.warn(`Initial location '${localPlayer.currentRoom}' invalid. Falling back to bedroom.`);
+                localPlayer.currentRoom = "bedroom";
+            }
+            
             refreshCommandPrompt(); 
         }
     } catch (e) { console.error("Failed to load player state:", e); }

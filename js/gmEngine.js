@@ -20,7 +20,22 @@ export async function handleGMIntent(
         const currentRoomData = state.activeMap[localPlayer.currentRoom];
         if (!currentRoomData) {
             console.error("Room not found in map:", localPlayer.currentRoom);
-            if (!isSilent) UI.addLog(`[SYSTEM ERROR]: Location data corrupted for ${localPlayer.currentRoom}.`, "var(--term-red)");
+            if (!isSilent) {
+                UI.addLog(`[SYSTEM ERROR]: Location data corrupted for ${localPlayer.currentRoom}. Attempting emergency recalibration...`, "var(--term-red)");
+                // Fallback to bedroom
+                localPlayer.currentRoom = "bedroom";
+                localPlayer.stratum = "mundane";
+                if (typeof actions.shiftStratum === 'function') actions.shiftStratum('mundane');
+                if (typeof actions.savePlayerState === 'function') actions.savePlayerState();
+                if (typeof actions.refreshStatusUI === 'function') actions.refreshStatusUI();
+                
+                const fallbackRoom = state.activeMap["bedroom"];
+                if (fallbackRoom) {
+                    UI.addLog(`[SYSTEM]: Emergency translocation successful. You materialize in your bedroom.`, "var(--term-green)");
+                    UI.printRoomDescription(fallbackRoom, false, state.activeMap, activeAvatar);
+                    triggerVisualUpdate(fallbackRoom.visualPrompt, localPlayer, state.activeMap, user);
+                }
+            }
             return [];
         }
         const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
@@ -52,11 +67,15 @@ export async function handleGMIntent(
         const exitText = exitStrs.length > 0 ? exitStrs.join(', ') : "None";
         const adjacentNpcText = adjacentNpcs.length > 0 ? adjacentNpcs.join('\n') : "None";
         
+        // List existing rooms for teleportation/fast-travel context
+        const existingRooms = Object.entries(state.activeMap).map(([id, r]) => `${r.name} (ID: ${id})`).join(', ');
+
         const sysPrompt = `You are Tandy, the GM of Terra Agnostum. 
         Context: ${currentRoomData.name} (${localPlayer.stratum.toUpperCase()}). ${currentRoomData.description}.
         Entities Present: ${npcText}. Inventory: ${inventoryNames}.
         Adjacent Entities (Visible through doorways/counters): ${adjacentNpcText}.
         Exits: ${exitText}.
+        Known Nodes in this Stratum: ${existingRooms}.
         Current Avatar: ${activeAvatar ? `${activeAvatar.name} (${activeAvatar.archetype})` : 'None'}.
         Player Cohesion: ${activeAvatar ? 'MATERIALIZED' : 'VOID (Disembodied)'}.
         Player Auth Tier: ${userTier || 'GUEST'}.
@@ -75,6 +94,10 @@ export async function handleGMIntent(
         
         SPECIAL QUEST: If the user is in the ASTRAL stratum, they are on a quest to obtain a 'Resonant Key' to escape the apartment. 
         The Astral Plane takes shape based on the user's actions. Create bizarre challenges, non-euclidean puzzles, or social encounters with memory-fragments.
+        
+        TELEPORTATION: If the user wants to "go to" a room that is NOT an adjacent exit, you may use "trigger_teleport". 
+        - ALWAYS prioritize using an existing Node ID from the "Known Nodes" list if the user's destination matches its name or purpose.
+        - Only create a "new_room_id" if the user is intentionally moving to a brand new area.
         
         ASTRAL ENCOUNTER: If the user is in the ASTRAL stratum and there is NO 'Shadow Avatar' (or a shadow reflection NPC) currently present in the 'Entities Present' list, you MUST immediately manifest one using "spawn_npc". 
         The Shadow Avatar is a dark, flickering reflection of the user's current avatar. It should challenge the player's identity or purpose. 
@@ -261,9 +284,34 @@ export async function handleGMIntent(
         }
         
             if (res.trigger_teleport && !res.trigger_respawn) {
-                const t = res.trigger_teleport;
+                let t = res.trigger_teleport;
+                
+                // Fuzzy Match Protection: Check if the AI invented a new ID for an existing room name
+                const existingEntry = Object.entries(state.activeMap).find(([id, r]) => 
+                    id.toLowerCase() === t.new_room_id.toLowerCase() || 
+                    r.name.toLowerCase() === t.name.toLowerCase()
+                );
+
+                if (existingEntry) {
+                    t.new_room_id = existingEntry[0];
+                }
+
                 if (!state.activeMap[t.new_room_id]) {
-                    state.activeMap[t.new_room_id] = { ...t, shortName: t.name.substring(0, 7).toUpperCase(), exits: {}, pinnedView: null, items: [], marginalia: [], npcs: [] };
+                    // It's a truly new room, link it back to the current room so they aren't trapped
+                    const returnDir = "back"; // or we could try to be smarter
+                    state.activeMap[t.new_room_id] = { 
+                        ...t, 
+                        shortName: t.name.substring(0, 7).toUpperCase(), 
+                        exits: { [returnDir]: localPlayer.currentRoom }, 
+                        pinnedView: null, 
+                        items: [], 
+                        marginalia: [], 
+                        npcs: [] 
+                    };
+                    
+                    // Also update current room to have an exit to the new room? 
+                    // No, teleport is usually one-way "reality warp" unless they go 'back'.
+
                     if (isSyncEnabled) {
                         if (t.new_room_id.startsWith('astral_')) {
                             const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
