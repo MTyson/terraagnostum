@@ -172,7 +172,7 @@ export async function handleGMIntent(
             );
             
             if (npc) {
-                if (!npc.stats) npc.stats = { WILL: 5, CONS: 20, PHYS: 20 };
+                if (!npc.stats) npc.stats = { WILL: 2, CONS: 20, PHYS: 20 };
                 npc.stats.WILL = Math.max(0, (npc.stats.WILL || 5) - res.damage_to_npc);
                 if (!isSilent) UI.addLog(`[COMBAT]: ${npc.name} took ${res.damage_to_npc} WILL damage! (Remaining WILL: ${npc.stats.WILL})`, "var(--term-amber)");
                 
