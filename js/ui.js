@@ -2,6 +2,29 @@
 // Purpose: Handles all DOM manipulation, canvas rendering, and CSS theme transitions.
 // It manages no global state, relying entirely on the main game engine to pass the correct data.
 
+const stratumDescriptions = {
+    mundane: "The baseline consensus reality. Physical laws strictly apply. The mundane world is ignorant of the deeper layers of existence.",
+    astral: "The realm of thought, memory, and subjective geometry. The environment is highly fluid, and willpower dictates form. Beware of wandering shadow-reflections.",
+    faen: "A chaotic dimension of raw, untamed magic and emotion. Colors bleed, logic fails, and conventional physics collapse.",
+    technate: "A hyper-structured digital/cybernetic overlay. Data is physical, code is law, and the Overarching Mind watches all."
+};
+
+export function toggleStratumModal(currentStratum) {
+    const modal = document.getElementById('stratum-modal');
+    const title = document.getElementById('stratum-modal-title');
+    const desc = document.getElementById('stratum-modal-desc');
+    
+    if (!modal || !title || !desc) return;
+
+    if (modal.classList.contains('hidden')) {
+        title.innerText = `STRATUM: ${currentStratum.toUpperCase()}`;
+        desc.innerText = stratumDescriptions[currentStratum.toLowerCase()] || "Unknown stratum.";
+        modal.classList.remove('hidden');
+    } else {
+        modal.classList.add('hidden');
+    }
+}
+
 // Inject Void Mode CSS
 const style = document.createElement('style');
 style.innerHTML = `
@@ -40,7 +63,7 @@ export function applyStratumTheme(stratum, isTransitioningToFaen) {
         root.style.setProperty('--term-bg', '#1c0f1a');
         root.style.setProperty('--crayola-blue', '#b084e8'); 
         root.style.setProperty('--gm-purple', '#ff77ff');
-        stratDisp.innerText = `STRATA: ${stratum.toUpperCase()}`;
+        stratDisp.innerText = `[ STRATA: ${stratum.toUpperCase()} ]`;
         stratDisp.style.color = 'var(--crayola-blue)';
     } else if (stratum === 'technate') {
         root.style.setProperty('--term-green', '#e0f7fa');
@@ -49,7 +72,7 @@ export function applyStratumTheme(stratum, isTransitioningToFaen) {
         root.style.setProperty('--term-bg', '#010a0f');
         root.style.setProperty('--crayola-blue', '#00ffff'); 
         root.style.setProperty('--gm-purple', '#ffffff');
-        stratDisp.innerText = 'STRATA: TECHNATE';
+        stratDisp.innerText = '[ STRATA: TECHNATE ]';
         stratDisp.style.color = 'var(--term-green)';
     } else {
         root.style.setProperty('--term-green', '#00ff41');
@@ -58,7 +81,7 @@ export function applyStratumTheme(stratum, isTransitioningToFaen) {
         root.style.setProperty('--term-bg', '#050505');
         root.style.setProperty('--crayola-blue', '#3b82f6');
         root.style.setProperty('--gm-purple', '#a855f7');
-        stratDisp.innerText = 'STRATA: MUNDANE';
+        stratDisp.innerText = '[ STRATA: MUNDANE ]';
         stratDisp.style.color = '#888';
     }
 }

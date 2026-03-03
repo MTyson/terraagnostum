@@ -967,6 +967,32 @@ async function handleCommand(val) {
 let isProcessing = false;
 const input = document.getElementById('cmd-input');
 
+// STRATUM MODAL LISTENERS
+const stratumDisplay = document.getElementById('stratum-display');
+if (stratumDisplay) {
+    stratumDisplay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        UI.toggleStratumModal(localPlayer.stratum);
+    });
+}
+
+const closeStratumModal = document.getElementById('close-stratum-modal');
+if (closeStratumModal) {
+    closeStratumModal.addEventListener('click', () => {
+        const modal = document.getElementById('stratum-modal');
+        if (modal) modal.classList.add('hidden');
+    });
+}
+
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('stratum-modal');
+    if (modal && !modal.classList.contains('hidden')) {
+        if (!modal.contains(e.target) && e.target !== stratumDisplay) {
+            modal.classList.add('hidden');
+        }
+    }
+});
+
 if (input) {
     input.addEventListener('keydown', async (e) => {
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && input.value === '') {

@@ -12,10 +12,19 @@
     <div class="terminal-container">
         <!-- HEADER HUD -->
         <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70 flex-shrink-0">
-            <span id="stratum-display" class="text-gray-500 font-bold">STRATA: MUNDANE</span>
+            <span id="stratum-display" class="text-gray-500 font-bold cursor-pointer hover:text-white transition-colors hover:underline decoration-dotted underline-offset-4">[ STRATA: MUNDANE ]</span>
             <span>Node: <span id="room-display">LORE1</span></span>
             <span id="sync-status">SYNC: INITIALIZING</span>
             <span id="time-display">T+00:00:00</span>
+        </div>
+        
+        <!-- STRATUM MODAL -->
+        <div id="stratum-modal" class="hidden absolute top-10 left-2 z-50 bg-black/95 border border-green-500 p-3 max-w-xs shadow-[0_0_10px_rgba(0,255,0,0.5)]">
+            <div class="flex justify-between border-b border-green-800 pb-1 mb-2">
+                <span id="stratum-modal-title" class="font-bold text-green-400 text-xs tracking-widest uppercase"></span>
+                <button id="close-stratum-modal" class="text-gray-500 hover:text-red-500 text-xs cursor-pointer">[X]</button>
+            </div>
+            <div id="stratum-modal-desc" class="text-gray-400 text-[10px] leading-relaxed"></div>
         </div>
 
         <div class="flex flex-1 min-h-0">
