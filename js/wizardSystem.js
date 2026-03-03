@@ -1,19 +1,15 @@
-import { collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { sendSignInLinkToEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { auth, db, appId, isSyncEnabled } from './firebaseConfig.js';
-import { callGemini, projectVisual, generatePortrait } from './apiService.js'; // Added generatePortrait
+import { callGemini, generatePortrait } from './apiService.js'; 
 import * as UI from './ui.js';
+import * as stateManager from './stateManager.js';
+import * as syncEngine from './syncEngine.js';
 
-const CHAR_COLLECTION = 'v3_characters'; // Matches main.js for safety
-
-export let wizardState = { active: false, type: null, step: 0, pendingData: {} };
-
+// State is now managed by stateManager.js
 export function startWizard(type, initialData = {}) {
-    wizardState = { active: true, type, step: 1, pendingData: initialData };
+    stateManager.startWizard(type, initialData);
 }
 
 export function resetWizard() {
-    wizardState = { active: false, type: null, step: 0, pendingData: {} };
+    stateManager.resetWizard();
 }
 
 // Built-in Compression Utility to prevent 1MB Firestore limits
@@ -42,24 +38,22 @@ async function compressImage(base64Str, maxWidth = 512, quality = 0.7) {
 
 // The Core Handler (Now Context-Aware!)
 export async function handleWizardInput(val, context = {}, callbacks = {}) {
+    const wizardState = stateManager.getState().wizardState;
     let currentVal = val.trim();
     
-    // Unpack the state passed from main.js
-    const { activeMap, localPlayer, user, activeAvatar, isSyncEnabled, db, appId } = context;
+    // Unpack the context
+    const { activeMap, localPlayer, user, activeAvatar } = context;
     const { 
-        refreshAllUI, 
         updateMapListener, 
         setActiveAvatar, 
         addLocalCharacter, 
         shiftStratum, 
         savePlayerState, 
-        refreshStatusUI, 
         handleGMIntent 
     } = callbacks;
 
     const endWizard = () => {
         resetWizard();
-        if (refreshAllUI) refreshAllUI();
     };
 
     // 1. LOGIN WIZARD
@@ -72,6 +66,12 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     if (wizardState.type === 'login') {
         const email = currentVal;
         UI.addLog(`[SYSTEM]: Transmitting anchoring frequency to ${email}...`, "var(--term-amber)");
+        // Authentication still uses direct Firebase Auth (handled in main.js or here via imports if needed, 
+        // but user message says severance from Firestore, not necessarily Auth).
+        // Actually, sendSignInLinkToEmail is imported in wizardSystem.js
+        const { auth } = await import('./firebaseConfig.js');
+        const { sendSignInLinkToEmail } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
+
         const actionCodeSettings = { url: window.location.href.split('?')[0], handleCodeInApp: true };
         try {
             await sendSignInLinkToEmail(auth, email, actionCodeSettings);
@@ -90,9 +90,8 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 const aiRes = await callGemini("Generate 1 cool cyberpunk name. Name only.");
                 currentVal = aiRes.trim();
             }
-            wizardState.pendingData.name = currentVal;
+            stateManager.updateWizardState({ pendingData: { ...wizardState.pendingData, name: currentVal }, step: 2 });
             UI.addLog(`[WIZARD]: Name confirmed: '${currentVal}'. Enter Archetype or press ENTER:`, "var(--term-amber)");
-            wizardState.step++;
         } 
         else if (wizardState.step === 2) {
             if (!currentVal) {
@@ -100,22 +99,21 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 const aiRes = await callGemini(`Suggest a 1-word cyberpunk archetype for ${wizardState.pendingData.name}.`);
                 currentVal = aiRes.replace(/["']/g, '').trim();
             }
-            wizardState.pendingData.archetype = currentVal;
+            stateManager.updateWizardState({ pendingData: { ...wizardState.pendingData, archetype: currentVal }, step: 3 });
             UI.addLog(`[WIZARD]: Archetype logged. Press ENTER for an AI visual imprint:`, "var(--term-amber)");
-            wizardState.step++;
         } 
         else if (wizardState.step === 3) {
             if (!currentVal) {
                 UI.addLog("[SYSTEM]: Extrapolating visual imprint...", "var(--term-amber)");
                 currentVal = await callGemini(`1-sentence visual description of ${wizardState.pendingData.name}, a ${wizardState.pendingData.archetype} in a cyberpunk world.`);
             }
-            wizardState.pendingData.visual_prompt = currentVal;
+            
             UI.addLog(`[SYSTEM]: Collapsing quantum state... Materializing vessel...`, "var(--gm-purple)");
             
             let finalImage = null;
             try {
                 UI.addLog(`[SYSTEM]: Rendering vessel matrix...`, "var(--term-amber)");
-                const b64 = await generatePortrait(wizardState.pendingData.visual_prompt, localPlayer.stratum);
+                const b64 = await generatePortrait(currentVal, localPlayer.stratum);
                 
                 if (b64) {
                     UI.addLog(`[SYSTEM]: Optimizing visual signature for stability...`, "var(--term-amber)");
@@ -130,34 +128,28 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             const finalData = {
                 name: wizardState.pendingData.name,
                 archetype: wizardState.pendingData.archetype,
-                visual_prompt: wizardState.pendingData.visual_prompt,
+                visual_prompt: currentVal,
                 image: finalImage,
                 stats: { WILL: 20, CONS: 20, PHYS: 20 },
                 deceased: false, deployed: false, timestamp: Date.now()
             };
 
-            const currentUser = user || auth.currentUser;
-            if (currentUser) {
-                addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, CHAR_COLLECTION), finalData).then(docRef => {
-                    finalData.id = docRef.id;
-                    if (setActiveAvatar) setActiveAvatar(finalData);
-                    if (addLocalCharacter) addLocalCharacter(finalData);
-                    UI.materializeEffect(); 
-                    UI.addLog(`[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.`, "var(--term-green)");
-                    UI.addLog(`[TANDY]: You have a shape now. Good. But your signature is fragile... a stiff breeze could scatter you. Go to the Lore Archive and use the Tandem Terminal to 'login'. Anchor yourself.`, "#b084e8");
-                    
-                    // Set flag for new user hint after login
-                    if (!currentUser || currentUser.isAnonymous) {
-                        localStorage.setItem('awaitingNewUserHint', 'true');
-                    }
-                    
-                    endWizard();
-                }).catch(e => {
-                    UI.addLog("[SYSTEM ERROR]: Failed to persist vessel.", "var(--term-red)");
-                    console.error(e);
-                    endWizard();
-                });
+            const characterId = await syncEngine.createCharacter(finalData);
+            if (characterId) {
+                finalData.id = characterId;
+                stateManager.setActiveAvatar(finalData);
+                const { localCharacters } = stateManager.getState();
+                stateManager.setLocalCharacters([...localCharacters, finalData]);
+                UI.materializeEffect(); 
+                UI.addLog(`[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.`, "var(--term-green)");
+                UI.addLog(`[TANDY]: You have a shape now. Good. But your signature is fragile... a stiff breeze could scatter you. Go to the Lore Archive and use the Tandem Terminal to 'login'. Anchor yourself.`, "#b084e8");
+                
+                if (!user || user.isAnonymous) {
+                    localStorage.setItem('awaitingNewUserHint', 'true');
+                }
+                endWizard();
             } else {
+                UI.addLog("[SYSTEM ERROR]: Failed to persist vessel.", "var(--term-red)");
                 endWizard();
             }
         }
@@ -168,20 +160,24 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     if (wizardState.type === 'item') {
         if (!currentVal) return;
         const room = activeMap[localPlayer.currentRoom];
-        if (!room.items) room.items = [];
-        room.items.push({ name: currentVal, type: "Constructed Object" });
+        const newItem = { name: currentVal, type: "Constructed Object" };
+        const items = [...(room.items || []), newItem];
+        stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { items });
+        syncEngine.addArrayElementToNode(localPlayer.currentRoom, 'items', newItem);
         UI.addLog(`[SYSTEM]: Materialized [${currentVal}].`, "var(--term-green)");
-        if (isSyncEnabled && updateMapListener) updateMapListener();
         endWizard();
         return;
     }
 
     if (wizardState.type === 'room') {
         if (currentVal) {
-            activeMap[localPlayer.currentRoom].name = currentVal;
-            activeMap[localPlayer.currentRoom].shortName = currentVal.substring(0, 7).toUpperCase();
+            const updates = {
+                name: currentVal,
+                shortName: currentVal.substring(0, 7).toUpperCase()
+            };
+            stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, updates);
+            syncEngine.updateMapNode(localPlayer.currentRoom, updates);
             UI.addLog(`[SYSTEM]: Sector identity overwritten.`, "var(--term-green)");
-            if (isSyncEnabled && updateMapListener) updateMapListener();
         }
         endWizard();
         return;
@@ -192,9 +188,11 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         const dir = wizardState.pendingData.direction;
         const room = activeMap[localPlayer.currentRoom];
         const target = typeof room.exits[dir] === 'string' ? room.exits[dir] : room.exits[dir].target;
-        room.exits[dir] = { target: target, locked: true, lockMsg: currentVal };
+        const exitUpdate = { target: target, locked: true, lockMsg: currentVal };
+        const exits = { ...room.exits, [dir]: exitUpdate };
+        stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { exits });
+        syncEngine.updateMapNode(localPlayer.currentRoom, { [`exits.${dir}`]: exitUpdate });
         UI.addLog(`[SYSTEM]: Exit ${dir.toUpperCase()} locked.`, "var(--term-amber)");
-        if (isSyncEnabled && updateMapListener) updateMapListener();
         endWizard();
         return;
     }
@@ -203,9 +201,9 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         if (!currentVal) return;
         const dir = wizardState.pendingData.direction;
         const newRoomId = 'room_' + crypto.randomUUID().split('-')[0];
-        const getOpposite = (d) => ({'north':'south','north':'north','east':'west','west':'east'})[d] || 'out';
+        const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
         
-        activeMap[newRoomId] = {
+        const newRoom = {
             name: currentVal,
             shortName: currentVal.substring(0, 7).toUpperCase(),
             description: "A newly woven pocket of reality. It is waiting for definition.",
@@ -214,9 +212,14 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             items: [], npcs: []
         };
         
-        activeMap[localPlayer.currentRoom].exits[dir] = newRoomId;
+        stateManager.updateMapNode(newRoomId.startsWith('astral_') ? 'astral' : 'apartment', newRoomId, newRoom);
+        syncEngine.updateMapNode(newRoomId, newRoom);
+
+        const currentExits = { ...activeMap[localPlayer.currentRoom].exits, [dir]: newRoomId };
+        stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { exits: currentExits });
+        syncEngine.updateMapNode(localPlayer.currentRoom, { [`exits.${dir}`]: newRoomId });
+
         UI.addLog(`[SYSTEM]: Reality expanded ${dir.toUpperCase()}.`, "var(--term-green)");
-        if (isSyncEnabled && updateMapListener) updateMapListener();
         endWizard();
         return;
     }
@@ -232,7 +235,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                  const newRoomId = 'room_' + crypto.randomUUID().split('-')[0];
                  const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
                  
-                 activeMap[newRoomId] = {
+                 const newRoom = {
                      name: res.name,
                      shortName: res.name.substring(0, 7).toUpperCase(),
                      description: res.description,
@@ -241,9 +244,15 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                      items: [], npcs: []
                  };
                  
-                 if (dir !== 'here') activeMap[localPlayer.currentRoom].exits[dir] = newRoomId;
+                 stateManager.updateMapNode(newRoomId.startsWith('astral_') ? 'astral' : 'apartment', newRoomId, newRoom);
+                 syncEngine.updateMapNode(newRoomId, newRoom);
+
+                 if (dir !== 'here') {
+                    const currentExits = { ...activeMap[localPlayer.currentRoom].exits, [dir]: newRoomId };
+                    stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { exits: currentExits });
+                    syncEngine.updateMapNode(localPlayer.currentRoom, { [`exits.${dir}`]: newRoomId });
+                 }
                  UI.addLog(`[SYSTEM]: Sector generated.`, "var(--term-green)");
-                 if (isSyncEnabled && updateMapListener) updateMapListener();
              }
          } catch(e) { UI.addLog("[SYSTEM ERROR]: Weave failed.", "var(--term-red)"); }
          endWizard();
@@ -253,7 +262,6 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     if (wizardState.type === 'deploy_npc') {
         if (!currentVal) return;
         const room = activeMap[localPlayer.currentRoom];
-        if (!room.npcs) room.npcs = [];
         
         const newNpc = {
             name: activeAvatar.name,
@@ -262,10 +270,12 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             image: activeAvatar.image,
             behavior: currentVal
         };
-        room.npcs.push(newNpc);
+        const npcs = [...(room.npcs || []), newNpc];
+        stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { npcs });
+        syncEngine.addArrayElementToNode(localPlayer.currentRoom, 'npcs', newNpc);
+
         UI.addLog(`[SYSTEM]: Vessel detached and autonomous protocol initialized.`, "var(--term-amber)");
-        if (isSyncEnabled && updateMapListener) updateMapListener();
-        if (setActiveAvatar) setActiveAvatar(null);
+        stateManager.setActiveAvatar(null);
         endWizard();
         return;
     }
@@ -273,25 +283,22 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     if (wizardState.type === 'create_npc') {
         if (wizardState.step === 1) {
             if (!currentVal) return;
-            wizardState.pendingData.name = currentVal;
+            stateManager.updateWizardState({ pendingData: { ...wizardState.pendingData, name: currentVal }, step: 2 });
             UI.addLog(`[WIZARD]: Name logged. Enter Archetype (e.g., 'Vendor', 'Guard'):`, "var(--term-amber)");
-            wizardState.step++;
         } else if (wizardState.step === 2) {
             if (!currentVal) return;
-            wizardState.pendingData.archetype = currentVal;
+            stateManager.updateWizardState({ pendingData: { ...wizardState.pendingData, archetype: currentVal }, step: 3 });
             UI.addLog(`[WIZARD]: Archetype logged. Enter Visual Description:`, "var(--term-amber)");
-            wizardState.step++;
         } else if (wizardState.step === 3) {
             if (!currentVal) return;
-            wizardState.pendingData.visualPrompt = currentVal;
             UI.addLog(`[SYSTEM]: Compiling NPC...`, "var(--term-amber)");
             
             let npcImg = null;
             try {
-                const b64 = await generatePortrait(wizardState.pendingData.visualPrompt, localPlayer.stratum);
+                const b64 = await generatePortrait(currentVal, localPlayer.stratum);
                 if (b64) {
                     const dataUrl = `data:image/png;base64,${b64}`;
-                    npcImg = await compressImage(dataUrl, 512, 0.7);
+                    npcImg = await compressImage(dataUrl, 400, 0.7);
                 }
             } catch(e) {
                 console.error("NPC render error:", e);
@@ -300,22 +307,23 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             const newNpc = {
                 name: wizardState.pendingData.name,
                 archetype: wizardState.pendingData.archetype,
-                visualPrompt: wizardState.pendingData.visualPrompt,
+                visualPrompt: currentVal,
                 image: npcImg,
                 behavior: "Standing idle."
             };
             
             const room = activeMap[localPlayer.currentRoom];
-            if (!room.npcs) room.npcs = [];
-            room.npcs.push(newNpc);
+            const npcs = [...(room.npcs || []), newNpc];
+            stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { npcs });
+            syncEngine.addArrayElementToNode(localPlayer.currentRoom, 'npcs', newNpc);
+            
             UI.addLog(`[SYSTEM]: Entity [${newNpc.name}] spawned successfully.`, "var(--term-green)");
-            if (isSyncEnabled && updateMapListener) updateMapListener();
             endWizard();
         }
         return;
     }
 
-    // === 4. TUTORIAL CYOA WIZARD | NOT CURRENTLY USED: KEEP THE CODE! ===
+    // === 4. TUTORIAL CYOA WIZARD ===
     if (wizardState.type === 'tutorial_cyoa') {
         if (wizardState.step === 1) {
             if (!currentVal) return;
@@ -325,7 +333,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 const response = await callGemini("Process CYOA turn 1", prompt);
                 UI.addLog(`[NARRATOR]: ${response}`, "#888");
                 UI.addLog(`[WIZARD]: How do you proceed?`, "var(--term-amber)");
-                wizardState.step++;
+                stateManager.updateWizardState({ step: 2 });
             } catch (e) {
                 UI.addLog(`[SYSTEM ERROR]: The connection destabilized. Try your action again.`, "var(--term-red)");
             }
@@ -336,7 +344,6 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             try {
                 const responseStr = await callGemini("Process CYOA turn 2", prompt);
                 
-                // Gemini might return markdown JSON blocks, so we clean it up
                 const cleanJson = responseStr.replace(/```json/g, '').replace(/```/g, '').trim();
                 const response = JSON.parse(cleanJson);
                 
@@ -344,22 +351,19 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 
                 if (response.success) {
                     UI.addLog(`[SYSTEM]: ANOMALY RESOLVED. REWARD DISTRIBUTED.`, "var(--term-green)");
-                    localPlayer.inventory.push({ 
+                    const newItem = { 
                         name: "Resonant Key", 
                         type: "Key Item", 
                         description: "A fractal shard of crystallized Meaning. It hums with the frequency of the front door." 
-                    });
+                    };
+                    stateManager.updatePlayer({ inventory: [...localPlayer.inventory, newItem] });
                     UI.addLog(`[TANDY]: You did it. You synthesized a Resonant Key. Returning you to mundane reality now. Go to the front door in the hallway and use the key to exit.`, "#b084e8");
                 } else {
                     UI.addLog(`[SYSTEM]: ANOMALY UNRESOLVED. YOU WERE EJECTED FROM THE ASTRAL PLANE.`, "var(--term-red)");
                     UI.addLog(`[TANDY]: That was close. The field collapsed. You'll need to tune the generator and try again when you're ready.`, "#b084e8");
                 }
                 
-                // Return to Mundane Stratum
                 if (shiftStratum) shiftStratum('mundane');
-                
-                // Update the inventory UI
-                if (refreshAllUI) refreshAllUI();
                 endWizard();
             } catch (e) {
                 UI.addLog(`[SYSTEM ERROR]: The connection destabilized. Try your action again.`, "var(--term-red)");
@@ -386,7 +390,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 const newRoomId = 'astral_' + Date.now();
                 const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
                 
-                activeMap[newRoomId] = {
+                const newRoom = {
                     name: res.name,
                     shortName: res.name.substring(0, 7).toUpperCase(),
                     description: res.description,
@@ -395,23 +399,24 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                     items: [], marginalia: [], npcs: []
                 };
                 
-                activeMap[fromId].exits = activeMap[fromId].exits || {};
-                activeMap[fromId].exits[dir] = newRoomId;
+                stateManager.updateMapNode('astral', newRoomId, newRoom);
+                syncEngine.updateMapNode(newRoomId, newRoom);
 
-                localPlayer.currentRoom = newRoomId;
+                const fromExits = { ...(activeMap[fromId].exits || {}), [dir]: newRoomId };
+                stateManager.updateMapNode('astral', fromId, { exits: fromExits });
+                syncEngine.updateMapNode(fromId, { [`exits.${dir}`]: newRoomId });
+
+                stateManager.updatePlayer({ currentRoom: newRoomId });
                 UI.addLog(`[SYSTEM]: Sector successfully manifested.`, "var(--term-green)");
-                UI.printRoomDescription(activeMap[newRoomId], true, activeMap, activeAvatar);
+                UI.printRoomDescription(newRoom, true, activeMap, activeAvatar);
                 
-                // Trigger visual update
-                const { triggerVisualUpdate } = await import('./visualSystem.js');
-                triggerVisualUpdate(res.visual_prompt, localPlayer, activeMap, user);
+                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, stateManager.getActiveMap(), user);
 
-                // Force the AI GM to react to the player entering the new pocket
                 if (handleGMIntent) {
                     handleGMIntent(
                         "The player has just manifested and entered this new astral sector. Check your directives for the Glitchy Shadow Avatar and present a challenge.", 
-                        context, 
-                        { ...callbacks, updateMapListener }
+                        { ...context, activeMap: stateManager.getActiveMap(), localPlayer: stateManager.getState().localPlayer }, 
+                        { ...callbacks, updateMapListener: () => syncEngine.updateMapListener(stateManager.getState().user) }
                     );
                 }
             }

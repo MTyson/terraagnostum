@@ -1,10 +1,26 @@
-import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 import { db, storage, appId } from './firebaseConfig.js';
+import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 import { projectVisual } from './apiService.js';
 import * as UI from './ui.js';
+import * as stateManager from './stateManager.js';
+import * as syncEngine from './syncEngine.js';
 
 let currentBase64 = null;
+let lastRoomId = null;
+let lastStratum = null;
+
+// Subscribe to state changes for visual updates
+stateManager.subscribe((state) => {
+    const { localPlayer, user } = state;
+    const activeMap = stateManager.getActiveMap();
+    
+    // Only trigger if room or stratum changed
+    if (localPlayer.currentRoom !== lastRoomId || localPlayer.stratum !== lastStratum) {
+        lastRoomId = localPlayer.currentRoom;
+        lastStratum = localPlayer.stratum;
+        triggerVisualUpdate(null, localPlayer, activeMap, user);
+    }
+});
 
 export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap, user) {
     const roomId = localPlayer.currentRoom;
@@ -49,8 +65,6 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
     }
 }
 
-// TEST git
-
 export async function togglePinView(localPlayer, activeMap, user) {
     if (!user || user.isAnonymous) { 
         UI.addLog("[SYSTEM]: Identity verification required for reality anchoring.", "var(--term-red)");
@@ -63,9 +77,8 @@ export async function togglePinView(localPlayer, activeMap, user) {
     if (room.pinnedView) {
         UI.togglePinButton(true, "UNPINNING...", "uploading");
         try {
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-            await updateDoc(mapRef, { [`nodes.${roomId}.pinnedView`]: null });
-            activeMap[roomId].pinnedView = null;
+            await syncEngine.updateMapNode(roomId, { pinnedView: null });
+            stateManager.updateMapNode(roomId.startsWith('astral_') ? 'astral' : 'apartment', roomId, { pinnedView: null });
             
             UI.addLog(`[SYSTEM]: Consensus reality anchor lifted. Space is fluid again.`, "var(--term-amber)");
             triggerVisualUpdate(null, localPlayer, activeMap, user); 
@@ -87,9 +100,8 @@ export async function togglePinView(localPlayer, activeMap, user) {
             await uploadString(fileRef, dataUrl, 'data_url');
             const downloadUrl = await getDownloadURL(fileRef);
             
-            const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'maps', 'apartment_graph_live');
-            await updateDoc(mapRef, { [`nodes.${roomId}.pinnedView`]: downloadUrl });
-            activeMap[roomId].pinnedView = downloadUrl;
+            await syncEngine.updateMapNode(roomId, { pinnedView: downloadUrl });
+            stateManager.updateMapNode(roomId.startsWith('astral_') ? 'astral' : 'apartment', roomId, { pinnedView: downloadUrl });
             
             UI.togglePinButton(true, "PINNED!", "pinned");
             UI.addLog(`[SYSTEM]: Consensus reality locked. The visual projection of ${activeMap[roomId].name || 'this sector'} is now canonical.`, "var(--gm-purple)");

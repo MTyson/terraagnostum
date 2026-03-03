@@ -1,6 +1,96 @@
 // js/ui.js
 // Purpose: Handles all DOM manipulation, canvas rendering, and CSS theme transitions.
-// It manages no global state, relying entirely on the main game engine to pass the correct data.
+// It manages no global state, relying entirely on the stateManager to pass the correct data.
+import * as stateManager from './stateManager.js';
+
+// Subscribe to state changes
+stateManager.subscribe((state) => {
+    const { activeAvatar, localPlayer, activeTerminal, wizardState } = state;
+    const activeMap = stateManager.getActiveMap();
+    const tier = stateManager.getUserTier();
+    
+    // Determine void mode
+    if (!activeAvatar) {
+        document.body.classList.add('void-mode');
+    } else {
+        document.body.classList.remove('void-mode');
+    }
+
+    // Update Command Prompt
+    const roomShort = activeMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
+    const wizardPlaceholder = wizardState.active ? (wizardState.type === 'login' ? '[ AWAITING EMAIL... ]' : '[ AWAITING INPUT... ]') : null;
+    let combatSuffix = localPlayer.combat.active ? `[COMBAT vs ${localPlayer.combat.opponent}]` : null;
+    
+    updateCommandPrompt(tier, roomShort, activeTerminal, wizardPlaceholder, activeAvatar, combatSuffix);
+
+    // Update Status UI
+    updateStatusUI(roomShort);
+
+    // Update Avatar UI
+    updateAvatarUI(activeAvatar);
+
+    // Update Inventory UI
+    updateInventoryUI(localPlayer.inventory);
+
+    // Update Room UI
+    const room = activeMap[localPlayer.currentRoom];
+    updateRoomItemsUI(room?.items);
+    updateRoomEntitiesUI(room?.npcs);
+    renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
+    updateContextualSuggestions(state.suggestions);
+});
+
+export function updateContextualSuggestions(aigmSuggestions = []) {
+    const { wizardState, localPlayer } = stateManager.getState();
+    if (wizardState.active) {
+        // Wizards might benefit from specific chips like 'Cancel'
+        renderContextualCommands(['Exit Wizard']);
+        return;
+    }
+
+    const activeMap = stateManager.getActiveMap();
+    const room = activeMap[localPlayer.currentRoom];
+    if (!room) return;
+
+    let suggestions = [];
+
+    // 1. DYNAMIC EXITS
+    if (room.exits) {
+        Object.keys(room.exits).forEach(dir => {
+            suggestions.push(`Go ${dir.charAt(0).toUpperCase() + dir.slice(1)}`);
+        });
+    }
+
+    // 2. NPC INTERACTIONS
+    if (room.npcs && room.npcs.length > 0) {
+        room.npcs.forEach(npc => {
+            suggestions.push(`Look at ${npc.name}`);
+        });
+    }
+
+    // 2.5 COMBAT ACTIONS
+    if (localPlayer.combat.active) {
+        suggestions.push("ATTACK WITH WILL FORCE");
+        suggestions.push("CREATE ASTRAL WEAPON");
+    }
+
+    // 3. MERGE AIGM SUGGESTIONS
+    const safeAigm = Array.isArray(aigmSuggestions) ? aigmSuggestions : [];
+    suggestions = [...suggestions, ...safeAigm];
+
+    // 4. CORE SYSTEM DEFAULTS
+    if (suggestions.length < 4) {
+        suggestions.push("Look");
+        suggestions.push("Inventory");
+    }
+
+    // 5. THE AI SUGGESTION ENGINE (Always available)
+    suggestions.push("💡 Suggest");
+
+    // Deduplicate and Render
+    const uniqueSuggestions = [...new Set(suggestions)];
+    renderContextualCommands(uniqueSuggestions);
+}
 
 const stratumDescriptions = {
     mundane: "The baseline consensus reality. Physical laws strictly apply. The mundane world is ignorant of the deeper layers of existence.",
