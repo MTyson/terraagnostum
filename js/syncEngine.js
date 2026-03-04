@@ -230,14 +230,23 @@ export async function updateMapNode(roomId, updates) {
     
     const mapPath = getMapPath(roomId, user.uid);
     const mapRef = doc(db, mapPath);
+    
+    // Prepare dotted paths for updateDoc
     const firestoreUpdates = {};
     for (let [key, val] of Object.entries(updates)) {
         firestoreUpdates[`nodes.${roomId}.${key}`] = val;
     }
     
     try {
+        // Try to update existing document using dotted paths (Deep Nesting)
         await updateDoc(mapRef, firestoreUpdates);
-    } catch (e) { console.error("SyncEngine: Failed to update map node:", e); }
+    } catch (e) {
+        // If the document does not exist, updateDoc throws an error.
+        // We fall back to creating it with a deeply nested object so setDoc behaves.
+        console.warn(`[SYNC]: Map document missing for ${roomId}. Creating new document...`);
+        const nestedData = { nodes: { [roomId]: updates } };
+        await setDoc(mapRef, nestedData, { merge: true });
+    }
 }
 
 export async function logManifestation(roomId, text) {

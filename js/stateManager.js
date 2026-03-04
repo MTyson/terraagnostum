@@ -135,7 +135,15 @@ export function setAstralMap(nodes) {
 }
 
 export function updateMapNode(mapType, nodeId, updates) {
-    const map = mapType === 'astral' ? state.astralMap : state.apartmentMap;
+    let map;
+    if (mapType === 'astral') {
+        map = state.astralMap;
+    } else if (mapType === 'mundane') {
+        map = state.mundaneMap; // Added missing mundane support
+    } else {
+        map = state.apartmentMap;
+    }
+    
     if (map[nodeId]) {
         map[nodeId] = { ...map[nodeId], ...updates };
         notify();

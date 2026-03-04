@@ -94,7 +94,7 @@
             border: 1px solid #1a3a1a;
             margin-bottom: 15px;
             background: #000;
-            display: none;
+            display: block;
             position: relative;
             overflow: hidden;
             border-radius: 4px;

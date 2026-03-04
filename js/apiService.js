@@ -51,25 +51,12 @@ export async function callGemini(userInput, systemPrompt) {
     return JSON.parse(data.candidates[0].content.parts[0].text);
 }
 
-// Generates the image or loads the pinned URL
+// Generates the image or returns the base64 string for processing
 export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewUrl = null) {
-    const loader = document.getElementById('visual-loading');
-    const buffer = document.getElementById('visual-buffer');
-    const img = document.getElementById('visual-image');
-    
-    if(!loader || !buffer || !img) return null;
-
-    buffer.style.display = 'block';
-    loader.classList.remove('hidden');
-    img.style.display = 'none';
-
     // If an Architect has pinned a view for this room, skip AI entirely!
     if (pinnedViewUrl) {
-        img.src = pinnedViewUrl;
-        img.style.display = 'block';
-        loader.classList.add('hidden');
         if (addLogCallback) addLogCallback(`[SYSTEM]: Retrieving Architect-pinned memory for this sector...`, "var(--term-green)");
-        return null; 
+        return pinnedViewUrl; // Return the URL directly
     }
 
     const styledPrompt = `Lofi glitch terminal art: ${prompt}. ${stratum} stratum aesthetic`;
@@ -86,17 +73,12 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
         const data = await res.json();
         if (data.predictions && data.predictions[0]) {
             const b64 = data.predictions[0].bytesBase64Encoded;
-            img.src = `data:image/png;base64,${b64}`;
-            img.style.display = 'block';
             if (addLogCallback) addLogCallback(`VISUAL BUFFER PULSED.`, "var(--term-amber)");
             return b64; 
         }
     } catch (e) { 
         console.error("Image Projection Error:", e);
         if (addLogCallback) addLogCallback("VISUAL BUFFER ERROR", "var(--term-red)"); 
-    }
-    finally { 
-        loader.classList.add('hidden'); 
     }
     return null;
 }
