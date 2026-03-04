@@ -62,11 +62,19 @@ export function getActiveMap() {
     if (currentRoom?.startsWith('astral_') || stratum === 'astral') {
         return state.astralMap;
     }
-    // Check if the room belongs to the archive/apartment
+    // Check archive first
     if (isArchiveRoom(currentRoom)) {
         return state.apartmentMap;
     }
-    // Fall back to mundane map for everything else
+    // Fallback chain for mundane rooms: 
+    // 1. Mundane Map (Synced Public World)
+    // 2. Apartment Map (Static Base Rooms / Private Instance)
+    if (state.mundaneMap && state.mundaneMap[currentRoom]) {
+        return state.mundaneMap;
+    }
+    if (state.apartmentMap[currentRoom]) {
+        return state.apartmentMap;
+    }
     return state.mundaneMap;
 }
 
