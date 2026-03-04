@@ -163,17 +163,23 @@ export async function updateMapListener(startRoom, mergeAndRefreshCallback) {
         let resolved = false;
         mapUnsubscribe = onSnapshot(mapRef, (snap) => {
             if (!snap.exists()) {
-                const { apartmentMap } = stateManager.getState();
-                setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
+                // Map Initialization: If snapshot doesn't exist and it's an Archive room, initialize it
+                if (isArchiveRoom(roomToUse)) {
+                    const { apartmentMap } = stateManager.getState();
+                    setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
+                }
             } else {
                 const data = snap.data();
                 if (data.nodes) {
+                    // Data Routing: Ensure data is routed to the correct state bucket
                     if (mergeAndRefreshCallback) {
                         mergeAndRefreshCallback(data.nodes);
-                    } else if (isMundane) {
-                        stateManager.setMundaneMap(data.nodes); // Use the new setter!
-                    } else {
+                    } else if (roomToUse.startsWith('astral_')) {
+                        stateManager.setAstralMap(data.nodes);
+                    } else if (isArchiveRoom(roomToUse)) {
                         stateManager.setApartmentMap(data.nodes);
+                    } else {
+                        stateManager.setMundaneMap(data.nodes);
                     }
                 }
             }
