@@ -171,12 +171,12 @@ export async function updateMapListener(startRoom, mergeAndRefreshCallback) {
             } else {
                 const data = snap.data();
                 if (data.nodes) {
-                    // Data Routing: Ensure data is routed to the correct state bucket
+                    // Data Routing: Ensure data is routed to the correct state bucket based on path
                     if (mergeAndRefreshCallback) {
                         mergeAndRefreshCallback(data.nodes);
-                    } else if (roomToUse.startsWith('astral_')) {
+                    } else if (currentMapPath.includes('astral_nodes')) {
                         stateManager.setAstralMap(data.nodes);
-                    } else if (isArchiveRoom(roomToUse)) {
+                    } else if (currentMapPath.includes('apartment_nodes')) {
                         stateManager.setApartmentMap(data.nodes);
                     } else {
                         stateManager.setMundaneMap(data.nodes);
