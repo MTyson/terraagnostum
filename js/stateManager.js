@@ -111,7 +111,14 @@ export function updatePlayer(updates) {
 }
 
 export function setApartmentMap(nodes) {
-    state.apartmentMap = { ...initialMap, ...nodes };
+    // Deep merge nodes with initialMap to preserve base metadata
+    const merged = { ...initialMap };
+    if (nodes) {
+        Object.keys(nodes).forEach(roomId => {
+            merged[roomId] = { ...(merged[roomId] || {}), ...nodes[roomId] };
+        });
+    }
+    state.apartmentMap = merged;
     validateLocation();
     notify();
 }

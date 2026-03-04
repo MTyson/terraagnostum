@@ -1,4 +1,4 @@
-export const ARCHIVE_NODES = ['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet', 'character_room', 'hallway'];
+export const ARCHIVE_NODES = ['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet', 'character_room', 'hallway', 'outside'];
 export const isArchiveRoom = (roomId) => ARCHIVE_NODES.includes(roomId);
 
 export const apartmentMap = {

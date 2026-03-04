@@ -425,9 +425,11 @@ export function renderMapHUD(activeMap, currentRoomKey, stratum) {
     while(queue.length > 0) {
         let curr = queue.shift();
         if (processed.has(curr.key)) continue;
-        processed.add(curr.key);
+        
         let node = activeMap[curr.key];
         if(!node) continue;
+        
+        processed.add(curr.key);
         if (node.exits) {
             const getTarget = (val) => (val && typeof val === 'object') ? val.target : val;
             
