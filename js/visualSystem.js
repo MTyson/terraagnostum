@@ -137,7 +137,12 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
         // 4. ASYNC UPLOAD (Background process)
         try {
             currentBase64 = result;
-            const storagePath = `artifacts/${appId}/${capturedArea}/${roomId}.png`;
+            
+            // Flat Architecture Storage Paths using the captured area
+            let storagePath = capturedArea.startsWith('apartment_') || capturedArea.startsWith('astral_')
+                ? `artifacts/${appId}/users/${user.uid}/areas/${capturedArea}/rooms/${roomId}.png`
+                : `artifacts/${appId}/public/data/areas/${capturedArea}/rooms/${roomId}.png`;
+                
             const fileRef = ref(storage, storagePath);
             await uploadString(fileRef, result, result.startsWith('data:') ? 'data_url' : 'base64');
             const downloadURL = await getDownloadURL(fileRef);

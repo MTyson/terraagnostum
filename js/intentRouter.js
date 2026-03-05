@@ -69,88 +69,55 @@ export async function executeMovement(targetDir) {
     }
     
     if (currentRoom.exits && currentRoom.exits[targetDir]) {
-        const exitData = currentRoom.exits[targetDir];
+        const targetExit = currentRoom.exits[targetDir];
+        const targetRoomId = typeof targetExit === 'string' ? targetExit : targetExit.target;
 
-        if (typeof exitData === 'object' && exitData.locked) {
-            UI.addLog(`[BLOCKED]: ${exitData.lockMsg || 'The path is barred.'}`, "var(--term-amber)");
-            return; 
-        }
-
-        const nextRoomKey = typeof exitData === 'string' ? exitData : exitData.target;
-        
-        // --- QUEST LOCK: FRONT DOOR ---
-        if (localPlayer.currentRoom === 'hallway' && targetDir === 'south' && nextRoomKey === 'outside') {
-            const currentRoomData = activeMap[localPlayer.currentRoom];
-            
-            // Check if it's already unlocked (allowing for string or object exit types)
-            const isLocked = typeof currentRoomData.exits.south === 'object' && currentRoomData.exits.south.locked;
-            
-            if (!isLocked) {
-                // Already open, proceed normally
-            } else {
-                const keyIdx = localPlayer.inventory.findIndex(i => i.name === "Resonant Key");
-                if (keyIdx === -1) {
-                    UI.addLog("[BLOCKED]: The front door is locked with a quantum seal. It requires a 'Resonant Key' to open.", "var(--term-amber)");
-                    UI.addLog("[TANDY]: You'll need to go to the closet and tune the generator to the Astral Plane to synthesize a key.", "#b084e8");
-                    return;
-                } else {
-                    UI.addLog("[SUCCESS]: You press the Resonant Key against the seal. It vibrates, then dissolves into light as the door unlatches.", "var(--term-green)");
-                    
-                    // 1. Update Firestore so the door stays open for this user
-                    syncEngine.updateMapNode('hallway', { 
-                        exits: { ...currentRoomData.exits, south: { target: 'outside', locked: false } } 
-                    });
-
-                    // 2. Remove the key and save player state
-                    const newInv = [...localPlayer.inventory];
-                    newInv.splice(keyIdx, 1);
-                    stateManager.updatePlayer({ inventory: newInv });
-                    syncEngine.savePlayerState();
-                }
+        // --- GENERIC EXIT LOCKS ---
+        if (typeof targetExit === 'object') {
+            if (targetExit.locked) {
+                UI.addLog(targetExit.lockMsg || "The way is locked.", "var(--term-amber)");
+                return;
+            }
+            if (targetExit.reqAuth && (!user || user.isAnonymous)) {
+                UI.addLog(targetExit.lockMsg || "[SYSTEM]: Identity verification required to proceed.", "#b084e8");
+                return;
             }
         }
 
-        // --- AREA TRANSITION LOGIC ---
+        // --- AREA TRANSITION LOGIC (v0.2 DYNAMIC BOUNDARIES) ---
         let newArea = localPlayer.currentArea;
-        
-        // 1. Leaving Private Apartment -> Entering Public Edge
-        if (nextRoomKey === 'outside' && localPlayer.currentArea.startsWith('apartment_')) {
+        if (targetRoomId === 'outside') {
             newArea = 'public_void';
-        } 
-        // 2. Leaving Public Edge -> Re-entering Private Apartment
-        else if (nextRoomKey === 'hallway' && localPlayer.currentArea === 'public_void') {
+        } else if (targetRoomId.startsWith('astral_')) {
+            newArea = `astral_${user.uid}`;
+        } else if (['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet', 'character_room', 'hallway'].includes(targetRoomId)) {
             newArea = `apartment_${user.uid}`;
         }
 
-        // --- ANONYMOUS BOUNDARY LOCK ---
-        if (newArea === 'public_void' && (!state.user || state.user.isAnonymous)) {
-            UI.addLog("[TANDY]: You cannot leave the Archive yet. Your vessel will evaporate. Go to the Tandem Terminal in the Lore Room and type 'login'.", "#b084e8");
-            return;
-        }
-
+        // If we are crossing a boundary, process the area jump and SKIP the local cache check
         if (newArea !== localPlayer.currentArea) {
             UI.addLog(`[SYSTEM]: Crossing boundary into area: ${newArea}...`, "var(--term-amber)");
-            stateManager.updatePlayer({ currentArea: newArea, currentRoom: nextRoomKey });
+            stateManager.updatePlayer({ currentArea: newArea, currentRoom: targetRoomId });
             syncEngine.savePlayerState();
             
             // Unsubscribe from old area and load the new one
             await syncEngine.updateAreaListener(newArea);
             
+            triggerVisualUpdate(null, stateManager.getState().localPlayer, stateManager.getActiveMap(), user);
             return;
         }
 
+        // --- CACHE VALIDATION (Only for internal area movement) ---
+        if (!activeMap[targetRoomId]) {
+            UI.addLog("[SYSTEM]: Dimensional synchronization in progress. Please wait for the sector to stabilize.", "var(--term-amber)");
+            return;
+        }
 
-        stateManager.updatePlayer({ currentRoom: nextRoomKey });
-        syncEngine.savePlayerState(); 
-        
-        // Give the syncEngine a moment to swap listeners and populate the new map
-        setTimeout(() => {
-            const updatedActiveMap = getActiveMap();
-            const nextRoom = updatedActiveMap[nextRoomKey];
-            UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
-            UI.printRoomDescription(nextRoom, stateManager.getState().localPlayer.stratum === 'astral', updatedActiveMap, activeAvatar);
-            syncEngine.logManifestation(stateManager.getState().localPlayer.currentRoom, `User arrived from the ${targetDir}.`);
-        }, 100);
+        // --- INTERNAL MOVEMENT ---
+        UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
+        stateManager.updatePlayer({ currentRoom: targetRoomId });
+        syncEngine.savePlayerState();
+        triggerVisualUpdate(null, stateManager.getState().localPlayer, stateManager.getActiveMap(), user);
     } else {
         UI.addLog(`[SYSTEM]: You cannot go that way.`, "var(--term-amber)");
     }

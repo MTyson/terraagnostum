@@ -362,6 +362,13 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                     UI.addLog(`[TANDY]: That was close. The field collapsed. You'll need to tune the generator and try again when you're ready.`, "#b084e8");
                 }
                 
+                const apartmentArea = `apartment_${user.uid}`;
+                stateManager.updatePlayer({ 
+                    currentArea: apartmentArea,
+                    currentRoom: 'closet'
+                });
+                await syncEngine.updateAreaListener(apartmentArea);
+
                 if (shiftStratum) shiftStratum('mundane');
                 endWizard();
             } catch (e) {
@@ -388,29 +395,38 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             if (res && res.name) {
                 const newRoomId = 'astral_' + Date.now();
                 const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
+                const backDir = getOpposite(dir);
                 
+                const targetAreaId = `astral_${stateManager.getState().user.uid}`;
                 const newRoom = {
-                    name: res.name,
-                    shortName: res.name.substring(0, 7).toUpperCase(),
-                    description: res.description,
-                    visualPrompt: res.visual_prompt,
-                    exits: { [getOpposite(dir)]: fromId },
-                    items: [], marginalia: [], npcs: []
+                    id: newRoomId,
+                    name: res.name || "Unknown Sector",
+                    shortName: (res.name || "ASTRAL").substring(0, 8).toUpperCase(),
+                    description: res.description || "A shifting expanse of raw potential.",
+                    visualPrompt: res.visual_prompt || "A surreal, dream-like landscape.",
+                    exits: { [backDir]: fromId },
+                    metadata: { stratum: 'astral', isEditable: true, ownerId: stateManager.getState().user.uid, area: targetAreaId }
                 };
+
+                // 1. Save new room to the target ASTRAL subcollection
+                syncEngine.updateMapNode(newRoomId, newRoom, targetAreaId);
                 
-                stateManager.updateMapNode(newRoomId, newRoom);
-                syncEngine.updateMapNode(newRoomId, newRoom);
+                // 2. Save the exit link in the CURRENT subcollection
+                const currentExits = activeMap[fromId].exits || {};
+                currentExits[dir] = newRoomId;
+                stateManager.updateMapNode(fromId, { exits: currentExits });
+                syncEngine.updateMapNode(fromId, { [`exits.${dir}`]: newRoomId }, stateManager.getState().localPlayer.currentArea);
 
-                const fromExits = { ...(activeMap[fromId].exits || {}), [dir]: newRoomId };
-                stateManager.updateMapNode(fromId, { exits: fromExits });
-                syncEngine.updateMapNode(fromId, { [`exits.${dir}`]: newRoomId });
-
-                stateManager.updatePlayer({ currentRoom: newRoomId });
+                // 3. Transition the player to the new Astral Area
+                stateManager.updatePlayer({ currentArea: targetAreaId, currentRoom: newRoomId });
                 UI.addLog(`[SYSTEM]: Sector successfully manifested.`, "var(--term-green)");
+                
+                // 4. Force sync engine to shift to the Astral map before rendering
+                await syncEngine.updateAreaListener(targetAreaId);
                 const updatedActiveMap = stateManager.getActiveMap();
                 UI.printRoomDescription(newRoom, true, updatedActiveMap, activeAvatar);
                 
-                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user);
+                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, stateManager.getState().user);
 
                 // Fire the Shadow Avatar Encounter
                 handleGMIntent(
