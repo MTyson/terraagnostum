@@ -408,7 +408,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 const updatedActiveMap = stateManager.getActiveMap();
                 UI.printRoomDescription(newRoom, true, updatedActiveMap, activeAvatar);
                 
-                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user);
+                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user, true);
 
                 if (handleGMIntent) {
                     handleGMIntent(

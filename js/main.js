@@ -57,7 +57,6 @@ if (isSyncEnabled) {
             const currentRoom = activeMap[stateManager.getState().localPlayer.currentRoom];
             if (currentRoom) {
                 UI.printRoomDescription(currentRoom, updatedState.localPlayer.stratum === 'faen', activeMap, updatedState.activeAvatar);
-                triggerVisualUpdate(null, stateManager.getState().localPlayer, activeMap, user);
             }
             
             if (!user.isAnonymous && localStorage.getItem('awaitingNewUserHint') === 'true') {

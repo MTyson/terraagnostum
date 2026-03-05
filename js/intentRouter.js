@@ -55,7 +55,6 @@ export async function executeMovement(targetDir) {
             const nextRoom = updatedActiveMap[nextId];
             UI.addLog(`[SYSTEM]: You traverse the astral currents to ${nextRoom.name}.`, "var(--term-green)");
             UI.printRoomDescription(nextRoom, true, updatedActiveMap, activeAvatar);
-            triggerVisualUpdate(null, stateManager.getState().localPlayer, updatedActiveMap, user);
             return;
         }
 
@@ -135,9 +134,6 @@ export async function executeMovement(targetDir) {
             // Unsubscribe from old area and load the new one
             await syncEngine.updateAreaListener(newArea);
             
-            // Note: The new map will render automatically via state subscriptions, 
-            // but we manually trigger the visual update for the new room.
-            triggerVisualUpdate(null, stateManager.getState().localPlayer, stateManager.getActiveMap(), user);
             return;
         }
 
@@ -152,11 +148,9 @@ export async function executeMovement(targetDir) {
             UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()}.`, "var(--term-green)");
             UI.printRoomDescription(nextRoom, stateManager.getState().localPlayer.stratum === 'astral', updatedActiveMap, activeAvatar);
             syncEngine.logManifestation(stateManager.getState().localPlayer.currentRoom, `User arrived from the ${targetDir}.`);
-            triggerVisualUpdate(null, stateManager.getState().localPlayer, updatedActiveMap, user);
         }, 100);
     } else {
         UI.addLog(`[SYSTEM]: You cannot go that way.`, "var(--term-amber)");
-        triggerVisualUpdate(null, localPlayer, getActiveMap(), user);
     }
 }
 
@@ -365,8 +359,7 @@ export async function handleCommand(val) {
             UI.addLog("[TANDY]: You're in. The Astral Plane is a reflection of your intent. To escape the apartment, you must find a way to synthesize a Resonant Key here.", "#b084e8");
             
             UI.printRoomDescription(activeMap[entryId], true, activeMap, activeAvatar);
-            await triggerVisualUpdate(activeMap[entryId].visualPrompt, stateManager.getState().localPlayer, activeMap, user);
-
+            
             // Let the AI take initiative
             await handleGMIntent("Describe the strange astral nexus and present an initial challenge to gain the Resonant Key.", 
                 { activeMap: newAstralMap, localPlayer: stateManager.getState().localPlayer, user, activeAvatar, isSyncEnabled: true, appId: 'ignored' },
@@ -593,7 +586,7 @@ export async function handleCommand(val) {
                 UI.addLog(`[SYSTEM]: Sector successfully rendered.`, "var(--term-green)");
                 const updatedActiveMap = getActiveMap();
                 UI.printRoomDescription(updatedActiveMap[localPlayer.currentRoom], localPlayer.stratum === 'astral', updatedActiveMap, activeAvatar);
-                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user);
+                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user, true);
             }
         } catch (err) {
             UI.addLog("[SYSTEM ERROR]: Reality collapse failed.", "var(--term-red)");
@@ -615,7 +608,7 @@ export async function handleCommand(val) {
     } else if (cmd === 'look' || cmd === 'l') {
         const activeMap = getActiveMap();
         UI.printRoomDescription(activeMap[localPlayer.currentRoom], localPlayer.stratum === 'astral', activeMap, activeAvatar); 
-        triggerVisualUpdate(null, localPlayer, activeMap, user); return;
+        return;
     } else if (cmd === 'stat' || cmd === 'stats') {
         if (!activeAvatar) return;
         UI.addLog(`IDENTITY: ${activeAvatar.name} | CLASS: ${activeAvatar.archetype}`, "var(--term-green)");

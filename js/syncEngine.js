@@ -9,7 +9,7 @@ import { blueprintApartment } from './mapData.js';
 
 let mapUnsubscribe = null;
 let currentMapPath = null;
-const CHAR_COLLECTION = 'v3_characters';
+const CHAR_COLLECTION = 'characters';
 
 /**
  * Orchestrates the boot sequence by peeking at state before applying it.

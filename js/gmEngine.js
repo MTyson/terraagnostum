@@ -216,10 +216,6 @@ export async function handleGMIntent(
                             shiftStratum('mundane');
                             if (!isSilent) UI.addLog(`[SYSTEM]: Harmonic resonance achieved. Shifting back to mundane stratum...`, "var(--term-green)");
                             
-                            // Trigger visual update for the bedroom using mundane data
-                            const activeMapAfterShift = stateManager.getActiveMap();
-                            const roomData = activeMapAfterShift['bedroom'];
-                            triggerVisualUpdate(roomData?.visualPrompt, stateManager.getState().localPlayer, activeMapAfterShift, user);
                             stateChanged = true;
                         }
                     }
@@ -392,14 +388,6 @@ export async function handleGMIntent(
             }
         }
         
-        const finalLocalPlayer = stateManager.getState().localPlayer;
-        const finalMap = stateManager.getActiveMap();
-        if (res.trigger_visual && !res.trigger_respawn && !res.trigger_teleport) {
-            triggerVisualUpdate(res.trigger_visual, finalLocalPlayer, finalMap, user);
-        } else if (res.trigger_stratum_shift || res.trigger_teleport || res.astral_jump || (res.world_edit && res.world_edit.type === 'spawn_npc') || isLooking) {
-            triggerVisualUpdate(null, finalLocalPlayer, finalMap, user);
-        }
-
         return res.suggested_actions || [];
     } catch (err) { 
         console.error(err);

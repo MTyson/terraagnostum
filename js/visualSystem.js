@@ -10,19 +10,27 @@ let activeVisualTicket = 0;
 let lastRenderedUrl = null;
 let lastRenderedRoom = null;
 let lastTriggeredUrl = null;
+let lastStratum = null;
 let currentBase64 = null;
 let isManifesting = false;
 let manifestingRoomId = null;
 const sessionVisualCache = new Map();
+const activeProjections = new Map();
 
 // SUBSCRIBE TO IMAGE UPDATES
 stateManager.subscribe((state) => {
     const { localPlayer, user } = state;
     const activeMap = stateManager.getActiveMap();
-    const currentImageUrl = activeMap?.[localPlayer.currentRoom]?.storedImageUrl;
+    const room = activeMap?.[localPlayer.currentRoom];
+    const currentImageUrl = room?.storedImageUrl;
 
-    if (localPlayer.currentRoom !== lastRenderedRoom || currentImageUrl !== lastTriggeredUrl) {
+    // Detect changes in Room, Stratum, or the arrival of a background Image URL
+    if (localPlayer.currentRoom !== lastRenderedRoom || 
+        localPlayer.stratum !== lastStratum || 
+        (currentImageUrl && currentImageUrl !== lastTriggeredUrl)) {
+        
         lastTriggeredUrl = currentImageUrl;
+        lastStratum = localPlayer.stratum;
         triggerVisualUpdate(null, localPlayer, activeMap, user);
     }
 });
@@ -65,13 +73,21 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
     const capturedArea = localPlayer.currentArea;
     let validStoredUrl = room.storedImageUrl;
 
-    const myTicket = ++activeVisualTicket;
-
-    // 0. CACHE-RECOVERY (NO BLACKOUT)
-    if (!overridePrompt && !forceRebuild && sessionVisualCache.has(roomId)) {
-        renderToCanvas(sessionVisualCache.get(roomId), roomId, myTicket);
-        return;
+    // --- 0. PRE-FLIGHT CACHE CHECK (SOVEREIGN) ---
+    // If we have it in session memory, or it's already in the DB, show it immediately and BAIL.
+    if (!overridePrompt && !forceRebuild) {
+        if (sessionVisualCache.has(roomId)) {
+            renderToCanvas(sessionVisualCache.get(roomId), roomId, activeVisualTicket);
+            return;
+        }
+        if (validStoredUrl) {
+            sessionVisualCache.set(roomId, validStoredUrl);
+            renderToCanvas(validStoredUrl, roomId, activeVisualTicket);
+            return;
+        }
     }
+
+    const myTicket = ++activeVisualTicket;
 
     // 1. REPETITION GUARD
     if (!overridePrompt && validStoredUrl && validStoredUrl === lastRenderedUrl && roomId === lastRenderedRoom && !forceRebuild) {
@@ -82,10 +98,12 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
     manifestingRoomId = roomId;
 
     try {
-        // 2. STORED IMAGE (NO BLACKOUT)
-        if (!overridePrompt && validStoredUrl && !forceRebuild) {
-            sessionVisualCache.set(roomId, validStoredUrl); // Warm the cache
-            renderToCanvas(validStoredUrl, roomId, myTicket);
+        // 2. REQUEST COLLAPSING (DEDUPLICATION)
+        if (activeProjections.has(roomId) && !overridePrompt && !forceRebuild) {
+            const result = await activeProjections.get(roomId);
+            if (result && myTicket === activeVisualTicket) {
+                renderToCanvas(sessionVisualCache.get(roomId) || result, roomId, myTicket);
+            }
             return;
         }
 
@@ -93,14 +111,18 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
         const loader = document.getElementById('visual-loading');
         if (loader) loader.classList.remove('hidden');
 
-        const result = await projectVisual(overridePrompt || room.visualPrompt || room.description, localPlayer.stratum, UI.addLog);
+        // Start projection and track it
+        const projectionPromise = projectVisual(overridePrompt || room.visualPrompt || room.description, localPlayer.stratum, UI.addLog);
+        activeProjections.set(roomId, projectionPromise);
+
+        const result = await projectionPromise;
+        activeProjections.delete(roomId); // Clean up
         
-        // --- NEW CACHING LOGIC ---
         if (result) {
             const dataUri = result.startsWith('data:') ? result : `data:image/png;base64,${result}`;
-            sessionVisualCache.set(roomId, dataUri); // ALWAYS CACHE FOR THIS ROOM
+            sessionVisualCache.set(roomId, dataUri); 
         } else {
-            return; // Silent failure
+            return; 
         }
 
         const shouldRender = (myTicket === activeVisualTicket);
@@ -136,6 +158,7 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
             isManifesting = false;
             manifestingRoomId = null;
         }
+        activeProjections.delete(roomId); // Secondary safety cleanup
     }
 }
 
