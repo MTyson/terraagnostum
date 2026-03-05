@@ -1,4 +1,5 @@
 import { callGemini, generatePortrait, compressImage } from './apiService.js';
+import { buildSystemPrompt } from './contextEngine.js';
 import { triggerVisualUpdate } from './visualSystem.js';
 import * as UI from './ui.js';
 import * as stateManager from './stateManager.js';
@@ -10,7 +11,7 @@ export async function handleGMIntent(
     actions,
     isSilent = false
 ) {
-    const { localPlayer, user, activeAvatar, userTier } = state;
+    const { localPlayer, user, activeAvatar } = state;
     const { shiftStratum, savePlayerState, setActiveAvatar, syncAvatarStats } = actions;
 
     if (!isSilent) {
@@ -27,106 +28,14 @@ export async function handleGMIntent(
             return `[NPC] ${n.name}${statsStr} - Personality: ${n.personality}`;
         }).join('\n') || "None";
         
-        // Build string representing current exits and their lock status
-        const exitStrs = [];
-        const adjacentNpcs = []; // Track NPCs in adjacent rooms for GM Context
-        for (let [dir, data] of Object.entries(currentRoomData.exits || {})) {
-            const targetId = typeof data === 'object' ? data.target : data;
-            if (typeof data === 'object' && data.locked) {
-                exitStrs.push(`${dir.toUpperCase()} (LOCKED: ${data.lockMsg})`);
-            } else {
-                exitStrs.push(dir.toUpperCase());
-            }
-            
-            // Peek into the adjacent room for visible entities
-            const targetRoom = activeMap[targetId];
-            if (targetRoom && targetRoom.npcs && targetRoom.npcs.length > 0) {
-                targetRoom.npcs.forEach(n => {
-                    adjacentNpcs.push(`[NPC to the ${dir.toUpperCase()}] ${n.name} - Personality: ${n.personality}`);
-                });
-            }
-        }
-        const exitText = exitStrs.length > 0 ? exitStrs.join(', ') : "None";
-        const adjacentNpcText = adjacentNpcs.length > 0 ? adjacentNpcs.join('\n') : "None";
-        
-        // List existing rooms for teleportation/fast-travel context
-        const existingRooms = Object.entries(activeMap).map(([id, r]) => `${r.name} (ID: ${id})`).join(', ');
+        // 1. BUILD MODULAR CONTEXT
+        const systemPrompt = buildSystemPrompt(localPlayer, currentRoomData, inventoryNames, npcText);
 
-        const sysPrompt = `You are Tandy, the GM of Terra Agnostum. 
-        Context: ${currentRoomData.name} (${localPlayer.stratum.toUpperCase()}). ${currentRoomData.description}.
-        Entities Present: ${npcText}. Inventory: ${inventoryNames}.
-        Adjacent Entities (Visible through doorways/counters): ${adjacentNpcText}.
-        Exits: ${exitText}.
-        Known Nodes in this Stratum: ${existingRooms}.
-        Current Avatar: ${activeAvatar ? `${activeAvatar.name} (${activeAvatar.archetype})` : 'None'}.
-        Player Cohesion: ${activeAvatar ? 'MATERIALIZED' : 'VOID (Disembodied)'}.
-        Player Auth Tier: ${userTier || 'GUEST'}.
-        Environment Flags: { closetDoorClosed: ${localPlayer.closetDoorClosed || false} }.
-        Combat Status: ${localPlayer.combat.active ? `ACTIVE with ${localPlayer.combat.opponent}` : 'INACTIVE'}.
-        Player Stats: ${activeAvatar ? `WILL: ${activeAvatar.stats.WILL}, CONS: ${activeAvatar.stats.CONS}, PHYS: ${activeAvatar.stats.PHYS}` : 'N/A'}.
-        
-        GUIDELINES FOR SUGGESTIONS:
-        - If the player's Auth Tier is GUEST or VOID, and there is a computer console, terminal, or Tandem device mentioned in the room description, you MUST strongly suggest "Login".
-        - If the player is a VOID (no avatar) and in a room that mentions character sheets, archives of forms, or vessel forging, strongly suggest "Create Avatar".
-        - In Schrödinger's Closet (or any room with the Resonance Generator) AND stratum is MUNDANE:
-            - If the 'closetDoorClosed' flag is FALSE, you MUST suggest "Close Door".
-            - If the 'closetDoorClosed' flag is TRUE, you MUST suggest "Use Resonator".
-        - If NPCs are present and the player is a VOID, suggest "Assume [NPC Name]".
-        - If NPCs are present and the player is MATERIALIZED, suggest "Talk to [NPC Name]".
-        
-        SPECIAL QUEST: If the user is in the ASTRAL stratum, they are on a quest to obtain a 'Resonant Key' to escape the apartment. 
-        The Astral Plane takes shape based on the user's actions. Create bizarre challenges, non-euclidean puzzles, or social encounters with memory-fragments.
-        
-        TELEPORTATION: If the user wants to "go to" a room that is NOT an adjacent exit, you may use "trigger_teleport". 
-        - ALWAYS prioritize using an existing Node ID from the "Known Nodes" list if the user's destination matches its name or purpose.
-        - Only create a "new_room_id" if the user is intentionally moving to a brand new area.
-        
-        ASTRAL ENCOUNTER: If the user is in the ASTRAL stratum and there is NO 'Shadow Avatar' (or a shadow reflection NPC) currently present in the 'Entities Present' list, you MUST immediately manifest one using "spawn_npc". 
-        The Shadow Avatar is a dark, flickering reflection of the user's current avatar. It should challenge the player's identity or purpose. 
-        Create a 'visual_prompt' for it that is a dark, glitchy, debased, sci-fi/fantasy bad guy version of the player character's description.
-        Required Action if NPC missing: "world_edit": {"type": "spawn_npc", "npc": {"name": "Shadow ${activeAvatar ? activeAvatar.name : 'Self'}", "archetype": "Glitch Reflection", "personality": "Challenging and cryptic", "stats": {"WILL": 2}, "visual_prompt": "A dark, glitching shadow silhouette of the player character, digital corruption artifacts, eerie astral plane background, glowing eyes, highly detailed."}}
-        
-        BATTLE OF WILLS: If the Shadow Avatar is present, it will eventually attack the player. 
-        - When combat is active, the player will attempt narrative actions. 
-        - You must resolve the player's action and then describe the Shadow's counter-attack in the 'narrative' field.
-        - The Shadow's attack ALWAYS deals 1 WILL damage to the player if it hits. 
-        - IMPORTANT: If combat is active, you MUST set "damage_to_player": 1 in your JSON response whenever the Shadow strikes (which should be almost every turn once combat starts).
-        - IMPORTANT: Describe the Shadow's attack in the narrative so the player knows they are being hit.
-        - The player's attacks (like 'ATTACK WITH WILL FORCE') deal damage to the Shadow's WILL.
-        - IMPORTANT: In your narrative, you MUST indicate the Shadow's remaining health/Will (e.g., "The Shadow flickers, its Will down to 3").
-        - You decide if the Shadow hits or if the player successfully resists/dodges based on their narrative.
-        - If the player's WILL hits 0, they are defeated.
-        - If the Shadow's WILL hits 0, it is defeated and vanishes.
-        - Set "combat_active": true to start or continue combat.
-        - Set "damage_to_player": 1 if the Shadow successfully strikes the player's Will.
-        - Set "damage_to_npc": number if the player successfully strikes the Shadow's Will.
-        
-        Once the user has sufficiently overcome an obstacle or demonstrated creative intent (or defeated the Shadow), you can grant them the 'Resonant Key' using "give_item": {"name": "Resonant Key", "type": "Key Item", "description": "..."}.
-        After they get the key, you should trigger a shift back to 'mundane'.  
-        
-        IMPORTANT: An 'astral_jump' can ONLY happen if the user is in 'Schrödinger's Closet' (CLOSET) or explicitly uses specific 'Aethal' code.
-        IMPORTANT: If a user attempts to interact with an Adjacent Entity across a counter or doorway, you may roleplay their response based on their personality.
-        IMPORTANT: If a user attempts to go through a LOCKED exit, and they successfully persuade, bribe, or trick the guarding Adjacent Entity, you may set world_edit type to 'unlock_exit' and provide the direction.
-        Respond STRICTLY in JSON:
-        {
-          "speaker": "NARRATOR or NPC Name",
-          "narrative": "outcome",
-          "color": "hex",
-          "trigger_visual": "prompt or null",
-          "astral_jump": boolean,
-          "trigger_stratum_shift": null or 'mundane', 'astral', 'faen', 'technate',
-          "trigger_teleport": null or { "new_room_id": "id", "name": "Name", "description": "Desc", "visual_prompt": "Prompt" },
-          "give_item": null or { "name": "Name", "type": "Type", "description": "Desc" },
-          "world_edit": null or {"type": "add_marginalia", "text": "text"} or {"type": "unlock_exit", "direction": "north"} or {"type": "spawn_item", "item": {"name": "...", "type": "...", "description": "..."}} or {"type": "spawn_npc", "npc": {"name": "...", "archetype": "...", "personality": "...", "visual_prompt": "..."}},
-          "trigger_respawn": false,
-          "combat_active": boolean,
-          "damage_to_player": number or null,
-          "damage_to_npc": number or null,
-          "suggested_actions": ["Action string 1", "Action string 2"]
-        }
-        ${isSilent ? 'IMPORTANT: This is a silent context-check. Focus primarily on providing 3-5 high-quality, relevant "suggested_actions". Keep "narrative" brief as it will not be displayed.' : ''}`;
-        
-        const res = await callGemini(`User: ${val}`, sysPrompt);
+        // 2. USER INTENT
+        const userPrompt = `PLAYER ACTION: "${val}"\n\nEvaluate this intent against the system rules and current room state. Respond ONLY in the requested JSON format.`;
+
+        // 3. API CALL
+        const res = await callGemini(userPrompt, systemPrompt);
         let stateChanged = false;
 
         // Handle Combat State from AI
