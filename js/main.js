@@ -24,14 +24,28 @@ function shiftStratum(targetStratum) {
 if (isSyncEnabled) {
     if (isSignInWithEmailLink(auth, window.location.href)) {
         let email = window.localStorage.getItem('emailForSignIn');
-        if (!email) email = window.prompt('Please provide your email for confirmation');
         
-        signInWithEmailLink(auth, email, window.location.href)
-            .then(() => {
-                window.localStorage.removeItem('emailForSignIn');
-                UI.addLog(`[SYSTEM]: Identity confirmed. Welcome to the Technate.`, "var(--crayola-blue)");
-            })
-            .catch((error) => UI.addLog(`[SYSTEM ERROR]: ${error.message}`, "var(--term-red)"));
+        if (!email) {
+            email = window.prompt('Please provide your email for confirmation');
+        }
+        
+        if (email) {
+            signInWithEmailLink(auth, email, window.location.href)
+                .then((result) => {
+                    window.localStorage.removeItem('emailForSignIn');
+                    // CRITICAL FIX: Scrub the single-use token from the URL so hard refreshes are safe
+                    window.history.replaceState(null, '', window.location.pathname);
+                })
+                .catch((error) => {
+                    console.error("Auth Link Error:", error);
+                    // Scrub the URL even on failure so we don't get stuck in an error loop
+                    window.history.replaceState(null, '', window.location.pathname);
+                });
+        } else {
+            // CRITICAL FIX: The user hit "Cancel" on the email prompt.
+            // Do NOT attempt to sign in. Just scrub the URL to prevent loops.
+            window.history.replaceState(null, '', window.location.pathname);
+        }
     }
 
     onAuthStateChanged(auth, async (u) => {

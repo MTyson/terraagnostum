@@ -20,7 +20,9 @@ export async function handleGMIntent(
     
     try {
         const activeMap = stateManager.getActiveMap();
-        const currentRoomData = activeMap[localPlayer.currentRoom];
+        // CRITICAL FIX: Add a fallback object so .npcs never throws an undefined error
+        const currentRoomData = activeMap[localPlayer.currentRoom] || { name: "Shifting Sector", description: "Reality is manifesting...", exits: {}, npcs: [], items: [], marginalia: [] };
+        
         const inventoryNames = localPlayer.inventory.map(i => i.name).join(', ');
         const npcText = (currentRoomData.npcs || []).map(n => {
             let statsStr = "";
@@ -84,7 +86,7 @@ export async function handleGMIntent(
         if (res.damage_to_npc && stateManager.getState().localPlayer.combat.active) {
             const currentState = stateManager.getState();
             const activeMap = stateManager.getActiveMap();
-            const room = activeMap[currentState.localPlayer.currentRoom];
+            const room = activeMap[currentState.localPlayer.currentRoom] || { npcs: [] };
             const opponentName = currentState.localPlayer.combat.opponent.toLowerCase();
             // Fuzzy match for NPC name
             const npc = room.npcs?.find(n => 
@@ -222,7 +224,7 @@ export async function handleGMIntent(
         if (res.world_edit) {
             const currentState = stateManager.getState();
             const activeMap = stateManager.getActiveMap();
-            const room = activeMap[currentState.localPlayer.currentRoom];
+            const room = activeMap[currentState.localPlayer.currentRoom] || { npcs: [], items: [], marginalia: [], exits: {} };
             
             if (res.world_edit.type === 'add_marginalia') {
                 const marginalia = [...(room.marginalia || []), res.world_edit.text];

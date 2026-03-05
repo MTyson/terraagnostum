@@ -60,11 +60,17 @@ export function setLocalAreaCache(nodes) {
     notify();
 }
 
-export function updateMapNode(nodeId, updates) {
-    if (state.localAreaCache[nodeId]) {
-        state.localAreaCache[nodeId] = { ...state.localAreaCache[nodeId], ...updates };
-        notify();
-    }
+export function updateMapNode(arg1, arg2, arg3) {
+    // Detect if caller used legacy (mapType, nodeId, updates) or new (nodeId, updates)
+    const nodeId = arg3 ? arg2 : arg1;
+    const updates = arg3 ? arg3 : arg2;
+
+    if (!nodeId) return;
+
+    // By removing the strict `if` check, we allow brand new rooms to be injected instantly
+    // before the Firebase onSnapshot listener even fires.
+    state.localAreaCache[nodeId] = { ...(state.localAreaCache[nodeId] || {}), ...updates };
+    notify();
 }
 
 export function setActiveAvatar(avatar) {

@@ -2,6 +2,8 @@ import { callGemini, generatePortrait } from './apiService.js';
 import * as UI from './ui.js';
 import * as stateManager from './stateManager.js';
 import * as syncEngine from './syncEngine.js';
+import { triggerVisualUpdate } from './visualSystem.js';
+import { handleGMIntent } from './gmEngine.js';
 
 // State is now managed by stateManager.js
 export function startWizard(type, initialData = {}) {
@@ -408,15 +410,26 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 const updatedActiveMap = stateManager.getActiveMap();
                 UI.printRoomDescription(newRoom, true, updatedActiveMap, activeAvatar);
                 
-                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user, true);
+                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user);
 
-                if (handleGMIntent) {
-                    handleGMIntent(
-                        "The player has just manifested and entered this new astral sector. Check your directives for the Glitchy Shadow Avatar and present a challenge.", 
-                        { ...context, activeMap: stateManager.getActiveMap(), localPlayer: stateManager.getState().localPlayer }, 
-                        { ...callbacks, updateMapListener: () => syncEngine.updateAreaListener(stateManager.getState().localPlayer.currentArea) }
-                    );
-                }
+                // Fire the Shadow Avatar Encounter
+                handleGMIntent(
+                    "The player has just manifested and entered this new astral sector. You MUST manifest the Glitchy Shadow Avatar NPC now. Use spawn_npc in world_edit. This is an urgent System encounter.", 
+                    { 
+                        activeMap: stateManager.getActiveMap(), 
+                        localPlayer: stateManager.getState().localPlayer, 
+                        user: stateManager.getState().user,
+                        activeAvatar: stateManager.getState().activeAvatar
+                    }, 
+                    { 
+                        updateMapListener: () => syncEngine.updateAreaListener(stateManager.getState().localPlayer.currentArea),
+                        shiftStratum: shiftStratum,
+                        savePlayerState: syncEngine.savePlayerState,
+                        setActiveAvatar: stateManager.setActiveAvatar,
+                        syncAvatarStats: syncEngine.syncAvatarStats
+                    },
+                    false // Ensure isSilent is false so the player sees the output
+                );
             }
         } catch(e) { 
             UI.addLog("[SYSTEM ERROR]: Astral manifestation failed. Reality collapsed back to nexus.", "var(--term-red)");
