@@ -1,26 +1,15 @@
 // js/syncEngine.js
 import { 
     doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, 
-    serverTimestamp, collection, addDoc, getDocs 
+    serverTimestamp, collection, addDoc, getDocs, writeBatch 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db, appId, isSyncEnabled } from './firebaseConfig.js';
 import * as stateManager from './stateManager.js';
-import { isArchiveRoom } from './mapData.js';
+import { blueprintApartment } from './mapData.js';
 
 let mapUnsubscribe = null;
 let currentMapPath = null;
 const CHAR_COLLECTION = 'v3_characters';
-
-/**
- * Sets up the world manifestation listener.
- */
-export function setupWorldListener() {
-    if (!db || !appId) return;
-    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
-    onSnapshot(roomRef, (snap) => {
-        if (!snap.exists()) setDoc(roomRef, { created: serverTimestamp(), manifestations: [] });
-    });
-}
 
 /**
  * Orchestrates the boot sequence by peeking at state before applying it.
@@ -29,62 +18,37 @@ export async function bootSyncEngine(mergeAndRefreshCallback) {
     const { user } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return;
 
-    // 1. PEEK at Player State (Do not update stateManager yet!)
-    let startRoom = 'bedroom'; // default
-    let playerData = null;
+    let startRoom = 'bedroom';
+    let startArea = `apartment_${user.uid}`;
     try {
         const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
         const snap = await getDoc(stateRef);
         if (snap.exists()) {
-            playerData = snap.data();
-            startRoom = playerData.currentRoom === 'main_room' ? 'lore1' : playerData.currentRoom;
+            const data = snap.data();
+            startRoom = data.currentRoom || startRoom;
+            startArea = data.currentArea || startArea;
         }
-    } catch(e) { console.error("SyncEngine: Failed to peek player state:", e); }
+    } catch(e) {}
 
-    // 2. Load Maps based on the peeked startRoom
-    await loadAstralMap(user);
-    await updateMapListener(startRoom, mergeAndRefreshCallback);
-
-    // 3. Start real-time player state listener
+    // Set initial area before loading
+    stateManager.updatePlayer({ currentArea: startArea, currentRoom: startRoom });
+    await updateAreaListener(startArea);
     await loadPlayerState(user);
-    
-    // 4. Load remaining user data
     await loadUserCharacters(user);
-
-    // 5. Subscribe to future room changes to update the map listener
-    stateManager.subscribe((state) => {
-        if (state.user) {
-            updateMapListener(state.localPlayer.currentRoom);
-        }
-    });
 }
 
 /**
- * Legacy initializer (now forwards to bootSyncEngine for compatibility if needed)
- */
-export async function initializeSession(user) {
-    setupWorldListener();
-    return bootSyncEngine();
-}
-
-/**
- * Loads player state and maintains a real-time listener for updates (e.g. Stripe checkout).
+ * Loads player state and maintains a real-time listener for updates.
  */
 export async function loadPlayerState(user) {
     try {
         const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
         
-        // Listen for real-time updates (like Stripe webhooks)
         onSnapshot(stateRef, (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
-                let newRoom = data.currentRoom;
-                if (newRoom === 'main_room') newRoom = 'lore1';
-                
-                // This keeps the browser state in sync with the database instantly
                 stateManager.updatePlayer({ 
                     ...data, 
-                    currentRoom: newRoom,
                     inventory: data.inventory || [], 
                     stratum: data.stratum || "mundane" 
                 });
@@ -97,16 +61,6 @@ export async function loadPlayerState(user) {
     } catch (e) { console.error("SyncEngine: Failed to sync player state:", e); }
 }
 
-async function loadAstralMap(user) {
-    try {
-        const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
-        const snap = await getDoc(astralRef);
-        if (snap.exists()) {
-            stateManager.setAstralMap(snap.data().nodes || {});
-        }
-    } catch (e) { console.error("SyncEngine: Failed to load astral map:", e); }
-}
-
 async function loadUserCharacters(user) {
     try {
         const charCol = collection(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION);
@@ -117,7 +71,6 @@ async function loadUserCharacters(user) {
         });
         stateManager.setLocalCharacters(characters);
         
-        // Restore active avatar if saved
         const { localPlayer } = stateManager.getState();
         if (localPlayer.activeAvatarId) {
             const found = characters.find(c => c.id === localPlayer.activeAvatarId);
@@ -129,74 +82,61 @@ async function loadUserCharacters(user) {
     } catch (e) { console.error("SyncEngine: Failed to load characters:", e); }
 }
 
-/**
- * Determines the correct Firestore path for a given room ID.
- * Seals the leak between private and public world data.
- */
-function getMapPath(roomId, userId) {
-    if (roomId.startsWith('astral_')) {
-        return `artifacts/${appId}/users/${userId}/instance/astral_nodes`;
-    } else if (isArchiveRoom(roomId)) {
-        return `artifacts/${appId}/users/${userId}/instance/apartment_nodes`;
-    } else {
-        return `artifacts/${appId}/public/data/maps/apartment_graph_live`;
-    }
-}
-
-export async function updateMapListener(startRoom, mergeAndRefreshCallback) {
+export async function updateAreaListener(areaId) {
     const { user } = stateManager.getState();
     if (!db || !user) return;
 
-    // Resolve room: prioritize passed startRoom, fallback to state
-    const roomToUse = startRoom || stateManager.getState().localPlayer.currentRoom;
-    const newPath = getMapPath(roomToUse, user.uid);
-    const isMundane = !roomToUse.startsWith('astral_') && !isArchiveRoom(roomToUse);
+    if (mapUnsubscribe) mapUnsubscribe();
+    currentMapPath = areaId;
 
-    if (currentMapPath === newPath) return Promise.resolve(); 
-    if (mapUnsubscribe) mapUnsubscribe(); 
-
-    currentMapPath = newPath;
-    const pathParts = newPath.split('/');
-    const mapRef = doc(db, pathParts.slice(0, -1).join('/'), pathParts.pop());
+    const areaRoomsRef = collection(db, 'artifacts', appId, 'public', 'data', 'areas', areaId, 'rooms');
     
     return new Promise((resolve) => {
         let resolved = false;
-        mapUnsubscribe = onSnapshot(mapRef, (snap) => {
-            if (!snap.exists()) {
-                // Map Initialization: If snapshot doesn't exist and it's an Archive room, initialize it
-                if (isArchiveRoom(roomToUse)) {
-                    const { apartmentMap } = stateManager.getState();
-                    setDoc(mapRef, { nodes: apartmentMap, lastUpdated: serverTimestamp() });
+        mapUnsubscribe = onSnapshot(areaRoomsRef, async (snapshot) => {
+            const areaNodes = {};
+            snapshot.forEach(doc => { areaNodes[doc.id] = doc.data(); });
+            
+            // THE IMPOSITION: If area is empty, spawn the blueprint apartment!
+            if (Object.keys(areaNodes).length === 0 && areaId === `apartment_${user.uid}`) {
+                console.log("[SYNC]: Imposing full apartment architecture...");
+                const batch = writeBatch(db);
+                
+                for (const [roomId, roomData] of Object.entries(blueprintApartment)) {
+                    // If the room is 'outside', it actually belongs in the public area, so we skip imposing it into the private apartment.
+                    if (roomId === 'outside') continue; 
+                    
+                    const roomRef = doc(areaRoomsRef, roomId);
+                    batch.set(roomRef, { 
+                        ...roomData, 
+                        id: roomId,
+                        metadata: { ...roomData.metadata, ownerId: user.uid, area: areaId }
+                    });
                 }
-            } else {
-                const data = snap.data();
-                if (data.nodes) {
-                    // Data Routing: Ensure data is routed to the correct state bucket based on path
-                    if (mergeAndRefreshCallback) {
-                        mergeAndRefreshCallback(data.nodes);
-                    } else if (currentMapPath.includes('astral_nodes')) {
-                        stateManager.setAstralMap(data.nodes);
-                    } else if (currentMapPath.includes('apartment_nodes')) {
-                        stateManager.setApartmentMap(data.nodes);
-                    } else {
-                        stateManager.setMundaneMap(data.nodes);
-                    }
-                }
+                await batch.commit();
+                return; // The snapshot will automatically re-fire after the commit
             }
-            if (!resolved) {
-                resolved = true;
-                resolve();
+
+            // PUBLIC WORLD SEEDING
+            if (Object.keys(areaNodes).length === 0 && areaId === 'public_void') {
+                console.log("[SYNC]: Imposing public void anchor...");
+                const roomRef = doc(areaRoomsRef, 'outside');
+                await setDoc(roomRef, { 
+                    ...blueprintApartment['outside'], 
+                    id: 'outside',
+                    metadata: { stratum: 'mundane', isEditable: false, ownerId: 'PUBLIC', area: 'public_void' }
+                });
+                return;
             }
-        }, (err) => {
-            console.error("SyncEngine: Map listener error:", err);
+
+            stateManager.setLocalAreaCache(areaNodes);
             if (!resolved) { resolved = true; resolve(); }
         });
     });
 }
 
-// 2. Modify savePlayerState to use { merge: true }
 export async function savePlayerState() {
-    const { user, localPlayer, activeAvatar, astralMap } = stateManager.getState();
+    const { user, localPlayer, activeAvatar } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return;
     try {
         const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
@@ -204,14 +144,7 @@ export async function savePlayerState() {
             ...localPlayer, 
             activeAvatarId: activeAvatar ? activeAvatar.id : null 
         };
-        
-        // CRITICAL: Use merge: true so local 'false' doesn't kill server 'true'
         await setDoc(stateRef, stateToSave, { merge: true });
-        
-        if (Object.keys(astralMap).length > 0) {
-            const astralRef = doc(db, 'artifacts', appId, 'users', user.uid, 'instance', 'astral_nodes');
-            await setDoc(astralRef, { nodes: astralMap, lastUpdated: serverTimestamp() }, { merge: true });
-        }
     } catch (e) { console.error("SyncEngine: Failed to save player state:", e); }
 }
 
@@ -225,67 +158,27 @@ export async function syncAvatarStats(avatarId, stats) {
 }
 
 export async function updateMapNode(roomId, updates) {
-    const { user } = stateManager.getState();
+    const { user, localPlayer } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return;
-    
-    const mapPath = getMapPath(roomId, user.uid);
-    const mapRef = doc(db, mapPath);
-    
-    // Prepare dotted paths for updateDoc
-    const firestoreUpdates = {};
-    for (let [key, val] of Object.entries(updates)) {
-        firestoreUpdates[`nodes.${roomId}.${key}`] = val;
-    }
-    
-    try {
-        // Try to update existing document using dotted paths (Deep Nesting)
-        await updateDoc(mapRef, firestoreUpdates);
-    } catch (e) {
-        // If the document does not exist, updateDoc throws an error.
-        // We fall back to creating it with a deeply nested object so setDoc behaves.
-        console.warn(`[SYNC]: Map document missing for ${roomId}. Creating new document...`);
-        const nestedData = { nodes: { [roomId]: updates } };
-        await setDoc(mapRef, nestedData, { merge: true });
-    }
-}
-
-export async function logManifestation(roomId, text) {
-    const { user } = stateManager.getState();
-    if (!db || !user || !isSyncEnabled) return;
-    
-    try {
-        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', 'archive_apartment');
-        await updateDoc(roomRef, { 
-            manifestations: arrayUnion({ 
-                author: user.uid, 
-                text: `[${roomId}] ${text}`, 
-                timestamp: Date.now() 
-            }) 
-        });
-    } catch (e) { console.error("SyncEngine: Failed to log manifestation:", e); }
+    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'areas', localPlayer.currentArea, 'rooms', roomId);
+    try { await updateDoc(roomRef, updates); } catch (e) { console.error(e); }
 }
 
 export async function removeArrayElementFromNode(roomId, arrayPath, element) {
-    const { user } = stateManager.getState();
+    const { user, localPlayer } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return;
-    
-    const mapPath = getMapPath(roomId, user.uid);
-        
+    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'areas', localPlayer.currentArea, 'rooms', roomId);
     try {
-        const mapRef = doc(db, mapPath);
-        await updateDoc(mapRef, { [`nodes.${roomId}.${arrayPath}`]: arrayRemove(element) });
+        await updateDoc(roomRef, { [arrayPath]: arrayRemove(element) });
     } catch (e) { console.error("SyncEngine: Failed to remove element from node:", e); }
 }
 
 export async function addArrayElementToNode(roomId, arrayPath, element) {
-    const { user } = stateManager.getState();
+    const { user, localPlayer } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return;
-    
-    const mapPath = getMapPath(roomId, user.uid);
-        
+    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'areas', localPlayer.currentArea, 'rooms', roomId);
     try {
-        const mapRef = doc(db, mapPath);
-        await updateDoc(mapRef, { [`nodes.${roomId}.${arrayPath}`]: arrayUnion(element) });
+        await updateDoc(roomRef, { [arrayPath]: arrayUnion(element) });
     } catch (e) { console.error("SyncEngine: Failed to add element to node:", e); }
 }
 
@@ -311,4 +204,11 @@ export async function markCharacterDeceased(avatarId) {
         const charRef = doc(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION, avatarId);
         await updateDoc(charRef, { deceased: true });
     } catch (e) { console.error("SyncEngine: Failed to mark character deceased:", e); }
+}
+
+export async function logManifestation(roomId, text) {
+    // This needs to be updated or removed for the new architecture.
+    // For now, logging to a central doc is fine if it still exists, 
+    // but the path 'artifacts/appId/public/data/rooms/archive_apartment' is deprecated.
+    console.log(`[MANIFESTATION] ${roomId}: ${text}`);
 }

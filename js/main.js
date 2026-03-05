@@ -1,7 +1,6 @@
 import { signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
 // IMPORT DECOMPOSED DATA & SERVICES
-import { apartmentMap as initialMap } from './mapData.js';
 import { triggerVisualUpdate } from './visualSystem.js';
 import { handleWizardInput } from './wizardSystem.js';
 import * as UI from './ui.js';
@@ -42,36 +41,24 @@ if (isSyncEnabled) {
         }
 
         stateManager.setUser(u);
-        const { localPlayer, user, apartmentMap } = stateManager.getState();
+        const { localPlayer, user } = stateManager.getState();
         if (user && !hasInitialized) {
             hasInitialized = true;
             const userType = user.isAnonymous ? "GUEST" : "ARCHITECT";
             UI.addLog(`${userType} LINKED: ${user.uid.substring(0,8)}`, "var(--crayola-blue)");
             
-            syncEngine.setupWorldListener();
-            await syncEngine.bootSyncEngine((nodes) => {
-                const currentMap = stateManager.getState().apartmentMap;
-                stateManager.setApartmentMap({ ...currentMap, ...nodes });
-            });
+            await syncEngine.bootSyncEngine();
             
             const updatedState = stateManager.getState();
             shiftStratum(updatedState.localPlayer.stratum);
             
             const activeMap = stateManager.getActiveMap();
             
-            const { apartmentMap } = stateManager.getState();
-            // Audit Closet Description
-            if (apartmentMap['closet'].description.includes('heavily reinforced') || apartmentMap['closet'].visualPrompt?.includes('steel door')) {
-                const newDesc = initialMap['closet'].description;
-                const newVisual = initialMap['closet'].visualPrompt;
-                stateManager.updateMapNode('apartment', 'closet', { description: newDesc, visualPrompt: newVisual });
-                syncEngine.updateMapNode('closet', { description: newDesc, visualPrompt: newVisual });
-            }
-
             const currentRoom = activeMap[stateManager.getState().localPlayer.currentRoom];
-            UI.printRoomDescription(currentRoom, updatedState.localPlayer.stratum === 'faen', activeMap, updatedState.activeAvatar);
-            
-            triggerVisualUpdate(null, stateManager.getState().localPlayer, activeMap, user);
+            if (currentRoom) {
+                UI.printRoomDescription(currentRoom, updatedState.localPlayer.stratum === 'faen', activeMap, updatedState.activeAvatar);
+                triggerVisualUpdate(null, stateManager.getState().localPlayer, activeMap, user);
+            }
             
             if (!user.isAnonymous && localStorage.getItem('awaitingNewUserHint') === 'true') {
                 localStorage.removeItem('awaitingNewUserHint');
@@ -144,7 +131,7 @@ if (input) {
                 await handleWizardInput(val, 
                     { activeMap, localPlayer, user, activeAvatar, isSyncEnabled: true, appId: 'ignored' },
                     { 
-                        updateMapListener: () => syncEngine.updateMapListener(stateManager.getState().user), 
+                        updateMapListener: () => syncEngine.updateAreaListener(stateManager.getState().localPlayer.currentArea), 
                         shiftStratum,
                         savePlayerState: syncEngine.savePlayerState,
                         renderMapHUD: UI.renderMapHUD,

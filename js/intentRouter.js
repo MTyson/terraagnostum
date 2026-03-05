@@ -8,7 +8,6 @@ import { handleGMIntent } from './gmEngine.js';
 import { startWizard } from './wizardSystem.js';
 import { triggerVisualUpdate, togglePinView } from './visualSystem.js';
 import { callGemini } from './apiService.js';
-import { isArchiveRoom } from './mapData.js';
 
 // --- HELPER WRAPPERS (Local to Router) ---
 
@@ -30,7 +29,7 @@ function shiftStratum(targetStratum) {
 // --- NARRATIVE MOVEMENT ENGINE ---
 export async function executeMovement(targetDir) {
     const state = stateManager.getState();
-    const { localPlayer, astralMap, apartmentMap, user, activeAvatar } = state;
+    const { localPlayer, user, activeAvatar } = state;
 
     if (localPlayer.combat.active) {
         UI.addLog(`[SYSTEM]: You cannot disengage while in combat with ${localPlayer.combat.opponent}!`, "var(--term-red)");
@@ -39,14 +38,13 @@ export async function executeMovement(targetDir) {
     const activeMap = getActiveMap();
     const currentRoom = activeMap[localPlayer.currentRoom];
     
-    if (!currentRoom && !isArchiveRoom(localPlayer.currentRoom)) {
+    if (!currentRoom) {
         UI.addLog('[SYSTEM]: Dimensional synchronization in progress. Please wait for the sector to stabilize.', 'var(--term-amber)');
         return;
     }
     
     if (localPlayer.stratum === 'astral') {
-        const currentMap = (localPlayer.currentRoom.startsWith('astral_')) ? astralMap : apartmentMap;
-        const currentRoomData = currentMap[localPlayer.currentRoom];
+        const currentRoomData = activeMap[localPlayer.currentRoom];
         
         if (currentRoomData.exits && currentRoomData.exits[targetDir]) {
             const nextId = typeof currentRoomData.exits[targetDir] === 'string' ? currentRoomData.exits[targetDir] : currentRoomData.exits[targetDir].target;
@@ -111,11 +109,38 @@ export async function executeMovement(targetDir) {
             }
         }
 
-        const tier = getUserTier();
-        if ((tier === "VOID" || tier === "GUEST") && !isArchiveRoom(nextRoomKey)) {
-            UI.addLog(`[TANDY]: You cannot leave the Archive yet. Your vessel will evaporate. Go to the Tandem Terminal in the Lore Room and type 'login'.`, "#b084e8");
+        // --- AREA TRANSITION LOGIC ---
+        let newArea = localPlayer.currentArea;
+        
+        // 1. Leaving Private Apartment -> Entering Public Edge
+        if (nextRoomKey === 'outside' && localPlayer.currentArea.startsWith('apartment_')) {
+            newArea = 'public_void';
+        } 
+        // 2. Leaving Public Edge -> Re-entering Private Apartment
+        else if (nextRoomKey === 'hallway' && localPlayer.currentArea === 'public_void') {
+            newArea = `apartment_${user.uid}`;
+        }
+
+        // --- ANONYMOUS BOUNDARY LOCK ---
+        if (newArea === 'public_void' && (!state.user || state.user.isAnonymous)) {
+            UI.addLog("[TANDY]: You cannot leave the Archive yet. Your vessel will evaporate. Go to the Tandem Terminal in the Lore Room and type 'login'.", "#b084e8");
             return;
         }
+
+        if (newArea !== localPlayer.currentArea) {
+            UI.addLog(`[SYSTEM]: Crossing boundary into area: ${newArea}...`, "var(--term-amber)");
+            stateManager.updatePlayer({ currentArea: newArea, currentRoom: nextRoomKey });
+            syncEngine.savePlayerState();
+            
+            // Unsubscribe from old area and load the new one
+            await syncEngine.updateAreaListener(newArea);
+            
+            // Note: The new map will render automatically via state subscriptions, 
+            // but we manually trigger the visual update for the new room.
+            triggerVisualUpdate(null, stateManager.getState().localPlayer, stateManager.getActiveMap(), user);
+            return;
+        }
+
 
         stateManager.updatePlayer({ currentRoom: nextRoomKey });
         syncEngine.savePlayerState(); 
@@ -138,7 +163,7 @@ export async function executeMovement(targetDir) {
 // --- COMMAND PARSER ---
 export async function handleCommand(val) {
     const state = stateManager.getState();
-    const { localPlayer, activeAvatar, user, activeTerminal, localCharacters, apartmentMap } = state;
+    const { localPlayer, activeAvatar, user, activeTerminal, localCharacters } = state;
     const cmd = val.toLowerCase();
 
     // INTERCEPT AI SUGGESTION REQUEST
@@ -156,7 +181,7 @@ export async function handleCommand(val) {
                     renderMapHUD: UI.renderMapHUD,
                     setActiveAvatar: stateManager.setActiveAvatar,
                     syncAvatarStats: () => syncEngine.syncAvatarStats(stateManager.getState().activeAvatar?.id, stateManager.getState().activeAvatar?.stats),
-                    updateMapListener: () => syncEngine.updateMapListener(stateManager.getState().user)
+                    updateMapListener: () => syncEngine.updateAreaListener(stateManager.getState().localPlayer.currentArea)
                 },
                 true // IS SILENT
             );
@@ -194,17 +219,12 @@ export async function handleCommand(val) {
             UI.addLog("[SYSTEM]: You are already bound as an ARCHITECT.", "var(--term-amber)");
             return;
         }
-        // PROD STRIPE:
-        //const paymentLink = `https://buy.stripe.com/dRmfZh0Cq0Jm5v31wpg3600?client_reference_id=${user.uid}`;
-        // TEST STRIPE:
-        //const paymentLink = `https://buy.stripe.com/test_7sY4gA5DC6U09JL7dd6kg00?client_reference_id=${user.uid}`;
-        // A simple way to swap links based on where the game is running
-    const isLocal = window.location.hostname === 'localhost';
-    const liveLink = "https://buy.stripe.com/dRmfZh0Cq0Jm5v31wpg3600";
-    const testLink = "https://buy.stripe.com/test_7sY4gA5DC6U09JL7dd6kg00";
-
-    const paymentLink = `${isLocal ? testLink : liveLink}?client_reference_id=${user.uid}`;
         
+        const isLocal = window.location.hostname === 'localhost';
+        const liveLink = "https://buy.stripe.com/dRmfZh0Cq0Jm5v31wpg3600";
+        const testLink = "https://buy.stripe.com/test_7sY4gA5DC6U09JL7dd6kg00";
+
+        const paymentLink = `${isLocal ? testLink : liveLink}?client_reference_id=${user.uid}`;
         
         window.open(paymentLink, '_blank');
         UI.addLog(`[SYSTEM]: Architect uplink opened in a new tab. Awaiting transaction...`, "var(--term-green)");
@@ -327,7 +347,7 @@ export async function handleCommand(val) {
             UI.addLog("[SYSTEM]: RESONANCE ACHIEVED. QUANTUM STATE COLLAPSING...", "var(--term-green)");
             shiftStratum('astral');
             
-            // Initialize Astral Map
+            // Initialize Astral Map (Local cache only, will be synced if edited)
             const entryId = 'astral_entry';
             const newAstralMap = {
                 [entryId]: {
@@ -337,7 +357,7 @@ export async function handleCommand(val) {
                     exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
                 }
             };
-            stateManager.setAstralMap(newAstralMap);
+            stateManager.setLocalAreaCache(newAstralMap);
             stateManager.updatePlayer({ currentRoom: entryId });
             const activeMap = getActiveMap();
 
@@ -460,7 +480,8 @@ export async function handleCommand(val) {
         }
 
         const targetName = assumeMatch[1].toLowerCase();
-        const room = getActiveMap()[localPlayer.currentRoom];
+        const activeMap = getActiveMap();
+        const room = activeMap[localPlayer.currentRoom];
         const npcs = room.npcs || [];
 
         const npcIndex = npcs.findIndex(n => n.name.toLowerCase().includes(targetName));
@@ -508,7 +529,8 @@ export async function handleCommand(val) {
         return;
     } else if (cmd === 'edit room' || cmd === 'rewrite room' || cmd === 'render room') {
         if (!activeAvatar) { UI.addLog("[SYSTEM]: Voids cannot render.", "var(--term-red)"); return; }
-        const currentRoomData = apartmentMap[localPlayer.currentRoom];
+        const activeMap = getActiveMap();
+        const currentRoomData = activeMap[localPlayer.currentRoom];
         startWizard('room', { ...currentRoomData });
         UI.setWizardPrompt("WIZARD@SECTOR:~$");
         UI.addLog(`[WIZARD]: Sector Overwrite Protocol Started.`);
@@ -565,12 +587,13 @@ export async function handleCommand(val) {
                     visualPrompt: res.visual_prompt,
                     pinnedView: null
                 };
-                stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, updates);
+                stateManager.updateMapNode(null, localPlayer.currentRoom, updates);
                 syncEngine.updateMapNode(localPlayer.currentRoom, updates);
                 
                 UI.addLog(`[SYSTEM]: Sector successfully rendered.`, "var(--term-green)");
-                UI.printRoomDescription(stateManager.getState().apartmentMap[localPlayer.currentRoom], localPlayer.stratum === 'astral', activeMap, activeAvatar);
-                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, activeMap, user);
+                const updatedActiveMap = getActiveMap();
+                UI.printRoomDescription(updatedActiveMap[localPlayer.currentRoom], localPlayer.stratum === 'astral', updatedActiveMap, activeAvatar);
+                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user);
             }
         } catch (err) {
             UI.addLog("[SYSTEM ERROR]: Reality collapse failed.", "var(--term-red)");
@@ -609,7 +632,7 @@ export async function handleCommand(val) {
             const items = [...room.items];
             const item = items.splice(itemIdx, 1)[0];
             const inventory = [...localPlayer.inventory, item];
-            stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { items });
+            stateManager.updateMapNode(null, localPlayer.currentRoom, { items });
             stateManager.updatePlayer({ inventory });
             syncEngine.removeArrayElementFromNode(localPlayer.currentRoom, 'items', item);
             syncEngine.savePlayerState(); 
@@ -641,7 +664,7 @@ export async function handleCommand(val) {
                 renderMapHUD: UI.renderMapHUD,
                 setActiveAvatar: stateManager.setActiveAvatar,
                 syncAvatarStats: () => syncEngine.syncAvatarStats(stateManager.getState().activeAvatar?.id, stateManager.getState().activeAvatar?.stats),
-                updateMapListener: () => syncEngine.updateMapListener(stateManager.getState().user)
+                updateMapListener: () => syncEngine.updateAreaListener(stateManager.getState().localPlayer.currentArea)
             }
         );
         stateManager.setSuggestions(suggestions);

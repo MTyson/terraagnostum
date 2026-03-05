@@ -1,3 +1,4 @@
+/* 
 export const ARCHIVE_NODES = ['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet', 'character_room', 'hallway', 'outside'];
 export const isArchiveRoom = (roomId) => ARCHIVE_NODES.includes(roomId);
 
@@ -86,5 +87,76 @@ export const apartmentMap = {
         items: [],
         marginalia: [],
         npcs: []
+    }
+};
+*/
+
+export const ARCHIVE_NODES = ['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet', 'character_room', 'hallway'];
+export const isArchiveRoom = (roomId) => ARCHIVE_NODES.includes(roomId);
+
+export const blueprintApartment = {
+    "lore1": {
+        name: "Lore Room (West)",
+        shortName: "LORE1",
+        description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall. The console hums with a strange energy, and the air feels thick with forgotten secrets.",
+        visualPrompt: "A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture. A hint of esoteric quantum light spilling out of the edges of the closet.",
+        exits: { east: "lore2", north: "closet", south: "bedroom" },
+        metadata: { stratum: "mundane", isEditable: false }
+    },
+    "lore2": {
+        name: "Lore Room (East)",
+        shortName: "LORE2",
+        description: "The eastern half of the main living area, acting as a central nexus connecting the apartment.",
+        visualPrompt: "A cyberpunk apartment living room, dim lighting, worn retro-futuristic couch, cables running along the floor.",
+        exits: { west: "lore1", north: "kitchen", east: "character_room", south: "hallway" },
+        metadata: { stratum: "mundane", isEditable: false }
+    },
+    "bedroom": {
+        name: "Bedroom & Bathroom",
+        shortName: "BEDROOM",
+        description: "A simple sleeping quarters south of the console with an attached, sterile bathroom.",
+        visualPrompt: "A sparse cyberpunk bedroom, messy bed, a cold blue light spilling from an attached sterile bathroom.",
+        exits: { north: "lore1" },
+        metadata: { stratum: "mundane", isEditable: false }
+    },
+    "closet": {
+        name: "Schrödinger's Closet",
+        shortName: "CLOSET",
+        description: "A typical apartment closet. The door is covered in cryptic occult and scientific diagrams. Inside is a Hacked Schumann Resonance Generator, arcing with potential energy.",
+        visualPrompt: "Inside a typical apartment closet, walls covered in marker-scrawled diagrams, a strange arcing device in the center.",
+        exits: { south: "lore1" },
+        metadata: { stratum: "mundane", isEditable: false }
+    },
+    "kitchen": {
+        name: "Small Kitchen",
+        shortName: "KITCHEN",
+        description: "A cramped kitchenette north of the living area with a dusty window looking out into an endless, foggy void.",
+        visualPrompt: "A grimy cyberpunk kitchenette, a window showing a dark foggy void, neon light filtering through the blinds.",
+        exits: { south: "lore2" },
+        metadata: { stratum: "mundane", isEditable: false }
+    },
+    "character_room": {
+        name: "Character Room",
+        shortName: "CHARS",
+        description: "A spare room full of character sheets and biological logs. You can create avatars here.",
+        visualPrompt: "A spare room overflowing with sketches, RPG character sheets, and anatomical drawings pinned to walls, cinematic lighting.  An RPG bonanza of data and lore related to characters and races and beings.",
+        exits: { west: "lore2" },
+        metadata: { stratum: "mundane", isEditable: false }
+    },
+    "hallway": {
+        name: "Hallway",
+        shortName: "HALLWAY",
+        description: "A narrow corridor extending south. At the far southern end is the front door leading 'outside'.",
+        visualPrompt: "A narrow, dimly lit apartment hallway. At the end is a heavy metal door.",
+        exits: { north: "lore2", south: "outside" },
+        metadata: { stratum: "mundane", isEditable: false }
+    },
+    "outside": {
+        name: "The Unrendered Edge",
+        shortName: "VOID",
+        description: "The entire area ahead looks like it's made of cardboard... The Technate hasn't processed this sector yet.",
+        visualPrompt: "A glitching transition where a realistic cyberpunk city abruptly turns into a crude child's crayon drawing.",
+        exits: { north: "hallway" },
+        metadata: { stratum: "mundane", isEditable: false }
     }
 };

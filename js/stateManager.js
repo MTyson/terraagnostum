@@ -1,11 +1,12 @@
 // js/stateManager.js
-import { apartmentMap as initialMap, ARCHIVE_NODES, isArchiveRoom } from './mapData.js';
+import { isArchiveRoom } from './mapData.js';
 
 // --- INITIAL STATE ---
 let state = {
     localPlayer: { 
         hp: 20, 
         currentRoom: "bedroom", 
+        currentArea: null,
         stratum: "mundane",
         inventory: [],
         closetDoorClosed: false,
@@ -13,9 +14,7 @@ let state = {
         combat: { active: false, opponent: null },
         activeAvatarId: null
     },
-    apartmentMap: { ...initialMap },
-    mundaneMap: {}, // Add this!
-    astralMap: {},
+    localAreaCache: {},
     localCharacters: [], 
     activeAvatar: null,  
     user: null,
@@ -58,24 +57,7 @@ export function getUserTier() {
 }
 
 export function getActiveMap() {
-    const { currentRoom, stratum } = state.localPlayer;
-    if (currentRoom?.startsWith('astral_') || stratum === 'astral') {
-        return state.astralMap;
-    }
-    // Check archive first
-    if (isArchiveRoom(currentRoom)) {
-        return state.apartmentMap;
-    }
-    // Fallback chain for mundane rooms: 
-    // 1. Mundane Map (Synced Public World)
-    // 2. Apartment Map (Static Base Rooms / Private Instance)
-    if (state.mundaneMap && state.mundaneMap[currentRoom]) {
-        return state.mundaneMap;
-    }
-    if (state.apartmentMap[currentRoom]) {
-        return state.apartmentMap;
-    }
-    return state.mundaneMap;
+    return state.localAreaCache;
 }
 
 // --- SETTERS & VALIDATION ---
@@ -110,42 +92,15 @@ export function updatePlayer(updates) {
     return changed;
 }
 
-export function setApartmentMap(nodes) {
-    // Deep merge nodes with initialMap to preserve base metadata
-    const merged = { ...initialMap };
-    if (nodes) {
-        Object.keys(nodes).forEach(roomId => {
-            merged[roomId] = { ...(merged[roomId] || {}), ...nodes[roomId] };
-        });
-    }
-    state.apartmentMap = merged;
+export function setLocalAreaCache(nodes) {
+    state.localAreaCache = nodes || {};
     validateLocation();
     notify();
 }
 
-export function setMundaneMap(nodes) {
-    state.mundaneMap = nodes || {};
-    notify();
-}
-
-export function setAstralMap(nodes) {
-    state.astralMap = nodes || {};
-    validateLocation();
-    notify();
-}
-
-export function updateMapNode(mapType, nodeId, updates) {
-    let map;
-    if (mapType === 'astral') {
-        map = state.astralMap;
-    } else if (mapType === 'mundane') {
-        map = state.mundaneMap; // Added missing mundane support
-    } else {
-        map = state.apartmentMap;
-    }
-    
-    if (map[nodeId]) {
-        map[nodeId] = { ...map[nodeId], ...updates };
+export function updateMapNode(mapType_deprecated, nodeId, updates) {
+    if (state.localAreaCache[nodeId]) {
+        state.localAreaCache[nodeId] = { ...state.localAreaCache[nodeId], ...updates };
         notify();
     }
 }

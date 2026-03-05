@@ -3,7 +3,6 @@ import { triggerVisualUpdate } from './visualSystem.js';
 import * as UI from './ui.js';
 import * as stateManager from './stateManager.js';
 import * as syncEngine from './syncEngine.js';
-import { isArchiveRoom } from './mapData.js';
 
 export async function handleGMIntent(
     val,
@@ -104,7 +103,7 @@ export async function handleGMIntent(
         
         Once the user has sufficiently overcome an obstacle or demonstrated creative intent (or defeated the Shadow), you can grant them the 'Resonant Key' using "give_item": {"name": "Resonant Key", "type": "Key Item", "description": "..."}.
         After they get the key, you should trigger a shift back to 'mundane'.  
-
+        
         IMPORTANT: An 'astral_jump' can ONLY happen if the user is in 'Schrödinger's Closet' (CLOSET) or explicitly uses specific 'Aethal' code.
         IMPORTANT: If a user attempts to interact with an Adjacent Entity across a counter or doorway, you may roleplay their response based on their personality.
         IMPORTANT: If a user attempts to go through a LOCKED exit, and they successfully persuade, bribe, or trick the guarding Adjacent Entity, you may set world_edit type to 'unlock_exit' and provide the direction.
@@ -175,7 +174,8 @@ export async function handleGMIntent(
         // Handle Damage to NPC (Battle of Wills)
         if (res.damage_to_npc && stateManager.getState().localPlayer.combat.active) {
             const currentState = stateManager.getState();
-            const room = stateManager.getActiveMap()[currentState.localPlayer.currentRoom];
+            const activeMap = stateManager.getActiveMap();
+            const room = activeMap[currentState.localPlayer.currentRoom];
             const opponentName = currentState.localPlayer.combat.opponent.toLowerCase();
             // Fuzzy match for NPC name
             const npc = room.npcs?.find(n => 
@@ -195,8 +195,7 @@ export async function handleGMIntent(
                     
                     // Remove NPC from room
                     const newNpcs = room.npcs.filter(n => n.name !== npc.name);
-                    const mapType = currentState.localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-                    stateManager.updateMapNode(mapType, currentState.localPlayer.currentRoom, { npcs: newNpcs });
+                    stateManager.updateMapNode(null, currentState.localPlayer.currentRoom, { npcs: newNpcs });
                     syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { npcs: newNpcs });
 
                     // Reset Combat State
@@ -213,13 +212,14 @@ export async function handleGMIntent(
                         }
                         
                         if (currentLocalPlayer.stratum !== 'mundane') {
-                            stateManager.updatePlayer({ currentRoom: 'closet', stratum: 'mundane' });
+                            stateManager.updatePlayer({ currentRoom: 'bedroom', stratum: 'mundane' });
                             shiftStratum('mundane');
                             if (!isSilent) UI.addLog(`[SYSTEM]: Harmonic resonance achieved. Shifting back to mundane stratum...`, "var(--term-green)");
                             
-                            // Trigger visual update for the closet using mundane data
-                            const mundaneRoomData = stateManager.getState().apartmentMap['closet'];
-                            triggerVisualUpdate(mundaneRoomData?.visualPrompt, stateManager.getState().localPlayer, stateManager.getState().apartmentMap, user);
+                            // Trigger visual update for the bedroom using mundane data
+                            const activeMapAfterShift = stateManager.getActiveMap();
+                            const roomData = activeMapAfterShift['bedroom'];
+                            triggerVisualUpdate(roomData?.visualPrompt, stateManager.getState().localPlayer, activeMapAfterShift, user);
                             stateChanged = true;
                         }
                     }
@@ -238,7 +238,7 @@ export async function handleGMIntent(
                     visualPrompt: "Glowing astral nexus portal.",
                     exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
                 };
-                stateManager.setAstralMap({ [entryId]: entryNode });
+                stateManager.setLocalAreaCache({ [entryId]: entryNode });
                 stateManager.updatePlayer({ currentRoom: entryId });
                 stateChanged = true;
                 if (!isSilent) UI.addLog(`[SYSTEM]: Conventional geometry discarded. Welcome to the Astral Plane.`, "var(--faen-pink)");
@@ -264,7 +264,7 @@ export async function handleGMIntent(
             const currentAvatar = stateManager.getState().activeAvatar;
             if (currentAvatar && user) syncEngine.markCharacterDeceased(currentAvatar.id);
             setActiveAvatar(null);
-            stateManager.updatePlayer({ currentRoom: "spare_room", stratum: "mundane" });
+            stateManager.updatePlayer({ currentRoom: "bedroom", stratum: "mundane" });
             stateChanged = true;
             if (!isSilent) UI.addLog(`Vessel destroyed. Connection severed.`, "var(--term-red)"); 
             shiftStratum('mundane');
@@ -297,8 +297,7 @@ export async function handleGMIntent(
                     npcs: [] 
                 };
                 
-                const mapType = t.new_room_id.startsWith('astral_') ? 'astral' : 'apartment';
-                stateManager.updateMapNode(mapType, t.new_room_id, newRoom);
+                stateManager.updateMapNode(null, t.new_room_id, newRoom);
                 syncEngine.updateMapNode(t.new_room_id, newRoom);
             }
             stateManager.updatePlayer({ currentRoom: t.new_room_id }); 
@@ -322,23 +321,20 @@ export async function handleGMIntent(
             
             if (res.world_edit.type === 'add_marginalia') {
                 const marginalia = [...(room.marginalia || []), res.world_edit.text];
-                const mapType = currentState.localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-                stateManager.updateMapNode(mapType, currentState.localPlayer.currentRoom, { marginalia });
+                stateManager.updateMapNode(null, currentState.localPlayer.currentRoom, { marginalia });
                 syncEngine.addArrayElementToNode(currentState.localPlayer.currentRoom, 'marginalia', res.world_edit.text);
             } else if (res.world_edit.type === 'unlock_exit') {
                 const unlockDir = res.world_edit.direction.toLowerCase();
                 if (room.exits[unlockDir] && typeof room.exits[unlockDir] === 'object') {
                     const exits = { ...room.exits };
                     exits[unlockDir] = { ...exits[unlockDir], locked: false };
-                    const mapType = currentState.localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-                    stateManager.updateMapNode(mapType, currentState.localPlayer.currentRoom, { exits });
+                    stateManager.updateMapNode(null, currentState.localPlayer.currentRoom, { exits });
                     syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { [`exits.${unlockDir}.locked`]: false });
                     if (!isSilent) UI.addLog(`[SYSTEM]: The path ${unlockDir.toUpperCase()} has been opened.`, "var(--term-green)");
                 }
             } else if (res.world_edit.type === 'spawn_item') {
                 const items = [...(room.items || []), res.world_edit.item];
-                const mapType = currentState.localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-                stateManager.updateMapNode(mapType, currentState.localPlayer.currentRoom, { items });
+                stateManager.updateMapNode(null, currentState.localPlayer.currentRoom, { items });
                 syncEngine.addArrayElementToNode(currentState.localPlayer.currentRoom, 'items', res.world_edit.item);
                 if (!isSilent) UI.addLog(`[SYSTEM]: ${res.world_edit.item.name} has manifested in the room.`, "var(--term-green)");
             } else if (res.world_edit.type === 'spawn_npc') {
@@ -373,8 +369,7 @@ export async function handleGMIntent(
                 } else {
                     npcs.push(npcData);
                 }
-                const mapType = currentState.localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-                stateManager.updateMapNode(mapType, currentState.localPlayer.currentRoom, { npcs });
+                stateManager.updateMapNode(null, currentState.localPlayer.currentRoom, { npcs });
                 syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { npcs });
                 if (!isSilent) UI.addLog(`[SYSTEM]: A new presence detected: ${npcData.name}.`, "var(--term-amber)");
             }
@@ -390,8 +385,7 @@ export async function handleGMIntent(
                     const b64 = await generatePortrait(npc.visual_prompt, stateManager.getState().localPlayer.stratum);
                     if (b64) {
                         npc.image = await compressImage(`data:image/png;base64,${b64}`, 400, 0.7);
-                        const mapType = stateManager.getState().localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-                        stateManager.updateMapNode(mapType, stateManager.getState().localPlayer.currentRoom, { npcs: currentRoomData.npcs });
+                        stateManager.updateMapNode(null, stateManager.getState().localPlayer.currentRoom, { npcs: currentRoomData.npcs });
                         syncEngine.updateMapNode(stateManager.getState().localPlayer.currentRoom, { npcs: currentRoomData.npcs });
                     }
                 }

@@ -2,7 +2,6 @@ import { callGemini, generatePortrait } from './apiService.js';
 import * as UI from './ui.js';
 import * as stateManager from './stateManager.js';
 import * as syncEngine from './syncEngine.js';
-import { isArchiveRoom } from './mapData.js';
 
 // State is now managed by stateManager.js
 export function startWizard(type, initialData = {}) {
@@ -67,9 +66,6 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
     if (wizardState.type === 'login') {
         const email = currentVal;
         UI.addLog(`[SYSTEM]: Transmitting anchoring frequency to ${email}...`, "var(--term-amber)");
-        // Authentication still uses direct Firebase Auth (handled in main.js or here via imports if needed, 
-        // but user message says severance from Firestore, not necessarily Auth).
-        // Actually, sendSignInLinkToEmail is imported in wizardSystem.js
         const { auth } = await import('./firebaseConfig.js');
         const { sendSignInLinkToEmail } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
 
@@ -163,8 +159,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         const room = activeMap[localPlayer.currentRoom];
         const newItem = { name: currentVal, type: "Constructed Object" };
         const items = [...(room.items || []), newItem];
-        const mapType = localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-        stateManager.updateMapNode(mapType, localPlayer.currentRoom, { items });
+        stateManager.updateMapNode(null, localPlayer.currentRoom, { items });
         syncEngine.addArrayElementToNode(localPlayer.currentRoom, 'items', newItem);
         UI.addLog(`[SYSTEM]: Materialized [${currentVal}].`, "var(--term-green)");
         endWizard();
@@ -177,8 +172,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 name: currentVal,
                 shortName: currentVal.substring(0, 7).toUpperCase()
             };
-            const mapType = localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-            stateManager.updateMapNode(mapType, localPlayer.currentRoom, updates);
+            stateManager.updateMapNode(null, localPlayer.currentRoom, updates);
             syncEngine.updateMapNode(localPlayer.currentRoom, updates);
             UI.addLog(`[SYSTEM]: Sector identity overwritten.`, "var(--term-green)");
         }
@@ -193,8 +187,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         const target = typeof room.exits[dir] === 'string' ? room.exits[dir] : room.exits[dir].target;
         const exitUpdate = { target: target, locked: true, lockMsg: currentVal };
         const exits = { ...room.exits, [dir]: exitUpdate };
-        const mapType = localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-        stateManager.updateMapNode(mapType, localPlayer.currentRoom, { exits });
+        stateManager.updateMapNode(null, localPlayer.currentRoom, { exits });
         syncEngine.updateMapNode(localPlayer.currentRoom, { [`exits.${dir}`]: exitUpdate });
         UI.addLog(`[SYSTEM]: Exit ${dir.toUpperCase()} locked.`, "var(--term-amber)");
         endWizard();
@@ -216,13 +209,11 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             items: [], npcs: []
         };
         
-        const mapTypeNew = newRoomId.startsWith('astral_') ? 'astral' : 'apartment';
-        stateManager.updateMapNode(mapTypeNew, newRoomId, newRoom);
+        stateManager.updateMapNode(null, newRoomId, newRoom);
         syncEngine.updateMapNode(newRoomId, newRoom);
 
         const currentExits = { ...activeMap[localPlayer.currentRoom].exits, [dir]: newRoomId };
-        const mapTypeCurrent = localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-        stateManager.updateMapNode(mapTypeCurrent, localPlayer.currentRoom, { exits: currentExits });
+        stateManager.updateMapNode(null, localPlayer.currentRoom, { exits: currentExits });
         syncEngine.updateMapNode(localPlayer.currentRoom, { [`exits.${dir}`]: newRoomId });
 
         UI.addLog(`[SYSTEM]: Reality expanded ${dir.toUpperCase()}.`, "var(--term-green)");
@@ -250,14 +241,12 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                      items: [], npcs: []
                  };
                  
-                 const mapTypeNew = newRoomId.startsWith('astral_') ? 'astral' : 'apartment';
-                 stateManager.updateMapNode(mapTypeNew, newRoomId, newRoom);
+                 stateManager.updateMapNode(null, newRoomId, newRoom);
                  syncEngine.updateMapNode(newRoomId, newRoom);
 
                  if (dir !== 'here') {
                     const currentExits = { ...activeMap[localPlayer.currentRoom].exits, [dir]: newRoomId };
-                    const mapTypeCurrent = localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment';
-                    stateManager.updateMapNode(mapTypeCurrent, localPlayer.currentRoom, { exits: currentExits });
+                    stateManager.updateMapNode(null, localPlayer.currentRoom, { exits: currentExits });
                     syncEngine.updateMapNode(localPlayer.currentRoom, { [`exits.${dir}`]: newRoomId });
                  }
                  UI.addLog(`[SYSTEM]: Sector generated.`, "var(--term-green)");
@@ -279,7 +268,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             behavior: currentVal
         };
         const npcs = [...(room.npcs || []), newNpc];
-        stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { npcs });
+        stateManager.updateMapNode(null, localPlayer.currentRoom, { npcs });
         syncEngine.addArrayElementToNode(localPlayer.currentRoom, 'npcs', newNpc);
 
         UI.addLog(`[SYSTEM]: Vessel detached and autonomous protocol initialized.`, "var(--term-amber)");
@@ -322,7 +311,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             
             const room = activeMap[localPlayer.currentRoom];
             const npcs = [...(room.npcs || []), newNpc];
-            stateManager.updateMapNode(localPlayer.currentRoom.startsWith('astral_') ? 'astral' : 'apartment', localPlayer.currentRoom, { npcs });
+            stateManager.updateMapNode(null, localPlayer.currentRoom, { npcs });
             syncEngine.addArrayElementToNode(localPlayer.currentRoom, 'npcs', newNpc);
             
             UI.addLog(`[SYSTEM]: Entity [${newNpc.name}] spawned successfully.`, "var(--term-green)");
@@ -407,24 +396,25 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                     items: [], marginalia: [], npcs: []
                 };
                 
-                stateManager.updateMapNode('astral', newRoomId, newRoom);
+                stateManager.updateMapNode(null, newRoomId, newRoom);
                 syncEngine.updateMapNode(newRoomId, newRoom);
 
                 const fromExits = { ...(activeMap[fromId].exits || {}), [dir]: newRoomId };
-                stateManager.updateMapNode('astral', fromId, { exits: fromExits });
+                stateManager.updateMapNode(null, fromId, { exits: fromExits });
                 syncEngine.updateMapNode(fromId, { [`exits.${dir}`]: newRoomId });
 
                 stateManager.updatePlayer({ currentRoom: newRoomId });
                 UI.addLog(`[SYSTEM]: Sector successfully manifested.`, "var(--term-green)");
-                UI.printRoomDescription(newRoom, true, activeMap, activeAvatar);
+                const updatedActiveMap = stateManager.getActiveMap();
+                UI.printRoomDescription(newRoom, true, updatedActiveMap, activeAvatar);
                 
-                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, stateManager.getActiveMap(), user);
+                triggerVisualUpdate(res.visual_prompt, stateManager.getState().localPlayer, updatedActiveMap, user);
 
                 if (handleGMIntent) {
                     handleGMIntent(
                         "The player has just manifested and entered this new astral sector. Check your directives for the Glitchy Shadow Avatar and present a challenge.", 
                         { ...context, activeMap: stateManager.getActiveMap(), localPlayer: stateManager.getState().localPlayer }, 
-                        { ...callbacks, updateMapListener: () => syncEngine.updateMapListener(stateManager.getState().user) }
+                        { ...callbacks, updateMapListener: () => syncEngine.updateAreaListener(stateManager.getState().localPlayer.currentArea) }
                     );
                 }
             }
