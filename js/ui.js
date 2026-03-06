@@ -262,21 +262,27 @@ export function updateAvatarUI(activeAvatar) {
     }
 
     container.innerHTML = `
-        <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a]" onclick="document.getElementById('cmd-input').value = 'stat'; document.getElementById('cmd-input').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));">
-            <div class="char-card-header border-b border-[#1a3a1a] pb-2 mb-2">
+        <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a] cursor-pointer hover:bg-[#1a1a1a] transition-colors" id="active-portrait">
+            <div class="char-card-header border-b border-[#1a3a1a] pb-2 mb-2 pointer-events-none">
                 <span class="char-card-title text-[10px] text-amber-500">[ACTV] ${activeAvatar.name}</span>
                 <span class="char-card-archetype text-[8px]">${activeAvatar.archetype}</span>
             </div>
-            <div class="char-card-img-container h-32 border-[#1a3a1a] mb-2">
+            <div class="char-card-img-container h-32 border-[#1a3a1a] mb-2 pointer-events-none">
                 ${activeAvatar.image ? `<img class="char-card-img" src="${activeAvatar.image}" alt="${activeAvatar.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[NO IMG]</div>`}
             </div>
-            <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0 flex-col text-[9px] gap-1">
+            <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0 flex-col text-[9px] gap-1 pointer-events-none">
                 <span>WILL (Mng): ${activeAvatar.stats.WILL || 20}</span>
                 <span>CONS (Amn): ${activeAvatar.stats.CONS || 20}</span>
                 <span>PHYS (HP): ${activeAvatar.stats.PHYS || 20}</span>
             </div>
         </div>
     `;
+
+    document.getElementById('active-portrait').addEventListener('click', () => {
+        import('./forgeSystem.js').then(({ openForgeModal }) => {
+            openForgeModal(activeAvatar);
+        });
+    });
 }
 
 export function updateInventoryUI(inventory) {

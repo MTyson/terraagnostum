@@ -163,7 +163,17 @@ export async function handleCommand(val) {
     }
 
     if (cmd === 'logout') {
+        if (user && user.isAnonymous) {
+            UI.addLog("[SYSTEM]: You are currently a GUEST. Logging out will PERMANENTLY DESTROY your vessel and progress. Type 'login' to anchor your signature first, or type 'force logout' to proceed anyway.", "var(--term-amber)");
+            return;
+        }
         UI.addLog("[SYSTEM]: Severing connection to the Technate...", "var(--term-amber)");
+        signOut(auth).then(() => window.location.href = window.location.pathname);
+        return;
+    }
+
+    if (cmd === 'force logout') {
+        UI.addLog("[SYSTEM]: Purging guest signature...", "var(--term-red)");
         signOut(auth).then(() => window.location.href = window.location.pathname);
         return;
     }

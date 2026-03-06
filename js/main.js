@@ -1,4 +1,4 @@
-import { signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { signInAnonymously, onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, signOut, EmailAuthProvider, linkWithCredential } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
 // IMPORT DECOMPOSED DATA & SERVICES
 import { triggerVisualUpdate } from './visualSystem.js';
@@ -12,36 +12,53 @@ import './forgeSystem.js';
 
 // --- CONFIG & DB VERSION ---
 let hasInitialized = false;
+let isProcessingAuthLink = false;
 
 // --- AUTHENTICATION & SYNC ---
 if (isSyncEnabled) {
-    if (isSignInWithEmailLink(auth, window.location.href)) {
-        let email = window.localStorage.getItem('emailForSignIn');
-        
-        if (!email) {
-            email = window.prompt('Please provide your email for confirmation');
-        }
-        
-        if (email) {
-            signInWithEmailLink(auth, email, window.location.href)
-                .then((result) => {
-                    window.localStorage.removeItem('emailForSignIn');
-                    // CRITICAL FIX: Scrub the single-use token from the URL so hard refreshes are safe
-                    window.history.replaceState(null, '', window.location.pathname);
-                })
-                .catch((error) => {
-                    console.error("Auth Link Error:", error);
-                    // Scrub the URL even on failure so we don't get stuck in an error loop
-                    window.history.replaceState(null, '', window.location.pathname);
-                });
-        } else {
-            // CRITICAL FIX: The user hit "Cancel" on the email prompt.
-            // Do NOT attempt to sign in. Just scrub the URL to prevent loops.
-            window.history.replaceState(null, '', window.location.pathname);
-        }
-    }
-
     onAuthStateChanged(auth, async (u) => {
+        // 1. HANDLE EMAIL LINK UPGRADES
+        if (isSignInWithEmailLink(auth, window.location.href) && !isProcessingAuthLink) {
+            isProcessingAuthLink = true;
+            let email = window.localStorage.getItem('emailForSignIn');
+            
+            if (!email) {
+                email = window.prompt('Please provide your email for confirmation');
+            }
+            
+            if (email) {
+                try {
+                    if (u && u.isAnonymous) {
+                        // UPGRADE THE ANONYMOUS ACCOUNT (Keeps characters)
+                        const credential = EmailAuthProvider.credentialWithLink(email, window.location.href);
+                        await linkWithCredential(u, credential);
+                        console.log("[AUTH]: Anonymous account upgraded successfully.");
+                    } else {
+                        // NORMAL SIGN IN
+                        await signInWithEmailLink(auth, email, window.location.href);
+                        console.log("[AUTH]: Signed in via email link.");
+                    }
+                } catch (error) {
+                    if (error.code === 'auth/credential-already-in-use') {
+                        // Email already registered to another account. Fallback to normal sign-in.
+                        await signInWithEmailLink(auth, email, window.location.href);
+                    } else {
+                        console.error("Auth Link Error:", error);
+                    }
+                } finally {
+                    window.localStorage.removeItem('emailForSignIn');
+                    window.history.replaceState(null, '', window.location.pathname);
+                    isProcessingAuthLink = false;
+                }
+                // Return so the new auth state event handles the boot sequence
+                return;
+            } else {
+                window.history.replaceState(null, '', window.location.pathname);
+                isProcessingAuthLink = false;
+            }
+        }
+
+        // 2. NORMAL AUTH INITIALIZATION
         if (!u) {
             if (!isSignInWithEmailLink(auth, window.location.href)) signInAnonymously(auth);
             return;

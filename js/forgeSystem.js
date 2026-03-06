@@ -7,24 +7,78 @@ import * as UI from './ui.js';
 
 let currentDraftStats = null;
 
-export function openForgeModal() {
+export function openForgeModal(readOnlyData = null) {
     const modal = document.getElementById('forge-modal');
     if (modal) {
         modal.classList.remove('hidden');
-        resetForge();
+        if (readOnlyData) {
+            setupReadOnlyForge(readOnlyData);
+        } else {
+            resetForge();
+        }
     }
+}
+
+function setupReadOnlyForge(data) {
+    const nameInput = document.getElementById('forge-name');
+    const descInput = document.getElementById('forge-desc');
+    const archLabel = document.getElementById('forge-archetype');
+    const statWill = document.getElementById('stat-will');
+    const statAwr = document.getElementById('stat-awr');
+    const statPhys = document.getElementById('stat-phys');
+    const portraitImg = document.getElementById('forge-portrait-img');
+    const asciiPlaceholder = document.getElementById('forge-ascii-placeholder');
+    const manifestBtn = document.getElementById('btn-manifest-vessel');
+    const analyzeBtn = document.getElementById('btn-analyze-biometrics');
+    const suggestNameBtn = document.getElementById('btn-suggest-name');
+    const suggestDescBtn = document.getElementById('btn-suggest-desc');
+
+    nameInput.value = data.name || '';
+    nameInput.readOnly = true;
+    descInput.value = data.description || '';
+    descInput.readOnly = true;
+
+    archLabel.innerText = (data.archetype || '---').toUpperCase();
+    statWill.innerText = (data.stats?.WILL || 0).toString().padStart(2, '0');
+    statAwr.innerText = (data.stats?.AWR || 0).toString().padStart(2, '0');
+    statPhys.innerText = (data.stats?.PHYS || 0).toString().padStart(2, '0');
+
+    document.getElementById('forge-stats-readout').classList.remove('hidden');
+
+    if (data.image) {
+        portraitImg.src = data.image;
+        portraitImg.classList.remove('hidden');
+        asciiPlaceholder.classList.add('hidden');
+    }
+
+    manifestBtn.style.display = 'none';
+    analyzeBtn.style.display = 'none';
+    suggestNameBtn.style.display = 'none';
+    suggestDescBtn.style.display = 'none';
 }
 
 function closeForgeModal() {
     const modal = document.getElementById('forge-modal');
     if (modal) {
         modal.classList.add('hidden');
+        // Reset styles for next time
+        document.getElementById('forge-name').readOnly = false;
+        document.getElementById('forge-desc').readOnly = false;
+        document.getElementById('btn-manifest-vessel').style.display = 'block';
+        document.getElementById('btn-analyze-biometrics').style.display = 'block';
+        document.getElementById('btn-suggest-name').style.display = 'block';
+        document.getElementById('btn-suggest-desc').style.display = 'block';
     }
 }
 
 function resetForge() {
-    document.getElementById('forge-name').value = '';
-    document.getElementById('forge-desc').value = '';
+    const nameInput = document.getElementById('forge-name');
+    const descInput = document.getElementById('forge-desc');
+    nameInput.value = '';
+    nameInput.readOnly = false;
+    descInput.value = '';
+    descInput.readOnly = false;
+
     document.getElementById('forge-stats-readout').classList.add('hidden');
     document.getElementById('forge-portrait-img').classList.add('hidden');
     document.getElementById('forge-ascii-placeholder').classList.remove('hidden');
@@ -32,6 +86,11 @@ function resetForge() {
     const manifestBtn = document.getElementById('btn-manifest-vessel');
     manifestBtn.disabled = true;
     manifestBtn.classList.remove('border-amber-500', 'text-amber-500');
+    manifestBtn.style.display = 'block';
+
+    document.getElementById('btn-analyze-biometrics').style.display = 'block';
+    document.getElementById('btn-suggest-name').style.display = 'block';
+    document.getElementById('btn-suggest-desc').style.display = 'block';
     
     currentDraftStats = null;
 }
