@@ -76,12 +76,14 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
     // --- 0. PRE-FLIGHT CACHE CHECK (SOVEREIGN) ---
     // If we have it in session memory, or it's already in the DB, show it immediately and BAIL.
     if (!overridePrompt && !forceRebuild) {
-        if (sessionVisualCache.has(roomId)) {
-            renderToCanvas(sessionVisualCache.get(roomId), roomId, activeVisualTicket);
+        // PRIORITY 1: Local JS Memory (0ms, no network)
+        let localSessionUri = sessionVisualCache.get(roomId);
+        if (localSessionUri) {
+            renderToCanvas(localSessionUri, roomId, activeVisualTicket);
             return;
         }
+        // PRIORITY 2: Firebase URL (Browser Disk Cache)
         if (validStoredUrl) {
-            sessionVisualCache.set(roomId, validStoredUrl);
             renderToCanvas(validStoredUrl, roomId, activeVisualTicket);
             return;
         }
@@ -144,18 +146,26 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
                 : `artifacts/${appId}/public/data/areas/${capturedArea}/rooms/${roomId}.png`;
                 
             const fileRef = ref(storage, storagePath);
-            await uploadString(fileRef, result, result.startsWith('data:') ? 'data_url' : 'base64');
+            const format = result.startsWith('data:') ? 'data_url' : 'base64';
+            
+            // Set aggressive Cache-Control so the browser never pings Firebase for 304s
+            const metadata = {
+                contentType: 'image/png',
+                cacheControl: 'public, max-age=31536000'
+            };
+
+            await uploadString(fileRef, result, format, metadata);
             const downloadURL = await getDownloadURL(fileRef);
             
             // Persist to sync engine
             await syncEngine.updateMapNode(roomId, { storedImageUrl: downloadURL }, capturedArea);
             stateManager.updateMapNode(roomId, { storedImageUrl: downloadURL });
             
-            // Finalize cache with CDN URL
-            sessionVisualCache.set(roomId, downloadURL);
+            // CRITICAL FIX: DO NOT overwrite the sessionVisualCache with the downloadURL here.
+            // Leave the raw dataUri in the session memory for instant 0ms loads!
 
             if (shouldRender) {
-                renderToCanvas(downloadURL, roomId, myTicket);
+                renderToCanvas(sessionVisualCache.get(roomId) || downloadURL, roomId, myTicket);
             }
         } catch (e) { console.error(e); }
     } finally {
