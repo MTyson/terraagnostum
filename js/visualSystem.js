@@ -85,6 +85,18 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
         // PRIORITY 2: Firebase URL (Browser Disk Cache)
         if (validStoredUrl) {
             renderToCanvas(validStoredUrl, roomId, activeVisualTicket);
+            
+            // ASYNC BLOB UPGRADER: Silently fetch the image into local JS memory.
+            // This guarantees that the NEXT time the player visits this room this session, 
+            // it will hit PRIORITY 1 and load in 0ms with zero network requests!
+            fetch(validStoredUrl)
+                .then(res => res.blob())
+                .then(blob => {
+                    const objectUrl = URL.createObjectURL(blob);
+                    sessionVisualCache.set(roomId, objectUrl);
+                })
+                .catch(e => console.warn("[SOVEREIGN]: Blob cache upgrade failed.", e));
+                
             return;
         }
     }
