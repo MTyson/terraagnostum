@@ -84,7 +84,17 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
 }
 
 export async function generatePortrait(prompt, stratum) {
-    const combinedPrompt = `Highly detailed character portrait, ${stratum} aesthetic, Magic the Gathering card art style: ${prompt}`;
+    // Map strata to specific artistic movements
+    const styleMap = {
+        'technate': 'clinical brutalism, high-key lighting, geometric',
+        'interregnum': 'cyberpunk noir, heavy rain, neon-on-chrome, cinematic',
+        'faen': 'surrealism, ethereal watercolor, fluid glitch-art',
+        'trenchtown': 'rusted industrial, high-tech/low-life, gritty, weathered'
+    };
+    
+    const style = styleMap[stratum?.toLowerCase()] || styleMap.interregnum;
+    const combinedPrompt = `Highly detailed character portrait, ${style} aesthetic, MTG card art style: ${prompt}`;
+    
     try {
         const res = await fetch(API_IMAGE, {
             method: 'POST',

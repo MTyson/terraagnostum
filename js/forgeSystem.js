@@ -7,6 +7,13 @@ import * as UI from './ui.js';
 
 let currentDraftStats = null;
 
+const PSYCHOTASY_STRATA = [
+    { name: "Technate", vibe: "Clinical, transhumanist, matte-white, algorithmic" },
+    { name: "Interregnum", vibe: "Gritty, analog, rain-slicked, survivalist" },
+    { name: "Faen", vibe: "Surreal, dream-like, fluid, psychic, ethereal" },
+    { name: "Trenchtown", vibe: "Rusted, industrial, makeshift, high-tech/low-life" }
+];
+
 export function openForgeModal(readOnlyData = null) {
     const modal = document.getElementById('forge-modal');
     if (modal) {
@@ -101,22 +108,13 @@ async function suggestName() {
     btn.innerText = '...';
     
     try {
-        const prompt = "Suggest a single evocative cyberpunk/psychic character name for a MUD. Return ONLY the name.";
-        const system = "You are the Technate Naming Protocol. Respond with a single name only.";
-        // We use a simplified call or wrap the existing one. 
-        // Note: callGemini expects (userInput, systemPrompt) and returns parsed JSON.
-        // We might need to adjust based on how callGemini is implemented (it expects JSON).
+        const seed = PSYCHOTASY_STRATA[Math.floor(Math.random() * PSYCHOTASY_STRATA.length)];
+        const prompt = `Invent a single, unique character name for a ${seed.name} character in a gritty MUD. Vibe: ${seed.vibe}. Return JSON: {"name": "string"}`;
+        const system = "You are the Technate Naming Protocol. Respond with JSON containing a single name.";
+        
         const res = await callGemini(prompt, system);
-        // If callGemini forces JSON, we should ask for JSON.
-        // Assuming callGemini returns the parsed object from the API which is configured for JSON.
         if (res && res.name) {
             document.getElementById('forge-name').value = res.name;
-        } else if (typeof res === 'string') {
-            document.getElementById('forge-name').value = res;
-        } else {
-             // Fallback if callGemini response structure is rigid
-             const res2 = await callGemini("Suggest a name. Return JSON: {\"name\": \"...\"}", system);
-             document.getElementById('forge-name').value = res2.name;
         }
     } catch (e) {
         console.error("Name suggestion failed", e);
@@ -131,7 +129,8 @@ async function suggestBackstory() {
     btn.innerText = '[ WEAVING... ]';
     
     try {
-        const prompt = "Suggest a 2-sentence gritty biometric seed/history for a cyberpunk character.";
+        const seed = PSYCHOTASY_STRATA[Math.floor(Math.random() * PSYCHOTASY_STRATA.length)];
+        const prompt = `Invent a 2-sentence gritty biometric seed (backstory) for a character originating from the ${seed.name} stratum. Reference ${seed.vibe} elements. Return JSON: {"backstory": "string"}`;
         const system = "You are the Technate History Archive. Return JSON: {\"backstory\": \"...\"}";
         const res = await callGemini(prompt, system);
         if (res && res.backstory) {
@@ -158,10 +157,14 @@ async function analyzeBiometrics() {
     btn.disabled = true;
 
     try {
-        const prompt = `Analyze this vessel's biometrics: Name: ${name}, Description: ${desc}.`;
-        const system = `You are the Technate Biometric Scanner. Assign stats based on the description. 
-        Total points should be around 45. WILL (mental/psychic), AWR (perception/awareness), PHYS (physical/body). 
-        Return JSON: {"WILL": int, "AWR": int, "PHYS": int, "archetype": "string"}`;
+        const prompt = `Analyze this character backstory: "${desc}".
+Based on the strata of Psychotasy (Technate, Interregnum, Faen, Trenchtown), assign stats (1-20).
+- WILL: Psychic manifestation/Technate override.
+- AWR: Perception of glitches/Aethal scripts.
+- PHYS: Analog/kinetic strength.
+
+Return JSON: { "WILL": int, "AWR": int, "PHYS": int, "archetype": "string", "analysis": "1-sentence lore explanation" }`;
+        const system = `You are the Technate Biometric Scanner. Assign stats based on the description and Psychotasy lore.`;
         
         const res = await callGemini(prompt, system);
         
