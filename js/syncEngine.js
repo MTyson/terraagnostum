@@ -3,7 +3,8 @@ import {
     doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, 
     serverTimestamp, collection, addDoc, getDocs, writeBatch 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, appId, isSyncEnabled } from './firebaseConfig.js';
+import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+import { db, appId, storage, isSyncEnabled } from './firebaseConfig.js';
 import * as stateManager from './stateManager.js';
 import { blueprintApartment } from './mapData.js';
 
@@ -94,22 +95,36 @@ export async function updateAreaListener(areaId) {
             const areaNodes = {};
             snapshot.forEach(doc => { areaNodes[doc.id] = doc.data(); });
             
-            // Seeding logic for the apartment
-            if (Object.keys(areaNodes).length === 0 && areaId === `apartment_${user.uid}`) {
-                console.log("[SYNC]: Imposing full apartment architecture...");
-                const batch = writeBatch(db);
-                
-                for (const [roomId, roomData] of Object.entries(blueprintApartment)) {
-                    if (roomId === 'outside') continue; 
-                    const roomRef = doc(areaRoomsRef, roomId);
+            // Seeding logic for the apartment and public areas
+            if (Object.keys(areaNodes).length === 0) {
+                if (areaId === `apartment_${user.uid}`) {
+                    console.log("[SYNC]: Imposing full apartment architecture...");
+                    const batch = writeBatch(db);
+                    
+                    for (const [roomId, roomData] of Object.entries(blueprintApartment)) {
+                        if (roomId === 'outside') continue; 
+                        const roomRef = doc(areaRoomsRef, roomId);
+                        batch.set(roomRef, { 
+                            ...roomData, 
+                            id: roomId,
+                            metadata: { ...roomData.metadata, ownerId: user.uid, area: areaId }
+                        });
+                    }
+                    batch.commit();
+                    return;
+                } else if (areaId === 'public_void') {
+                    console.log("[SYNC]: Imposing public void architecture...");
+                    const batch = writeBatch(db);
+                    const roomData = blueprintApartment['outside'];
+                    const roomRef = doc(areaRoomsRef, 'outside');
                     batch.set(roomRef, { 
                         ...roomData, 
-                        id: roomId,
-                        metadata: { ...roomData.metadata, ownerId: user.uid, area: areaId }
+                        id: 'outside',
+                        metadata: { ...roomData.metadata, area: 'public_void' }
                     });
+                    batch.commit();
+                    return;
                 }
-                batch.commit();
-                return;
             }
 
             stateManager.setLocalAreaCache(areaNodes);
@@ -171,6 +186,23 @@ export async function createCharacter(charData) {
     if (!db || !user || !isSyncEnabled) return null;
     
     try {
+        // --- STORAGE FIX FOR LARGE IMAGES ---
+        // Character portraits can exceed Firestore's 1MB limit. 
+        // We persist them to Storage and save the URL instead.
+        if (charData.image && charData.image.startsWith('data:')) {
+            try {
+                const avatarId = `avatar_${Date.now()}`;
+                const storagePath = `artifacts/${appId}/users/${user.uid}/avatars/${avatarId}.png`;
+                const fileRef = ref(storage, storagePath);
+                
+                await uploadString(fileRef, charData.image, 'data_url');
+                charData.image = await getDownloadURL(fileRef);
+            } catch (storageErr) {
+                console.error("SyncEngine: Failed to upload character image to storage:", storageErr);
+                // Continue anyway, but Firestore might fail if image is too large.
+            }
+        }
+
         const charCol = collection(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION);
         const docRef = await addDoc(charCol, charData);
         return docRef.id;

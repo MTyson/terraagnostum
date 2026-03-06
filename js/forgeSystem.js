@@ -1,4 +1,5 @@
 // js/forgeSystem.js
+import { appId } from './firebaseConfig.js';
 import { callGemini, generatePortrait } from './apiService.js';
 import { createCharacter } from './syncEngine.js';
 import * as stateManager from './stateManager.js';
@@ -147,9 +148,11 @@ async function manifestVessel() {
         const b64 = await generatePortrait(portraitPrompt, stateManager.getState().localPlayer.stratum);
         
         if (b64) {
-            const imgData = `data:image/png;base64,${b64}`;
+            const dataUri = b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`;
+            
+            // Display it instantly to the user
             const portraitImg = document.getElementById('forge-portrait-img');
-            portraitImg.src = imgData;
+            portraitImg.src = dataUri;
             portraitImg.classList.remove('hidden');
             document.getElementById('forge-ascii-placeholder').classList.add('hidden');
             
@@ -164,7 +167,8 @@ async function manifestVessel() {
                     PHYS: currentDraftStats.PHYS
                 },
                 visual_prompt: portraitPrompt,
-                image: imgData,
+                image: dataUri, // syncEngine will handle Storage upload
+                stratum: stateManager.getState().localPlayer.stratum,
                 timestamp: Date.now(),
                 deceased: false,
                 deployed: false

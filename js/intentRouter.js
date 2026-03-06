@@ -88,6 +88,11 @@ export async function executeMovement(targetDir) {
         // --- AREA TRANSITION LOGIC (v0.2 DYNAMIC BOUNDARIES) ---
         let newArea = localPlayer.currentArea;
         if (targetRoomId === 'outside') {
+            const hasKey = (localPlayer.inventory || []).some(i => i.name === 'Resonant Key');
+            if (!hasKey) {
+                UI.addLog("[SYSTEM]: The front door is sealed by a quantum lock. You need a Resonant Key to pass through.", "var(--term-amber)");
+                return;
+            }
             newArea = 'public_void';
         } else if (targetRoomId.startsWith('astral_')) {
             newArea = `astral_${user.uid}`;
