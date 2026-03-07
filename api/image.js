@@ -1,26 +1,30 @@
 /**
- * Vercel Serverless Function: Image Proxy (Gemini 2.0 Native Edition)
+ * Vercel Serverless Function: Universal Image Proxy
+ * DEFAULT: Imagen 4 Fast ($0.02 / Image)
  * Path: /api/image.js
- * * Spec: https://developers.googleblog.com/experiment-with-gemini-20-flash-native-image-generation/
- * * This version is optimized for a billed/pay-as-you-go AI Studio project.
  */
 
 export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY is not configured in Vercel.' });
+    console.error("CRITICAL: GEMINI_API_KEY is missing from environment.");
+    return res.status(500).json({ error: 'GEMINI_API_KEY is not configured. Check your .env file.' });
   }
+
+  /**
+   * ENGINE SELECTION
+   * DEFAULT: 'imagen' (Imagen 4 Fast)
+   * To use Nano Banana, set IMAGE_ENGINE=nano in your Vercel/env settings.
+   */
+  const imageEngine = (process.env.IMAGE_ENGINE || 'imagen').toLowerCase(); //
 
   // --- GET: DIAGNOSTIC MODE ---
   if (req.method === 'GET') {
-    try {
-      const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-      const listRes = await fetch(listUrl);
-      const listData = await listRes.json();
-      return res.status(200).json(listData);
-    } catch (e) {
-      return res.status(500).json({ error: "Failed to list models." });
-    }
+    return res.status(200).json({ 
+      status: "Active",
+      activeEngine: imageEngine,
+      message: "Send a POST request to generate an image." 
+    });
   }
 
   if (req.method !== 'POST') {
@@ -31,69 +35,89 @@ export default async function handler(req, res) {
     const incomingPayload = req.body;
     let promptText = "A lofi glitch terminal art piece.";
     
-    // Support both 'instances' and 'contents' formats for maximum frontend compatibility
+    // Safely extract the prompt text no matter what format the frontend sends
     if (incomingPayload.instances?.[0]?.prompt) {
       promptText = incomingPayload.instances[0].prompt;
     } else if (incomingPayload.contents?.[0]?.parts?.[0]?.text) {
       promptText = incomingPayload.contents[0].parts[0].text;
     }
 
-    /**
-     * NATIVE IMAGE GENERATION SPECS (REFINED)
-     * Model: gemini-2.0-flash-exp-image-generation
-     * Endpoint: generateContent
-     * * FIX: Many tiers currently require ["TEXT", "IMAGE"] even for the 
-     * image-generation specific model to prevent the 400 Modality error.
-     */
-    const model = "gemini-2.0-flash-exp-image-generation";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    let url, finalPayload;
 
-    const geminiPayload = {
-      contents: [{
-        parts: [{ text: `Generate a high-fidelity visual for the following prompt: ${promptText}` }]
-      }],
-      generationConfig: {
-        // Including TEXT alongside IMAGE is the documented fix for the 400 error
-        responseModalities: ["TEXT", "IMAGE"]
-      }
-    };
+    if (imageEngine === 'imagen') {
+      /**
+       * ENGINE 1: IMAGEN 4 FAST ($0.02 / Image)
+       * Uses the :predict endpoint and instances/parameters structure.
+       */
+      const model = "imagen-4.0-fast-generate-001";
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
+      finalPayload = {
+        instances: [{ prompt: promptText }],
+        parameters: { sampleCount: 1 }
+      };
+    } else {
+      /**
+       * ENGINE 2: NANO BANANA 2 (Gemini 3.1 Flash Image)
+       * Uses the :generateContent endpoint and multimodal contents structure.
+       */
+      const model = "gemini-3.1-flash-image-preview";
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      finalPayload = {
+        contents: [
+          { parts: [{ text: promptText }] }
+        ],
+        // Required to force image output instead of text descriptions
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"]
+        }
+      };
+    }
 
+    // Execute the request to the Google API
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(geminiPayload)
+      body: JSON.stringify(finalPayload)
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Native Gen Error:", JSON.stringify(data, null, 2));
+      console.error(`[${imageEngine.toUpperCase()}] Error:`, JSON.stringify(data, null, 2));
       return res.status(response.status).json({
         error: data.error?.message || "Source Generation Error",
-        code: response.status,
+        engine: imageEngine,
         details: data
       });
     }
 
     /**
-     * NATIVE RESPONSE PARSING:
-     * We filter parts to find the image. Since we requested TEXT as well,
-     * there may be multiple parts in the candidate.
+     * RESPONSE EXTRACTION
+     * Normalizes the response so the frontend apiService.js always receives 
+     * the exact format it expects.
      */
-    const parts = data.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image/'));
-    const base64Data = imagePart?.inlineData?.data;
+    let base64Data = null;
+    let textResponseMetadata = null;
+
+    if (imageEngine === 'imagen') {
+      base64Data = data.predictions?.[0]?.bytesBase64Encoded; //
+    } else {
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const imagePart = parts.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image/'));
+      base64Data = imagePart?.inlineData?.data; //
+      textResponseMetadata = parts.find(p => p.text)?.text; 
+    }
 
     if (!base64Data) {
-      const textResponse = parts.find(p => p.text)?.text;
+      console.warn(`[${imageEngine.toUpperCase()}] No image data found.`);
       return res.status(500).json({ 
-        error: "The Source returned a text response but no visual part.",
-        textMetadata: textResponse,
+        error: `The ${imageEngine} model returned a response but no visual data was found.`,
+        textMetadata: textResponseMetadata,
         details: data 
       });
     }
 
-    // Return in the format index.html expects (predictions array)
+    // Return in the unified format required by apiService.js
     return res.status(200).json({
       predictions: [{ bytesBase64Encoded: base64Data }]
     });

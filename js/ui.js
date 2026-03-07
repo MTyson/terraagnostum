@@ -1,6 +1,5 @@
 // js/ui.js
 // Purpose: Handles all DOM manipulation, canvas rendering, and CSS theme transitions.
-// It manages no global state, relying entirely on the stateManager to pass the correct data.
 import * as stateManager from './stateManager.js';
 
 // Subscribe to state changes
@@ -9,13 +8,6 @@ stateManager.subscribe((state) => {
     const activeMap = stateManager.getActiveMap();
     const tier = stateManager.getUserTier();
     
-    // Determine void mode
-    if (!activeAvatar) {
-        document.body.classList.add('void-mode');
-    } else {
-        document.body.classList.remove('void-mode');
-    }
-
     // Update Command Prompt
     const roomShort = activeMap[localPlayer.currentRoom]?.shortName || localPlayer.currentRoom.toUpperCase();
     const wizardPlaceholder = wizardState.active ? (wizardState.type === 'login' ? '[ AWAITING EMAIL... ]' : '[ AWAITING INPUT... ]') : null;
@@ -23,35 +15,26 @@ stateManager.subscribe((state) => {
     
     updateCommandPrompt(tier, roomShort, activeTerminal, wizardPlaceholder, activeAvatar, combatSuffix);
 
-    // Update Status UI
-    updateStatusUI(roomShort);
-
-    // Update Avatar UI
+    // Update Sidebars/HUD
+    updateStatusUI(roomShort, localPlayer.stratum);
     updateAvatarUI(activeAvatar);
-
-    // Update Inventory UI
     updateInventoryUI(localPlayer.inventory);
-
-    // Update Room UI
+    
     const room = activeMap[localPlayer.currentRoom];
     updateRoomItemsUI(room?.items);
     updateRoomEntitiesUI(room?.npcs);
     updateCompassUI(room);
     renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
     updateContextualSuggestions(state.suggestions);
-    updateArchitectHUD(localPlayer.isArchitect, state.user);
 });
 
-/**
- * Initializes listeners for the persistent HUD widgets (Compass, Mobile Bar).
- */
 export function initHUDWidgets() {
     // Compass Listeners
     const compassButtons = {
-        'btn-n': 'north',
-        'btn-s': 'south',
-        'btn-e': 'east',
-        'btn-w': 'west'
+        'compass-n': 'n',
+        'compass-s': 's',
+        'compass-e': 'e',
+        'compass-w': 'w'
     };
 
     Object.entries(compassButtons).forEach(([id, dir]) => {
@@ -66,76 +49,23 @@ export function initHUDWidgets() {
             };
         }
     });
-
-    // Mobile Action Bar Listeners
-    const actionBtns = document.querySelectorAll('.action-btn');
-    actionBtns.forEach(btn => {
-        btn.onclick = () => {
-            const cmd = btn.getAttribute('data-cmd');
-            const input = document.getElementById('cmd-input');
-            if (input) {
-                input.value = cmd;
-                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-            }
-        };
-    });
 }
 
-/**
- * Updates the compass buttons to show/hide based on available exits.
- */
 export function updateCompassUI(room) {
     const directions = ['north', 'south', 'east', 'west'];
-    const btnMap = { north: 'btn-n', south: 'btn-s', east: 'btn-e', west: 'btn-w' };
+    const btnMap = { north: 'compass-n', south: 'compass-s', east: 'compass-e', west: 'compass-w' };
 
     directions.forEach(dir => {
         const btn = document.getElementById(btnMap[dir]);
         if (!btn) return;
-
-        if (room && room.exits && room.exits[dir]) {
-            btn.disabled = false;
-            btn.classList.remove('opacity-20');
-            btn.classList.add('bg-green-900/40', 'text-green-400', 'border-green-500');
-        } else {
-            btn.disabled = true;
-            btn.classList.add('opacity-20');
-            btn.classList.remove('bg-green-900/40', 'text-green-400', 'border-green-500');
-        }
+        const hasExit = room && room.exits && room.exits[dir];
+        btn.disabled = !hasExit;
     });
-}
-
-/**
- * Updates the Architect link and User Status in the bottom HUD.
- */
-export function updateArchitectHUD(isArchitect, user) {
-    const link = document.getElementById('become-architect-link');
-    const hudStatus = document.getElementById('hud-status');
-    if (!link || !hudStatus) return;
-
-    if (isArchitect) {
-        link.textContent = "[ ARCHITECT_LEVEL_LICENSE ]";
-        link.style.color = "var(--crayola-blue)";
-        link.style.cursor = 'default';
-        link.style.display = "inline";
-    } else {
-        link.textContent = "[ BECOME_ARCHITECT ]";
-        link.style.color = "#ffcc00";
-        link.style.cursor = 'pointer';
-        link.style.display = "inline";
-    }
-
-    if (user) {
-        const type = user.isAnonymous ? 'GUEST' : 'RESONANT';
-        hudStatus.textContent = `// USER://_${type}/${user.uid.substring(0,6)} // AUTHENTICATED //`;
-    } else {
-        hudStatus.textContent = "// UNKNOWN_ENTITY // LOGIN_REQUIRED //";
-    }
 }
 
 export function updateContextualSuggestions(aigmSuggestions = []) {
     const { wizardState, localPlayer } = stateManager.getState();
     if (wizardState.active) {
-        // Wizards might benefit from specific chips like 'Cancel'
         renderContextualCommands(['Exit Wizard']);
         return;
     }
@@ -146,132 +76,28 @@ export function updateContextualSuggestions(aigmSuggestions = []) {
 
     let suggestions = [];
 
-    // 1. DYNAMIC EXITS
-    if (room.exits) {
-        Object.keys(room.exits).forEach(dir => {
-            suggestions.push(`Go ${dir.charAt(0).toUpperCase() + dir.slice(1)}`);
-        });
-    }
-
-    // 2. NPC INTERACTIONS
     if (room.npcs && room.npcs.length > 0) {
         room.npcs.forEach(npc => {
             suggestions.push(`Look at ${npc.name}`);
         });
     }
 
-    // 2.5 COMBAT ACTIONS
     if (localPlayer.combat.active) {
         suggestions.push("ATTACK WITH WILL FORCE");
         suggestions.push("CREATE ASTRAL WEAPON");
     }
 
-    // 3. MERGE AIGM SUGGESTIONS
     const safeAigm = Array.isArray(aigmSuggestions) ? aigmSuggestions : [];
     suggestions = [...suggestions, ...safeAigm];
 
-    // 4. CORE SYSTEM DEFAULTS
     if (suggestions.length < 4) {
         suggestions.push("Look");
         suggestions.push("Inventory");
     }
-
-    // 5. THE AI SUGGESTION ENGINE (Always available)
     suggestions.push("💡 Suggest");
 
-    // Deduplicate and Render
     const uniqueSuggestions = [...new Set(suggestions)];
     renderContextualCommands(uniqueSuggestions);
-}
-
-const stratumDescriptions = {
-    mundane: "The baseline consensus reality. Physical laws strictly apply. The mundane world is ignorant of the deeper layers of existence.",
-    astral: "The realm of thought, memory, and subjective geometry. The environment is highly fluid, and willpower dictates form. Beware of wandering shadow-reflections.",
-    faen: "A chaotic dimension of raw, untamed magic and emotion. Colors bleed, logic fails, and conventional physics collapse.",
-    technate: "A hyper-structured digital/cybernetic overlay. Data is physical, code is law, and the Overarching Mind watches all."
-};
-
-export function toggleStratumModal(currentStratum) {
-    const modal = document.getElementById('stratum-modal');
-    const title = document.getElementById('stratum-modal-title');
-    const desc = document.getElementById('stratum-modal-desc');
-    
-    if (!modal || !title || !desc) return;
-
-    if (modal.classList.contains('hidden')) {
-        title.innerText = `STRATUM: ${currentStratum.toUpperCase()}`;
-        desc.innerText = stratumDescriptions[currentStratum.toLowerCase()] || "Unknown stratum.";
-        modal.classList.remove('hidden');
-    } else {
-        modal.classList.add('hidden');
-    }
-}
-
-// Inject Void Mode CSS
-const style = document.createElement('style');
-style.innerHTML = `
-.void-mode img { filter: grayscale(1) brightness(0.6) contrast(1.3) !important; }
-.void-mode #log div { color: var(--gm-purple) !important; }
-.void-mode #log div[style*="color: #fff"] { color: #fff !important; }
-.materialize-flash { position: fixed; inset: 0; background: white; z-index: 9999; pointer-events: none; animation: flash-out 1.2s ease-out forwards; }
-@keyframes flash-out { from { opacity: 1; } to { opacity: 0; } }
-#right-sidebar { overflow-y: auto; overflow-x: hidden; }
-#right-sidebar > div { flex-shrink: 0; min-height: min-content; }
-@keyframes inv-flash { 0% { box-shadow: 0 0 20px var(--term-green); border-color: var(--term-green); } 100% { box-shadow: none; border-color: inherit; } }
-.flash-inv { animation: inv-flash 1s ease-out; }
-.astral-mode #log div { text-shadow: none !important; filter: none !important; }
-`;
-document.head.appendChild(style);
-
-export function applyStratumTheme(stratum, isTransitioningToAstral) {
-    const root = document.documentElement;
-    const stratDisp = document.getElementById('stratum-display');
-    
-    if (isTransitioningToAstral) {
-        document.body.classList.add('desaturated');
-        addLog("[SYSTEM]: REALITY_RENDER_STUTTER_DETECTED...", "var(--term-red)");
-        setTimeout(() => {
-            document.body.classList.remove('desaturated');
-            document.body.classList.add('astral-mode');
-        }, 1000);
-    } else if (stratum === 'astral') {
-        document.body.classList.add('astral-mode');
-    } else {
-        document.body.classList.remove('astral-mode');
-    }
-
-    if (stratum === 'astral') {
-        root.style.setProperty('--term-green', '#e2b714');
-        root.style.setProperty('--term-amber', '#ff9d00');
-        root.style.setProperty('--term-red', '#e53935'); 
-        root.style.setProperty('--term-bg', '#1c0f1a');
-        root.style.setProperty('--crayola-blue', '#b084e8'); 
-        root.style.setProperty('--gm-purple', '#ff77ff');
-        stratDisp.innerText = `[ STRATA: ASTRAL ]`;
-        stratDisp.style.color = 'var(--crayola-blue)';
-    } else if (stratum === 'faen') {
-        // Placeholder for future Faen stratum
-        stratDisp.innerText = `[ STRATA: FAEN (UNIMPLEMENTED) ]`;
-        stratDisp.style.color = 'var(--term-amber)';
-    } else if (stratum === 'technate') {
-        root.style.setProperty('--term-green', '#e0f7fa');
-        root.style.setProperty('--term-amber', '#ff2a2a');
-        root.style.setProperty('--term-red', '#ff0000'); 
-        root.style.setProperty('--term-bg', '#010a0f');
-        root.style.setProperty('--crayola-blue', '#00ffff'); 
-        root.style.setProperty('--gm-purple', '#ffffff');
-        stratDisp.innerText = '[ STRATA: TECHNATE ]';
-        stratDisp.style.color = 'var(--term-green)';
-    } else {
-        root.style.setProperty('--term-green', '#00ff41');
-        root.style.setProperty('--term-amber', '#ffb000');
-        root.style.setProperty('--term-red', '#ff3e3e');
-        root.style.setProperty('--term-bg', '#050505');
-        root.style.setProperty('--crayola-blue', '#3b82f6');
-        root.style.setProperty('--gm-purple', '#a855f7');
-        stratDisp.innerText = '[ STRATA: MUNDANE ]';
-        stratDisp.style.color = '#888';
-    }
 }
 
 export function updateCommandPrompt(tier, roomShort, activeTerminal = false, wizardPlaceholder = null, activeAvatar = null, combatSuffix = null) {
@@ -279,24 +105,14 @@ export function updateCommandPrompt(tier, roomShort, activeTerminal = false, wiz
     const inputEl = document.getElementById('cmd-input');
     if (!prefixEl || !inputEl) return;
 
-    inputEl.className = "w-full bg-transparent text-white outline-none font-mono text-sm sm:text-base";
-
     if (wizardPlaceholder) {
         inputEl.placeholder = wizardPlaceholder;
-        inputEl.classList.add("border-b", "border-amber-500");
     } else if (activeTerminal) {
         inputEl.placeholder = "TANDEM_OS // Awaiting command ('exit' to disconnect)...";
-        inputEl.classList.add("border-b", "border-emerald-500");
     } else if (combatSuffix) {
         inputEl.placeholder = "BATTLE OF WILLS // Describe your resistance...";
-        inputEl.classList.add("border-b", "border-red-500");
     } else {
         inputEl.placeholder = "Enter command...";
-    }
-
-    if (activeTerminal) {
-        prefixEl.innerHTML = '<span class="text-emerald-400 font-bold tracking-widest">TANDEM:~$</span>&nbsp;';
-        return;
     }
 
     const displayName = activeAvatar ? activeAvatar.name.toUpperCase() : tier;
@@ -305,51 +121,53 @@ export function updateCommandPrompt(tier, roomShort, activeTerminal = false, wiz
     if (tier === 'GUEST') colorClass = "text-gray-500";
     if (tier === 'ARCHITECT') colorClass = "text-blue-400";
 
-    const combatDisplay = combatSuffix ? `<span class="text-red-500 anim-pulse ml-1">${combatSuffix}</span>` : "";
-
+    const combatDisplay = combatSuffix ? `<span class="text-red-500 ml-1">${combatSuffix}</span>` : "";
     prefixEl.innerHTML = `<span class="${colorClass} font-bold">${displayName}@${roomShort}:~$</span>${combatDisplay}&nbsp;`;
 }
 
-export function setWizardPrompt(promptText) {
-    document.getElementById('prompt-prefix').innerHTML = `<span class="text-amber-500">${promptText}</span>&nbsp;`;
+export function updateStatusUI(roomShort, stratum = 'MUNDANE') {
+    const roomEl = document.getElementById('room-display');
+    if (roomEl) roomEl.innerText = roomShort;
+    
+    const stratumEl = document.getElementById('stratum-name');
+    if (stratumEl) stratumEl.innerText = stratum.toUpperCase();
 }
 
 export function updateAvatarUI(activeAvatar) {
     const container = document.getElementById('avatar-container');
+    if (!container) return;
+    
     if (!activeAvatar) {
         container.innerHTML = `
-            <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2">
-                NO VESSEL DETECTED<br>DISEMBODIED STATE<br><br><span class="text-gray-500 text-[8px]">Go to the Archive and type 'CREATE AVATAR' to forge a form.</span>
+            <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2 uppercase tracking-tighter">
+                NO VESSEL DETECTED<br>DISEMBODIED STATE<br><br>
+                <span class="text-gray-600">Navigate to character_room and type 'CREATE AVATAR'.</span>
             </div>`;
         return;
     }
+    
+    const portrait = activeAvatar.image 
+        ? `<img src="${activeAvatar.image}" class="w-full h-32 object-cover border border-[#1a3a1a] mb-2 contrast-125">`
+        : `<div class="w-full h-32 bg-gray-900 border border-[#1a3a1a] mb-2 flex items-center justify-center text-[10px] text-gray-700">[ NO VISUAL DATA ]</div>`;
 
     container.innerHTML = `
-        <div class="char-card w-full m-0 mt-2 p-3 bg-transparent shadow-none border-[#1a3a1a] cursor-pointer hover:bg-[#1a1a1a] transition-colors" id="active-portrait">
-            <div class="char-card-header border-b border-[#1a3a1a] pb-2 mb-2 pointer-events-none">
-                <span class="char-card-title text-[10px] text-amber-500">[ACTV] ${activeAvatar.name}</span>
-                <span class="char-card-archetype text-[8px]">${activeAvatar.archetype}</span>
+        <div class="char-card w-full m-0 mt-2 p-3 bg-transparent border-[#1a3a1a]">
+            ${portrait}
+            <div class="char-card-header pb-2 mb-2 border-b border-[#1a3a1a]">
+                <span class="char-card-title text-[10px] text-amber-500 font-bold uppercase tracking-widest">[ACTV] ${activeAvatar.name}</span>
             </div>
-            <div class="char-card-img-container h-32 border-[#1a3a1a] mb-2 pointer-events-none">
-                ${activeAvatar.image ? `<img class="char-card-img" src="${activeAvatar.image}" alt="${activeAvatar.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[NO IMG]</div>`}
-            </div>
-            <div class="char-card-stats border-[#1a3a1a] bg-transparent pb-0 flex-col text-[9px] gap-1 pointer-events-none">
-                <span>WILL (Mng): ${activeAvatar.stats.WILL || 20}</span>
-                <span>CONS (Amn): ${activeAvatar.stats.CONS || 20}</span>
-                <span>PHYS (HP): ${activeAvatar.stats.PHYS || 20}</span>
+            <div class="char-card-stats flex flex-col gap-1 text-[9px] font-mono text-green-700 uppercase">
+                <div class="flex justify-between"><span>WILLFORCE:</span> <span>${activeAvatar.stats.WILL || 10}</span></div>
+                <div class="flex justify-between"><span>AWARENESS:</span> <span>${activeAvatar.stats.AWR || 10}</span></div>
+                <div class="flex justify-between"><span>PHYSICALITY:</span> <span>${activeAvatar.stats.PHYS || 10}</span></div>
             </div>
         </div>
     `;
-
-    document.getElementById('active-portrait').addEventListener('click', () => {
-        import('./forgeSystem.js').then(({ openForgeModal }) => {
-            openForgeModal(activeAvatar);
-        });
-    });
 }
 
 export function updateInventoryUI(inventory) {
     const container = document.getElementById('inventory-container');
+    if (!container) return;
     if (!inventory || inventory.length === 0) {
         container.innerHTML = "[EMPTY]";
         return;
@@ -357,404 +175,206 @@ export function updateInventoryUI(inventory) {
     container.innerHTML = inventory.map(item => `
         <div class="border border-[#1a3a1a] p-2 rounded bg-black/40 border-l-4 border-l-green-900">
             <span class="text-amber-500 font-bold block">${item.name}</span>
-            <span class="text-[9px] text-blue-400 uppercase">${item.type}</span>
-            <div class="mt-1 leading-tight">${item.description}</div>
         </div>
     `).join('');
 }
 
 export function updateRoomItemsUI(items) {
     const container = document.getElementById('room-items-container');
+    if (!container) return;
     if (!items || items.length === 0) {
         container.innerHTML = "[EMPTY]";
         return;
     }
-    container.innerHTML = items.map(item => `
-        <div class="border border-[#1a3a1a] p-2 rounded bg-black/40 border-l-4 border-l-amber-700">
-            <span class="text-amber-500 font-bold block">${item.name}</span>
-            <span class="text-[9px] text-blue-400 uppercase">${item.type}</span>
-            <div class="mt-1 leading-tight">${item.description}</div>
-        </div>
-    `).join('');
+    container.innerHTML = items.map(item => `<div class="text-xs text-amber-600">> ${item.name}</div>`).join('');
 }
 
 export function updateRoomEntitiesUI(npcs) {
     const container = document.getElementById('room-entities-container');
+    if (!container) return;
     if (!npcs || npcs.length === 0) {
         container.innerHTML = "[NONE]";
         return;
     }
-    container.innerHTML = npcs.map(npc => `
-        <div class="border border-[#1a3a1a] p-2 rounded bg-black/40 border-l-4 cursor-pointer transition-colors flex items-center gap-3 hover:bg-[#001a33]"
-             style="border-left-color: var(--crayola-blue);"
-             onclick="document.getElementById('cmd-input').value = 'look at ${npc.name}'; document.getElementById('cmd-input').focus();">
-            ${npc.image 
-                ? `<img src="${npc.image}" style="width: 36px; height: 36px; object-fit: cover; border: 1px solid #333; border-radius: 4px;" alt="${npc.name}">` 
-                : `<div style="width: 36px; height: 36px; background: #111; border: 1px solid #333; display: flex; align-items: center; justify-content: center; font-size: 8px; border-radius: 4px; color: #555;">[?]</div>`
-            }
-            <div style="flex: 1; min-width: 0;">
-                <span style="color: var(--crayola-blue); font-weight: bold; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;" class="uppercase">${npc.name}</span>
-                <span class="text-[9px] text-gray-500 uppercase block truncate">${npc.archetype}</span>
-                ${npc.stats ? `<span class="text-[8px] text-amber-600 block font-mono mt-1">WILL:${npc.stats.WILL} CONS:${npc.stats.CONS} PHYS:${npc.stats.PHYS}</span>` : ''}
-            </div>
-        </div>
-    `).join('');
-}
-
-export function printRoomDescription(room, isAstral, fullMap = null, activeAvatar = null) {
-    if (!room) return; // Guard against undefined room during transitions
-    addLog(`[NARRATOR]: ${room.description}`, "#888");
-    if (room.marginalia && room.marginalia.length > 0) {
-        room.marginalia.forEach(note => {
-            addLog(`[MARGINALIA]: ${note}`, "var(--crayola-blue)");
-        });
-    }
-    if (room.items && room.items.length > 0) {
-        const itemNames = room.items.map(i => `<span class="text-amber-400">${i.name}</span>`).join(', ');
-        addLog(`You see items resting here: ${itemNames}`, "#aaa");
-    }
-    if (room.npcs && room.npcs.length > 0) {
-        const npcNames = room.npcs.map(n => `<span class="text-crayola-blue font-bold">${n.name} (${n.archetype})</span>`).join(', ');
-        addLog(`Entities Present: ${npcNames}`, "#aaa");
-    }
-    
-    // Check for ADJACENT NPCs through exits
-    if (fullMap && !isAstral) {
-        let adjacentNpcs = [];
-        for (let [dir, exitData] of Object.entries(room.exits || {})) {
-            const targetId = typeof exitData === 'object' ? exitData.target : exitData;
-            const targetRoom = fullMap[targetId];
-            if (targetRoom && targetRoom.npcs && targetRoom.npcs.length > 0) {
-                targetRoom.npcs.forEach(n => {
-                    adjacentNpcs.push(`<span class="text-crayola-blue font-bold">${n.name}</span> (to the ${dir})`);
-                });
-            }
-        }
-        if (adjacentNpcs.length > 0) {
-            addLog(`You can see nearby: ${adjacentNpcs.join(', ')}`, "#aaa");
-        }
-    }
-    
-    if (!isAstral) {
-        const exits = Object.keys(room.exits || {}).map(e => e.toUpperCase()).join(', ');
-        addLog(`Obvious Exits: ${exits || 'NONE'}`, "#555");
-    } else {
-        addLog(`The astral plane stretches infinitely.`, "var(--astral-pink)");
-    }
-
-    if (!activeAvatar) {
-        addLog(`[TANDY]: Is someone there? I feel a ripple... Ian? No, the signature is different.  You're too thin, Wanderer. Find the Character Room and sketch a life.`, "var(--gm-purple)");
-    }
-}
-
-export function toggleMapModal() {
-    const modal = document.getElementById('map-modal');
-    if (!modal) return;
-
-    if (modal.classList.contains('hidden')) {
-        modal.classList.remove('hidden');
-        const state = stateManager.getState();
-        const activeMap = stateManager.getActiveMap();
-        const currentRoom = activeMap[state.localPlayer.currentRoom];
-        
-        document.getElementById('map-modal-room-name').innerText = currentRoom?.name || state.localPlayer.currentRoom;
-        document.getElementById('map-modal-stratum').innerText = state.localPlayer.stratum.toUpperCase();
-        
-        renderMapHUD(activeMap, state.localPlayer.currentRoom, state.localPlayer.stratum, true);
-    } else {
-        modal.classList.add('hidden');
-    }
-}
-
-export function renderMapHUD(activeMap, currentRoomKey, stratum, isModal = false) {
-    const containerId = isModal ? 'map-modal-canvas-container' : 'map-canvas-container';
-    const canvasId = isModal ? 'map-modal-canvas' : 'map-canvas';
-    
-    const canvasContainer = document.getElementById(containerId);
-    const canvas = document.getElementById(canvasId);
-    if (!canvas || !canvasContainer) return;
-
-    // Guard against empty map or missing room during transitions
-    if (!activeMap || Object.keys(activeMap).length === 0 || !currentRoomKey || !activeMap[currentRoomKey]) {
-        return;
-    }
-
-    const ctx = canvas.getContext('2d');
-    const existingZones = canvasContainer.querySelectorAll('.map-clickable-zone');
-    existingZones.forEach(zone => zone.remove());
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    if (stratum === 'astral' || stratum === 'faen' || currentRoomKey.toLowerCase().includes('astral')) {
-        // DRAW STATIC
-        const imageData = ctx.createImageData(canvas.width, canvas.height);
-        const data = imageData.data;
-        for (let i = 0; i < data.length; i += 4) {
-            const val = Math.random() * 255;
-            data[i] = val;     // R
-            data[i + 1] = val; // G
-            data[i + 2] = val; // B
-            data[i + 3] = 50;  // A (semi-transparent)
-        }
-        ctx.putImageData(imageData, 0, 0);
-        
-        const termColor = isModal ? "var(--crayola-blue)" : "var(--term-green)";
-        ctx.fillStyle = termColor;
-        ctx.font = "bold 12px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("SIGNAL LOST", canvas.width / 2, canvas.height / 2);
-        ctx.fillText("ASTRAL INTERFERENCE", canvas.width / 2, canvas.height / 2 + 15);
-        return;
-    }
-
-    const computedStyle = getComputedStyle(document.body);
-    const termGreen = isModal ? '#3b82f6' : (computedStyle.getPropertyValue('--term-green').trim() || '#00ff41');
-    const termAmber = computedStyle.getPropertyValue('--term-amber').trim() || '#ffb000';
-    const termBg = computedStyle.getPropertyValue('--term-bg').trim() || '#050505';
-
-    const nodeSize = isModal ? 40 : 30;
-    const spacing = isModal ? 80 : 60;
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-
-    let coords = {}; 
-    let queue = [{key: currentRoomKey, logicalX: 0, logicalY: 0}];
-    coords[currentRoomKey] = {x: 0, y: 0};
-    let processed = new Set();
-
-    while(queue.length > 0) {
-        let curr = queue.shift();
-        if (processed.has(curr.key)) continue;
-        
-        let node = activeMap[curr.key];
-        if(!node) continue;
-        
-        processed.add(curr.key);
-        if (node.exits) {
-            const getTarget = (val) => (val && typeof val === 'object') ? val.target : val;
-            
-            const nId = getTarget(node.exits.north);
-            if (nId && !coords[nId]) {
-                coords[nId] = {x: curr.logicalX, y: curr.logicalY - 1};
-                queue.push({key: nId, logicalX: curr.logicalX, logicalY: curr.logicalY - 1});
-            }
-            
-            const sId = getTarget(node.exits.south);
-            if (sId && !coords[sId]) {
-                coords[sId] = {x: curr.logicalX, y: curr.logicalY + 1};
-                queue.push({key: sId, logicalX: curr.logicalX, logicalY: curr.logicalY + 1});
-            }
-            
-            const eId = getTarget(node.exits.east);
-            if (eId && !coords[eId]) {
-                coords[eId] = {x: curr.logicalX + 1, y: curr.logicalY};
-                queue.push({key: eId, logicalX: curr.logicalX + 1, logicalY: curr.logicalY});
-            }
-            
-            const wId = getTarget(node.exits.west);
-            if (wId && !coords[wId]) {
-                coords[wId] = {x: curr.logicalX - 1, y: curr.logicalY};
-                queue.push({key: wId, logicalX: curr.logicalX - 1, logicalY: curr.logicalY});
-            }
-        }
-    }
-
-    ctx.strokeStyle = termGreen;
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.4; 
-    processed.forEach(key => {
-        let node = activeMap[key];
-        let p1 = coords[key];
-        if(!node || !p1) return;
-        const drawEdge = (targetData) => {
-            if (!targetData) return;
-            const targetKey = (typeof targetData === 'object') ? targetData.target : targetData;
-            const isLocked = (typeof targetData === 'object' && targetData.locked);
-            if (!targetKey) return;
-            
-            let p2 = coords[targetKey];
-            if(p2) {
-                ctx.beginPath();
-                ctx.moveTo(centerX + p1.x * spacing, centerY + p1.y * spacing);
-                ctx.lineTo(centerX + p2.x * spacing, centerY + p2.y * spacing);
-                ctx.strokeStyle = isLocked ? '#ff0000' : termGreen; // Draw red line if locked
-                ctx.stroke();
-            }
-        };
-        if(node.exits) {
-            if(node.exits.north) drawEdge(node.exits.north);
-            if(node.exits.south) drawEdge(node.exits.south);
-            if(node.exits.east) drawEdge(node.exits.east);
-            if(node.exits.west) drawEdge(node.exits.west);
-        }
-    });
-
-    ctx.globalAlpha = 1.0;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = isModal ? "bold 12px monospace" : "bold 9px monospace";
-    processed.forEach(key => {
-        let node = activeMap[key];
-        let p = coords[key];
-        if(!node || !p) return;
-        let x = centerX + p.x * spacing;
-        let y = centerY + p.y * spacing;
-        let isCurrent = (key === currentRoomKey);
-        if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
-        if (isCurrent) {
-            ctx.shadowColor = termGreen;
-            ctx.shadowBlur = 10;
-            ctx.fillStyle = termGreen; 
-        } else {
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = termBg; 
-        }
-        ctx.strokeStyle = isCurrent ? '#000' : termGreen;
-        ctx.fillRect(x - nodeSize/2, y - nodeSize/2, nodeSize, nodeSize);
-        ctx.strokeRect(x - nodeSize/2, y - nodeSize/2, nodeSize, nodeSize);
-        ctx.fillStyle = isCurrent ? '#000' : termAmber; 
-        ctx.shadowBlur = 0;
-        let shortName = (node.shortName || "???").substring(0, isModal ? 8 : 4);
-        ctx.fillText(shortName, x, y);
-        
-        // Click zones for movement
-        let clickZone = document.createElement('div');
-        clickZone.className = 'map-clickable-zone';
-        clickZone.style.left = `${x - nodeSize/2}px`;
-        clickZone.style.top = `${y - nodeSize/2}px`;
-        clickZone.style.width = `${nodeSize}px`;
-        clickZone.style.height = `${nodeSize}px`;
-        clickZone.title = isCurrent ? "You are here" : `Go to ${node.name}`;
-        if (!isCurrent) {
-            clickZone.onclick = (e) => {
-                e.stopPropagation();
-                document.getElementById('cmd-input').value = `go to ${node.name}`;
-                document.getElementById('cmd-input').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));
-                if (isModal) toggleMapModal();
-            };
-        } else if (isModal) {
-             clickZone.onclick = (e) => e.stopPropagation();
-        }
-        canvasContainer.appendChild(clickZone);
-    });
+    container.innerHTML = npcs.map(npc => `<div class="text-xs text-blue-400">> ${npc.name} (${npc.archetype})</div>`).join('');
 }
 
 export function addLog(text, color = 'var(--term-green)') {
     const log = document.getElementById('log');
+    if (!log) return;
     const p = document.createElement('div');
-    
-    if (color === 'var(--term-green)') {
-        if (text.startsWith('[TANDY]')) color = '#b084e8';
-        else if (text.startsWith('[SYSTEM]')) color = '#f59e0b';
-        else if (text.startsWith('[NARRATOR]')) color = '#888888';
-    }
-
     p.style.color = color;
     p.className = 'mb-1';
-    p.innerHTML = `> ${text}`;
+    p.innerHTML = `> ${text.replace(/\n/g, '<br>')}`;
     log.appendChild(p);
-    document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
-}
-
-export function updateStatusUI(roomShort) {
-    document.getElementById('room-display').innerText = roomShort;
-}
-
-export function renderCharacterCard(charData, imgSrc) {
-    const log = document.getElementById('log');
-    const wrapper = document.createElement('div');
-    const deceasedClass = charData.deceased ? 'deceased' : '';
-    const statusLabel = charData.deceased ? '[DECEASED]' : (charData.deployed ? '[DEPLOYED]' : '[ACTV]');
     
-    wrapper.innerHTML = `
-        <div class="char-card ${deceasedClass}">
-            <div class="char-card-header">
-                <span class="char-card-title">${statusLabel} ${charData.name}</span>
-                <span class="char-card-archetype">${charData.archetype}</span>
-            </div>
-            <div class="char-card-img-container">
-                ${imgSrc ? `<img class="char-card-img" src="${imgSrc}" alt="${charData.name}">` : `<div style="padding: 20px; text-align:center; color:#555;">[IMAGE UNAVAILABLE]</div>`}
-            </div>
-            <div class="char-card-desc">
-                ${charData.visual_prompt}
-            </div>
-            <div class="char-card-stats">
-                <span>WIL: ${charData.stats.WILL || 20}</span>
-                <span>CON: ${charData.stats.CONS || 20}</span>
-                <span>PHY: ${charData.stats.PHYS || 20}</span>
-            </div>
-        </div>
-    `;
-    log.appendChild(wrapper);
-    document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
-}
-
-export function togglePinButton(isVisible, text = "PIN VIEW", state = "normal") {
-    const pinBtn = document.getElementById('pin-view-btn');
-    if (!pinBtn) return;
-    if (isVisible) {
-        pinBtn.classList.remove('hidden');
-        pinBtn.innerText = text;
-        if (state === "uploading") {
-            pinBtn.disabled = true;
-        } else if (state === "pinned") {
-            pinBtn.classList.add('bg-green-600', 'border-green-400');
-            pinBtn.disabled = false;
-        } else {
-            pinBtn.classList.remove('bg-green-600', 'border-green-400');
-            pinBtn.disabled = false;
-        }
-    } else {
-        pinBtn.classList.add('hidden');
-        pinBtn.classList.remove('bg-green-600', 'border-green-400');
-        pinBtn.disabled = false;
-    }
-}
-
-export function materializeEffect() {
-    document.body.classList.remove('void-mode');
-    const flash = document.createElement('div');
-    flash.className = 'materialize-flash';
-    document.body.appendChild(flash);
-    setTimeout(() => flash.remove(), 1200);
-}
-
-export function flashInventory() {
-    const inv = document.getElementById('inventory-container');
-    if(inv) {
-        inv.classList.remove('flash-inv');
-        void inv.offsetWidth;
-        inv.classList.add('flash-inv');
-    }
+    const output = document.getElementById('output');
+    if (output) output.scrollTop = output.scrollHeight;
 }
 
 export function renderContextualCommands(commands) {
     const bar = document.getElementById('context-bar');
     if (!bar) return;
     bar.innerHTML = '';
-    
-    if (!commands || commands.length === 0) {
-        bar.classList.add('hidden');
-        return;
-    }
-    
-    bar.classList.remove('hidden');
     commands.forEach(cmd => {
         const btn = document.createElement('button');
         btn.className = 'context-chip';
         btn.innerText = cmd;
-        btn.onclick = (e) => {
-            e.preventDefault();
+        btn.onclick = () => {
             const input = document.getElementById('cmd-input');
             if (input) {
                 input.value = cmd;
-                // Dispatch enter key to trigger the existing listener in main.js
-                input.dispatchEvent(new KeyboardEvent('keydown', {
-                    key: 'Enter',
-                    bubbles: true,
-                    cancelable: true
-                }));
+                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
             }
         };
         bar.appendChild(btn);
     });
+}
+
+/**
+ * Real-time Topology Renderer: Draws the active map graph with labeled nodes.
+ */
+export function renderMapHUD(activeMap, currentRoomKey, stratum) {
+    const canvas = document.getElementById('map-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const rect = canvas.parentElement.getBoundingClientRect();
+    if (canvas.width !== rect.width || canvas.height !== rect.height) {
+        if (rect.width > 0 && rect.height > 0) {
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+    }
+
+    if (!activeMap || Object.keys(activeMap).length === 0 || canvas.width === 0) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const spacingX = 60;
+    const spacingY = 50;
+
+    const room = activeMap[currentRoomKey];
+    if (!room) return;
+
+    // Use hex codes for canvas compatibility
+    const currentGreen = "#4ade80";
+    const dimGreen = "#3a7a3a";
+    const astralPurple = "#b084e8";
+
+    ctx.strokeStyle = stratum === 'astral' ? astralPurple : '#3a7a3a';
+    ctx.lineWidth = 2;
+
+    // Draw Connections & Adjacent Nodes
+    if (room.exits) {
+        Object.entries(room.exits).forEach(([dir, target]) => {
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            
+            let tx = centerX;
+            let ty = centerY;
+
+            if (dir === 'north') ty -= spacingY;
+            if (dir === 'south') ty += spacingY;
+            if (dir === 'east') tx += spacingX;
+            if (dir === 'west') tx -= spacingX;
+            
+            ctx.lineTo(tx, ty);
+            ctx.stroke();
+
+            // Draw adjacent node box
+            const targetRoom = activeMap[typeof target === 'string' ? target : target.target];
+            const label = targetRoom ? (targetRoom.shortName || targetRoom.name).substring(0, 4).toUpperCase() : "???";
+            
+            ctx.fillStyle = "#051505";
+            ctx.strokeStyle = stratum === 'astral' ? astralPurple : dimGreen;
+            ctx.lineWidth = 1;
+            ctx.fillRect(tx - 16, ty - 12, 32, 24);
+            ctx.strokeRect(tx - 16, ty - 12, 32, 24);
+            
+            // Draw label
+            ctx.fillStyle = stratum === 'astral' ? astralPurple : dimGreen;
+            ctx.font = "10px monospace";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(label, tx, ty);
+            
+            ctx.lineWidth = 2; // Restore line width for next connection
+        });
+    }
+
+    // Draw Current Node
+    ctx.fillStyle = "#051505";
+    ctx.strokeStyle = stratum === 'astral' ? "#d8b4fe" : currentGreen;
+    ctx.shadowBlur = 10; 
+    ctx.shadowColor = stratum === 'astral' ? "#d8b4fe" : currentGreen;
+    ctx.fillRect(centerX - 16, centerY - 12, 32, 24);
+    ctx.strokeRect(centerX - 16, centerY - 12, 32, 24);
+    ctx.shadowBlur = 0;
+    
+    // Draw Current Label
+    ctx.fillStyle = stratum === 'astral' ? "#d8b4fe" : currentGreen;
+    ctx.font = "bold 11px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const currentLabel = (room.shortName || room.name).substring(0, 4).toUpperCase();
+    ctx.fillText(currentLabel, centerX, centerY);
+}
+
+export function materializeEffect() {
+    const flash = document.createElement('div');
+    flash.style = "position:fixed;inset:0;background:white;z-index:9999;pointer-events:none;animation:flash-out 0.8s forwards;";
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 800);
+}
+
+export function applyStratumTheme(stratum, isTransitioning) {
+    const stratumNameEl = document.getElementById('stratum-name');
+    if (stratumNameEl) {
+        stratumNameEl.innerText = stratum.toUpperCase();
+    }
+    document.body.setAttribute('data-stratum', stratum);
+    if (isTransitioning) {
+        materializeEffect();
+    }
+}
+
+export function toggleMapModal() {
+    const modal = document.getElementById('map-modal');
+    if (modal) {
+        modal.classList.toggle('hidden');
+    }
+}
+
+export function toggleStratumModal(currentStratum) {
+    const modal = document.getElementById('stratum-modal');
+    if (modal) {
+        modal.classList.toggle('hidden');
+    }
+}
+
+export function printRoomDescription(room, isAstral, activeMap, activeAvatar) {
+    if (!room) {
+        addLog("[SYSTEM]: The frequency is shifting. Reality is rendering...", "var(--gm-purple)");
+        return;
+    }
+
+    const color = isAstral ? "var(--gm-purple)" : "var(--term-green)";
+    addLog(`\n--- ${room.name.toUpperCase()} ---`, color);
+    addLog(room.description, "#ccc");
+
+    if (room.items && room.items.length > 0) {
+        const itemNames = room.items.map(i => `[${i.name}]`).join(", ");
+        addLog(`Items here: ${itemNames}`, "var(--term-amber)");
+    }
+
+    if (room.npcs && room.npcs.length > 0) {
+        room.npcs.forEach(npc => {
+            addLog(`Presence detected: ${npc.name} (${npc.archetype || 'Entity'})`, "var(--crayola-blue)");
+        });
+    }
+
+    const exits = Object.keys(room.exits || {}).join(", ").toUpperCase();
+    if (exits) addLog(`Visible Exits: ${exits}`, "#888");
 }

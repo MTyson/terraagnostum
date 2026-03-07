@@ -1,8 +1,10 @@
 // js/apiService.js
-
 const API_GENERATE = "/api/generate";
 const API_IMAGE = "/api/image";
 
+/**
+ * Compresses an image data URI to prevent Firestore document size limits.
+ */
 export async function compressImage(base64Str, maxWidth = 400, quality = 0.7) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -26,40 +28,64 @@ export async function compressImage(base64Str, maxWidth = 400, quality = 0.7) {
 }
 
 export async function callGemini(userInput, systemPrompt) {
-    const res = await fetch(API_GENERATE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: userInput }] }],
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            generationConfig: { responseMimeType: "application/json" }
-        })
-    });
-    
-    if (!res.ok) {
-        let errorMessage = "Unknown API Error";
-        try {
-            const errorData = await res.json();
-            errorMessage = errorData.error?.message || JSON.stringify(errorData);
-        } catch (e) {
-             errorMessage = `HTTP Error ${res.status}: ${res.statusText}`;
-        }
-        throw new Error(`Gemini API Error: ${errorMessage}`);
-    }
+    try {
+        const res = await fetch(API_GENERATE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: "user", parts: [{ text: userInput }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { 
+                    responseMimeType: "application/json",
+                    temperature: 0.7 
+                }
+            })
+        });
 
-    const data = await res.json();
-    return JSON.parse(data.candidates[0].content.parts[0].text);
+        const data = await res.json();
+        let text = data.candidates[0].content.parts[0].text;
+
+        // CRITICAL: Scrub markdown backticks and trailing garbage.
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            text = text.substring(firstBrace, lastBrace + 1);
+        }
+
+        try {
+            return JSON.parse(text);
+        } catch (initialError) {
+            for (let i = lastBrace; i > firstBrace; i--) {
+                if (text[i - firstBrace] === '}') {
+                    try {
+                        const candidate = text.substring(0, i - firstBrace + 1);
+                        return JSON.parse(candidate);
+                    } catch (e) {
+                        // Keep trying smaller segments
+                    }
+                }
+            }
+            throw initialError;
+        }
+    } catch (e) {
+        console.error("Gemini API Parse Error:", e);
+        return null;
+    }
 }
 
-// Generates the image or returns the base64 string for processing
 export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewUrl = null) {
-    // If an Architect has pinned a view for this room, skip AI entirely!
-    if (pinnedViewUrl) {
-        if (addLogCallback) addLogCallback(`[SYSTEM]: Retrieving Architect-pinned memory for this sector...`, "var(--term-green)");
-        return pinnedViewUrl; // Return the URL directly
-    }
+    if (pinnedViewUrl) return pinnedViewUrl;
 
-    const styledPrompt = `Lofi glitch terminal art: ${prompt}. ${stratum} stratum aesthetic`;
+    const envStyleMap = {
+        'technate': 'clinical brutalism, sterile white-on-cyan, severe geometric architecture, dystopian corporation, high contrast, oppressive',
+        'mundane': 'gritty 1980s cyberpunk, claustrophobic dystopian sci-fi, Neuromancer aesthetic, dark and dirty, decaying, exposed wiring, CRT glow, heavy VHS tracking noise',
+        'faen': 'dark surrealism, ethereal watercolor, fluid glitch-art, twisted nature, psychic resonance',
+        'astral': 'abstract fractal, non-euclidean geometry, cosmic horror, shimmering neon purple and gold static'
+    };
+    const style = envStyleMap[stratum?.toLowerCase()] || envStyleMap.mundane;
+    
+    // CRITICAL FIX: Ensure vibrant, full-color rendering and lock the perspective.
+    const styledPrompt = `Environmental concept art, highly detailed, vibrant full color. DO NOT INCLUDE PEOPLE UNLESS EXPLICITLY REQUESTED. Subject: [ ${prompt} ]. Atmosphere and rendering style MUST BE: ${style}.`;
 
     try {
         const res = await fetch(API_IMAGE, {
@@ -67,33 +93,30 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ instances: [{ prompt: styledPrompt }] })
         });
-        
-        if (!res.ok) throw new Error(`Image API returned status ${res.status}`);
-
         const data = await res.json();
         if (data.predictions && data.predictions[0]) {
-            const b64 = data.predictions[0].bytesBase64Encoded;
-            if (addLogCallback) addLogCallback(`VISUAL BUFFER PULSED.`, "var(--term-amber)");
-            return b64; 
+            return data.predictions[0].bytesBase64Encoded;
         }
-    } catch (e) { 
-        console.error("Image Projection Error:", e);
-        if (addLogCallback) addLogCallback("VISUAL BUFFER ERROR", "var(--term-red)"); 
-    }
+    } catch (e) { console.error("Image Projection Error:", e); }
     return null;
 }
 
 export async function generatePortrait(prompt, stratum) {
-    // Map strata to specific artistic movements
     const styleMap = {
-        'technate': 'clinical brutalism, high-key lighting, geometric',
-        'interregnum': 'cyberpunk noir, heavy rain, neon-on-chrome, cinematic',
-        'faen': 'surrealism, ethereal watercolor, fluid glitch-art',
-        'trenchtown': 'rusted industrial, high-tech/low-life, gritty, weathered'
+        'technate': 'clinical brutalism, high-key lighting, geometric, vibrant cyan and electric violet accents',
+        'mundane': 'gritty 1980s cyberpunk, high-saturation neon, heavy rain, chrome reflections, vibrant pink and teal lighting, VHS glitch',
+        'faen': 'surrealist, dream-like, watercolor glitch, ethereal, prismatic colors',
+        'astral': 'abstract fractal, shimmering, non-euclidean geometry, cosmic nebula colors'
     };
+    const style = styleMap[stratum?.toLowerCase()] || styleMap.mundane;
     
-    const style = styleMap[stratum?.toLowerCase()] || styleMap.interregnum;
-    const combinedPrompt = `Highly detailed character portrait, ${style} aesthetic, MTG card art style: ${prompt}`;
+    // RESTORE THE MAGIC: Explicitly demand full color, digital painting, and MTG styling.
+    // ADDED: Extreme focus on humanoid/character features to prevent the AI from drawing buildings.
+    const combinedPrompt = `Masterpiece digital painting, hyper-vibrant full color, high saturation, MTG card art style. 
+        SUBJECT: A close-up high-end character portrait of a humanoid person. 
+        Focus on face, eyes, and clothing. NO BUILDINGS. NO EXTERIORS. 
+        Aesthetic: ${style}. 
+        Character Details: ${prompt}`;
     
     try {
         const res = await fetch(API_IMAGE, {
@@ -101,15 +124,10 @@ export async function generatePortrait(prompt, stratum) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ instances: [{ prompt: combinedPrompt }] })
         });
-        
-        if (!res.ok) throw new Error(`Image API returned status ${res.status}`);
-
         const data = await res.json();
         if (data.predictions && data.predictions[0]) {
             return data.predictions[0].bytesBase64Encoded;
         }
-    } catch (e) { 
-        console.error("Portrait Generation Error:", e);
-    }
+    } catch (e) { console.error("Portrait Generation Error:", e); }
     return null;
 }

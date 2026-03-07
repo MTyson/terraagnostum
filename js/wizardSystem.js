@@ -168,7 +168,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 archetype: wizardState.pendingData.archetype,
                 visual_prompt: currentVal,
                 image: finalImage,
-                stats: { WILL: 20, CONS: 20, PHYS: 20 },
+                stats: { WILL: 20, AWR: 20, PHYS: 20 },
                 deceased: false, deployed: false, timestamp: Date.now()
             };
 
@@ -469,7 +469,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
 
                 // Fire the Shadow Avatar Encounter
                 handleGMIntent(
-                    "SYSTEM OVERRIDE: The player has just manifested a new astral sector. You MUST spawn an enemy NPC named 'Shadow Avatar' right now. You MUST use the world_edit object with type 'spawn_npc'. You MUST set combat_active to true. CRITICAL RULE: When the player defeats this Shadow Avatar in combat, you MUST use the world_edit spawn_item command to drop an item exactly named 'Resonant Key'.", 
+                    "SYSTEM OVERRIDE: The player has just manifested a new astral sector. You MUST spawn an enemy NPC named 'Shadow Avatar' right now. You MUST use the world_edit object with type 'spawn_npc'. You MUST set combat_active to true. Describe its terrifying, glitchy appearance. CRITICAL RULE: When the player defeats this Shadow Avatar in combat, you MUST use the world_edit spawn_item command to drop an item exactly named 'Resonant Key'.", 
                     { 
                         activeMap: stateManager.getActiveMap(), 
                         localPlayer: stateManager.getState().localPlayer, 

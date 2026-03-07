@@ -1,4 +1,5 @@
 # TANDEM OS // TERRA AGNOSTUM TERMINAL // AIGM (AI Game Master)
+## Narrative Reality Engine (NRE)
 
 <img width="2816" height="1504" alt="Gemini_Generated_Image_adlas6adlas6adla" src="https://github.com/user-attachments/assets/e7875b43-7354-4605-8865-2b7018a0b552" />
 

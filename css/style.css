@@ -1,403 +1,114 @@
+:root {
+    --term-green: #00ff41;
+    --term-amber: #ffb000;
+    --term-red: #ff3e3e;
+    --term-bg: #050505;
+    --crayola-blue: #3b82f6;
+    --gm-purple: #a855f7;
+    --astral-cyan: #00f5ff;
+    --astral-pink: #ff00ff;
+}
 
-        :root {
-            /* Default Mundane Theme */
-            --term-green: #00ff41;
-            --term-amber: #ffb000;
-            --term-red: #ff3e3e;
-            --term-bg: #050505;
-            --crayola-blue: #3b82f6;
-            --gm-purple: #a855f7;
-            /* Astral Mode Palette (Glitch) */
-            --astral-cyan: #00f5ff;
-            --astral-pink: #ff00ff;
-            /* Faen Mode Palette (High-Fantasy - Future Use) */
-            --faen-gold: #ffcc00;
-        }
+#header-row { z-index: 100; }
+/* Ensure the root containers occupy full screen */
+html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
 
-        @keyframes flicker {
-            0% { opacity: 0.97; }
-            100% { opacity: 1; }
-        }
+/* Force main area to handle vertical segments without overflow leakage */
+#main-terminal-area {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
 
-        body, html {
-            background-color: var(--term-bg);
-            color: var(--term-green);
-            font-family: 'Courier New', Courier, monospace;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            transition: background-color 1s ease, color 1s ease;
-        }
+/* Ensure output area handles the scrolling exclusively */
+#output {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
 
-        /* --- THE ASTRAL JUMP STYLES --- */
-        body.astral-mode {
-            text-shadow: 2px 0 var(--astral-pink), -2px 0 var(--astral-cyan) !important;
-            filter: contrast(1.2) brightness(1.1);
-        }
+/* --- MAP CANVAS --- */
+#map-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
 
-        body.desaturated {
-            filter: grayscale(100%) brightness(0.2) contrast(2) !important;
-            transition: filter 0.1s steps(2);
-        }
+/* --- COMPASS WIDGET --- */
+.compass-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 24px);
+    grid-template-rows: repeat(3, 24px);
+    gap: 3px;
+}
+.compass-btn {
+    border: 1px solid var(--term-green);
+    background: rgba(0, 40, 0, 0.4);
+    color: var(--term-green);
+    font-size: 10px;
+    font-family: monospace;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: 0.1s;
+}
+.compass-btn:not(:disabled):hover { background: var(--term-green); color: black; }
+.compass-btn:disabled { opacity: 0.1; cursor: not-allowed; border-style: dashed; }
+#compass-n { grid-column: 2; grid-row: 1; }
+#compass-w { grid-column: 1; grid-row: 2; }
+#compass-center { grid-column: 2; grid-row: 2; display: flex; align-items: center; justify-content: center; color: #1a3a1a; font-size: 10px; }
+#compass-e { grid-column: 3; grid-row: 2; }
+#compass-s { grid-column: 2; grid-row: 3; }
 
-        .astral-mode #map-canvas-container::after {
-            content: "SIGNAL LOST // ASTRAL INTERFERENCE";
-            position: absolute;
-            inset: 0;
-            background: rgba(0,0,0,0.8);
-            color: var(--astral-pink);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            letter-spacing: 1px;
-            z-index: 40;
-            animation: flicker 0.1s infinite;
-        }
+/* CONTEXT CHIPS */
+.context-chip {
+    border: 1px solid var(--term-green);
+    color: var(--term-green);
+    background: transparent;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 4px 10px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    transition: all 0.1s;
+    opacity: 0.8;
+}
 
-        .crt::before {
-            content: " ";
-            display: block;
-            position: absolute;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            z-index: 20;
-            pointer-events: none;
-        }
+.context-chip:hover {
+    background: var(--term-green);
+    color: black;
+    opacity: 1;
+    box-shadow: 0 0 8px var(--term-green);
+}
 
-        .terminal-container {
-            position: relative;
-            z-index: 10;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            box-sizing: border-box;
-            max-width: 1400px;
-            margin: 0 auto;
-            width: 100%;
-        }
+/* MODALS */
+.terminal-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 800px;
+    background: #000;
+    border: 2px solid var(--term-green);
+    z-index: 1000;
+}
 
-        #output {
-            flex-grow: 1;
-            overflow-y: auto;
-            scrollbar-width: none;
-            padding-bottom: 20px;
-        }
+.hidden { display: none; }
 
-        .visual-buffer {
-            width: 100%;
-            height: 250px;
-            min-height: 250px;
-            flex-shrink: 0;
-            border: 1px solid #1a3a1a;
-            margin-bottom: 15px;
-            background: #000;
-            display: block;
-            position: relative;
-            overflow: hidden;
-            border-radius: 4px;
-        }
+@keyframes dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60% { content: '...'; }
+    80%, 100% { content: ''; }
+}
+.loading-dots:after {
+    content: '.';
+    animation: dots 1.5s steps(5, end) infinite;
+}
 
-        #visual-image { 
-            width: 100%; 
-            height: 100%; 
-            object-fit: cover; 
-            opacity: 0.7; 
-        }
-
-        .visual-overlay {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
-            padding: 2px 8px;
-            font-size: 10px;
-            color: var(--term-amber);
-            text-transform: uppercase;
-        }
-
-        .input-area {
-            display: flex;
-            align-items: center;
-            border-top: 1px solid #1a3a1a;
-            padding-top: 15px;
-            margin-top: 10px;
-            flex-shrink: 0;
-        }
-
-        #cmd-input {
-            background: transparent;
-            border: none;
-            color: var(--term-green);
-            outline: none;
-            flex-grow: 1;
-            font-family: inherit;
-            font-size: 1.1rem;
-        }
-
-        .loading-dots:after {
-            content: '.';
-            animation: dots 1.5s steps(5, end) infinite;
-        }
-
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60% { content: '...'; }
-            80%, 100% { content: ''; }
-        }
-
-        /* Character Card Styles */
-        .char-card {
-            border: 1px solid var(--term-amber);
-            border-radius: 6px;
-            background: rgba(20, 20, 20, 0.8);
-            width: 280px;
-            display: inline-block;
-            margin: 10px 10px 10px 0;
-            padding: 12px;
-            text-align: left;
-            box-shadow: 0 0 10px rgba(255, 176, 0, 0.1);
-            vertical-align: top;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .char-card.deceased {
-            border-color: var(--term-red);
-            opacity: 0.6;
-            filter: grayscale(100%);
-        }
-        .char-card:hover {
-            border-color: var(--term-green);
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
-        }
-        .char-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #333;
-            padding-bottom: 6px;
-            margin-bottom: 8px;
-        }
-        .char-card-title {
-            font-weight: bold;
-            color: var(--term-green);
-            text-transform: uppercase;
-            font-size: 0.9em;
-        }
-        .deceased .char-card-title { color: var(--term-red); }
-        
-        .char-card-archetype {
-            color: var(--term-amber);
-            font-size: 0.7em;
-            text-transform: uppercase;
-        }
-        .char-card-img-container {
-            width: 100%;
-            height: 180px;
-            border: 1px solid #333;
-            border-radius: 4px;
-            margin-bottom: 8px;
-            background: #000;
-            overflow: hidden;
-            position: relative;
-        }
-        .char-card-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 0.8;
-            filter: grayscale(20%) contrast(120%);
-        }
-        .char-card-desc {
-            font-size: 0.75em;
-            margin-bottom: 8px;
-            color: #aaa;
-            line-height: 1.3;
-            height: 40px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .char-card-stats {
-            background: #000;
-            padding: 6px;
-            border-radius: 4px;
-            font-size: 0.75em;
-            color: var(--crayola-blue);
-            display: flex;
-            justify-content: space-around;
-            border: 1px solid #222;
-        }
-        
-        /* Interactive Map Overlay */
-        #map-canvas-container {
-            position: relative;
-        }
-        .map-clickable-zone {
-            position: absolute;
-            cursor: pointer;
-            z-index: 30;
-        }
-        .map-clickable-zone:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        /* Contextual Commands Bar */
-        #context-bar {
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-            min-height: 40px;
-            padding-bottom: 20px;
-            margin-top: 15px;
-            z-index: 50;
-        }
-        #context-bar::-webkit-scrollbar {
-            display: none;
-        }
-        .scroll-hide {
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
-        .scroll-hide::-webkit-scrollbar {
-            display: none;
-        }
-
-        .context-chip {
-            border: 1px solid var(--term-green);
-            color: var(--term-green);
-            background: transparent;
-            font-family: inherit;
-            font-size: 10px;
-            padding: 4px 10px;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            white-space: nowrap;
-            transition: all 0.1s;
-            opacity: 0.8;
-            border-radius: 2px;
-        }
-        .context-chip:hover {
-            background: var(--term-green);
-            color: var(--term-bg);
-            opacity: 1;
-            box-shadow: 0 0 8px var(--term-green);
-        }
-        .context-chip:active {
-            transform: scale(0.95);
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.3; }
-            100% { opacity: 1; }
-        }
-        .anim-pulse {
-            animation: pulse 1s infinite ease-in-out;
-        }
-
-        /* FORGE MODAL STYLES */
-        .terminal-window {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 90%;
-            max-width: 800px;
-            background: #000;
-            border: 2px solid var(--term-green);
-            box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
-            z-index: 10000;
-            display: flex;
-            flex-direction: column;
-            border-radius: 4px;
-        }
-
-        .terminal-window.hidden {
-            display: none;
-        }
-
-        .ascii-placeholder {
-            font-family: 'Courier New', Courier, monospace;
-            white-space: pre;
-            line-height: 1.2;
-            color: var(--term-green);
-            opacity: 0.6;
-            pointer-events: none;
-        }
-
-        #forge-portrait-img {
-            filter: grayscale(100%) contrast(150%) brightness(0.8);
-            mix-blend-mode: screen;
-        }
-
-        #forge-visual-target::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            z-index: 2;
-            background-size: 100% 2px, 3px 100%;
-            pointer-events: none;
-        }
-
-        input#forge-name::placeholder, 
-        textarea#forge-desc::placeholder {
-            color: #1a3a1a;
-        }
-
-        #btn-manifest-vessel:not(:disabled) {
-            border-color: var(--term-amber);
-            color: var(--term-amber);
-            cursor: pointer;
-        }
-
-        #btn-manifest-vessel:not(:disabled):hover {
-            background: var(--term-amber);
-            color: #000;
-            box-shadow: 0 0 15px var(--term-amber);
-        }
-
-        /* COMPASS & MOBILE UI */
-        .compass-btn {
-            background: rgba(0, 255, 65, 0.05);
-            transition: all 0.2s;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .compass-btn:hover:not(:disabled) {
-            background: rgba(0, 255, 65, 0.2);
-            box-shadow: 0 0 10px var(--term-green);
-        }
-        .compass-btn:disabled {
-            cursor: not-allowed;
-            filter: grayscale(1);
-        }
-
-        .action-btn {
-            transition: all 0.2s;
-            cursor: pointer;
-            letter-spacing: 1px;
-        }
-        .action-btn:hover {
-            background: var(--term-green);
-            color: var(--term-bg);
-            box-shadow: 0 0 10px var(--term-green);
-        }
-        
-        #input-container {
-            display: flex;
-            flex-direction: column;
-        }
-
-        @media (max-width: 768px) {
-            .terminal-container { padding: 10px; }
-            .visual-buffer { height: 180px; min-height: 180px; }
-            #header-bar { font-size: 8px; }
-            #mobile-action-bar { display: flex !important; }
-        }
+#map-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}

@@ -7,269 +7,145 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body class="crt">
+<body class="crt bg-black text-green-500 font-mono overflow-hidden">
 
-    <div class="terminal-container">
-        <!-- HEADER HUD -->
-        <div id="header-bar" class="p-2 mb-4 text-[10px] flex justify-between uppercase tracking-widest border-b border-green-900 opacity-70 flex-shrink-0">
-            <span id="stratum-display" class="text-gray-500 font-bold cursor-pointer hover:text-white transition-colors hover:underline decoration-dotted underline-offset-4">[ STRATA: MUNDANE ]</span>
-            <span>Node: <span id="room-display">LORE1</span></span>
-            <span id="sync-status">SYNC: INITIALIZING</span>
-            <span id="time-display">T+00:00:00</span>
+    <div class="flex h-screen w-screen overflow-hidden bg-black text-green-500 font-mono">
+        <!-- 1. MAIN COCKPIT COLUMN -->
+        <div id="main-terminal-area" class="flex flex-col flex-grow min-w-0 border-r border-[#1a3a1a] h-full">
+            
+            <!-- TOP HUD: STRATA & SYNC (THE MISSING BAR) -->
+            <div id="header-row" class="flex justify-between items-center px-4 py-1 border-b border-[#1a3a1a] bg-black text-[9px] text-green-800 uppercase tracking-widest flex-shrink-0">
+                <div id="stratum-display" class="cursor-pointer hover:text-green-400">[ STRATA: <span id="stratum-name">MUNDANE</span> ]</div>
+                <div id="node-display">NODE: <span id="room-display">BEDROOM</span></div>
+                <div id="sync-status">SYNC: READY</div>
+                <div id="time-display">T+00:00:00</div>
+            </div>
+
+            <!-- VISUALS -->
+            <div id="visuals" class="relative h-[35%] sm:h-[45%] border-b border-[#1a3a1a] bg-black overflow-hidden flex-shrink-0">
+                 <div class="visual-overlay z-30">Source Projection</div>
+                 <canvas id="visual-canvas" class="absolute inset-0 w-full h-full object-cover opacity-70 z-10"></canvas>
+                 <img id="visual-image" src="" alt="" class="hidden absolute inset-0 w-full h-full object-cover opacity-70 z-10">
+                 
+                 <!-- THE PIN BUTTON (Architects Only) -->
+                 <button id="pin-view-btn" class="hidden absolute bottom-2 right-2 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded hover:bg-blue-500 z-50 transition-colors border border-blue-400 cursor-pointer">
+                     PIN VIEW
+                 </button>
+
+                 <div id="visual-loading" class="absolute inset-0 flex items-center justify-center text-amber-500 text-xs italic hidden z-20 bg-black/80">
+                     RENDERING REALITY<span class="loading-dots"></span>
+                 </div>
+            </div>
+
+            <!-- TERMINAL LOG -->
+            <div id="output" class="flex-grow overflow-y-auto p-4 bg-black/40 min-h-0">
+                <div id="log" class="max-w-full break-words text-sm"></div>
+            </div>
+
+            <!-- BOTTOM: INTERACTION HUB (Fixed height container) -->
+        <div id="input-container" class="p-4 border-t border-[#1a3a1a] bg-black/80 flex-shrink-0 flex flex-col gap-3">
+            
+            <!-- Context chips stay at the top of the container -->
+            <div id="context-bar" class="flex flex-wrap gap-2"></div>
+            
+            <div class="flex flex-row items-center gap-4 w-full">
+                <!-- THE COMPASS -->
+                <div id="compass-widget" class="flex-none">
+                    <div class="compass-grid">
+                        <button id="compass-n" class="compass-btn" data-cmd="n">N</button>
+                        <button id="compass-w" class="compass-btn" data-cmd="w">W</button>
+                        <div id="compass-center">+</div>
+                        <button id="compass-e" class="compass-btn" data-cmd="e">E</button>
+                        <button id="compass-s" class="compass-btn" data-cmd="s">S</button>
+                    </div>
+                </div>
+
+                <!-- COMMAND PROMPT (FIXED ALIGNMENT) -->
+                <div id="prompt-line" class="flex-1 flex flex-row items-center min-w-0 bg-[#050a05] border border-[#1a3a1a] p-2 rounded">
+                    <span id="prompt-prefix" class="flex-none font-mono whitespace-nowrap mr-2 text-green-700"></span>
+                    <input id="cmd-input" type="text" autocomplete="off" autofocus class="flex-1 min-w-0 bg-transparent outline-none border-none text-green-400 p-0 m-0 font-mono">
+                </div>
+            </div>
         </div>
-        
-        <!-- STRATUM MODAL -->
-        <div id="stratum-modal" class="hidden absolute top-10 left-2 z-50 bg-black/95 border border-green-500 p-3 max-w-xs shadow-[0_0_10px_rgba(0,255,0,0.5)]">
-            <div class="flex justify-between border-b border-green-800 pb-1 mb-2">
-                <span id="stratum-modal-title" class="font-bold text-green-400 text-xs tracking-widest uppercase"></span>
-                <button id="close-stratum-modal" class="text-gray-500 hover:text-red-500 text-xs cursor-pointer">[X]</button>
-            </div>
-            <div id="stratum-modal-desc" class="text-gray-400 text-[10px] leading-relaxed"></div>
-        </div>
 
-        <!-- MAP MODAL (Topology HUD) -->
-        <div id="map-modal" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] bg-black/95 border border-blue-500 p-4 w-[90%] max-w-md shadow-[0_0_20px_rgba(0,100,255,0.5)] terminal-window">
-            <div class="flex justify-between border-b border-blue-900 pb-2 mb-4 uppercase tracking-widest text-[10px]">
-                <span class="font-bold text-blue-400">SYSTEM.TOPOLOGY_HUD</span>
-                <button id="close-map-modal" class="text-gray-500 hover:text-red-500 cursor-pointer">[ ESC ]</button>
-            </div>
-            <div id="map-modal-content" class="flex flex-col gap-4">
-                <div id="map-modal-canvas-container" class="w-full bg-black/50 border border-blue-900/50 rounded flex items-center justify-center overflow-hidden h-64 relative">
-                    <canvas id="map-modal-canvas" width="400" height="250" class="max-w-full opacity-90"></canvas>
-                </div>
-                <div id="map-modal-details" class="text-[10px] text-gray-400 font-mono bg-blue-950/10 p-2 border border-blue-900/30">
-                    <div class="flex justify-between mb-1">
-                        <span class="text-blue-800">CURRENT_SECTOR:</span>
-                        <span id="map-modal-room-name" class="text-blue-400">---</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-blue-800">STRATUM_PHASE:</span>
-                        <span id="map-modal-stratum" class="text-blue-400">---</span>
-                    </div>
-                </div>
+        <!-- BOTTOM FOOTER: SYSTEM STATUS -->
+        <div id="footer-hud" class="flex justify-between p-2 border-t border-[#1a3a1a] bg-[#050a05] text-[10px] text-green-700 tracking-widest flex-shrink-0 mt-auto">
+            <div id="hud-status">SYSTEM_STATUS: // UNKNOWN_ENTITY // LOGIN_REQUIRED //</div>
+            <div class="flex gap-4">
+                <a href="#" id="become-architect-link" class="hover:text-blue-400 hidden">[ BECOME_ARCHITECT ]</a>
+                <a href="#" class="hover:text-amber-500">[ COMMS ]</a>
             </div>
         </div>
+    </div>
 
-        <div class="flex flex-1 min-h-0">
-            <!-- MAIN TERMINAL COLUMN -->
-            <div class="flex flex-col flex-1 min-w-0 md:pr-4">
-                
-                <!-- VISUAL PROJECTION AREA -->
-                <div id="visual-buffer" class="visual-buffer relative">
-                    <div class="visual-overlay z-30">Source Projection</div>
-                    <canvas id="visual-canvas" class="absolute inset-0 w-full h-full object-cover opacity-70 z-10"></canvas>
-                    <img id="visual-image" src="" alt="" class="hidden absolute inset-0 w-full h-full object-cover opacity-70 z-10">
-                    
-                    <!-- THE PIN BUTTON (Architects Only) -->
-                    <button id="pin-view-btn" class="hidden absolute bottom-2 right-2 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded hover:bg-blue-500 z-50 transition-colors border border-blue-400 cursor-pointer">
-                        PIN VIEW
-                    </button>
-
-                    <div id="visual-loading" class="absolute inset-0 flex items-center justify-center text-amber-500 text-xs italic hidden z-20 bg-black/80">
-                        RENDERING REALITY<span class="loading-dots"></span>
-                    </div>
+    <!-- 2. SIDEBAR -->
+        <div id="right-sidebar" class="hidden lg:flex flex-col w-80 p-4 overflow-y-auto h-full border-l border-[#1a3a1a] bg-black/90">
+            <!-- Map Canvas goes inside Sidebar for Desktop -->
+            <div class="sidebar-section mb-6">
+                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1">SYSTEM.TOPOLOGY</div>
+                <div id="map-canvas-container" class="relative w-full aspect-square border border-[#1a3a1a] bg-black/40">
+                    <canvas id="map-canvas"></canvas>
                 </div>
-
-                <!-- NARRATIVE OUTPUT -->
-                <div id="output">
-                    <div id="log">
-                        <p class="text-amber-500 font-bold">>> TECHNATE SHARED ARCHIVE [v6.8 - Manifestation Node]</p>
-                        <p>> The Overarching Mind is Online.</p>
-                        <p>> <span class="text-crayola-blue font-bold">CURRENT DIRECTIVE:</span> Remote connection established. Escape the local sector.</p>
-                        <p>> Type <span class="text-blue-400">'HELP'</span> for system functions, or simply describe your actions.</p>
-                    </div>
-                </div>
-
-                <!-- INPUT AREA -->
-                <div id="input-container">
-                    <div class="input-area">
-                        <span id="prompt-prefix" class="mr-2 opacity-80 text-gray-500">GUEST@VOID:~$</span>
-                        <input type="text" id="cmd-input" autofocus spellcheck="false" autocomplete="off">
-                    </div>
-
-                    <!-- MOBILE ACTION BAR -->
-                    <div id="mobile-action-bar" class="flex md:hidden gap-1 mb-2 mt-2">
-                        <button class="action-btn flex-1 bg-green-900/20 border border-green-900 text-[10px] py-2 uppercase" data-cmd="look">LOOK</button>
-                        <button class="action-btn flex-1 bg-green-900/20 border border-green-900 text-[10px] py-2 uppercase" data-cmd="inv">INV</button>
-                        <button class="action-btn flex-1 bg-green-900/20 border border-green-900 text-[10px] py-2 uppercase" data-cmd="stat">STAT</button>
-                        <button class="action-btn flex-1 bg-green-900/20 border border-green-900 text-[10px] py-2 uppercase" data-cmd="map">MAP</button>
-                    </div>
-                </div>
-
-                <!-- CONTEXTUAL COMMANDS -->
-                <div id="context-bar" class="flex flex-wrap gap-2 overflow-x-auto scroll-hide"></div>
             </div>
 
-            <!-- HUD SIDEBAR -->
-            <div class="hidden md:flex w-64 flex-col border-l border-green-900 pl-4 overflow-y-auto shrink-0 pr-2">
-                
-                <!-- BIOMETRICS -->
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2">SYSTEM.BIOMETRICS</div>
+            <!-- BIOMETRICS -->
+            <div class="sidebar-section mb-6">
+                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1">SYSTEM.BIOMETRICS</div>
                 <div id="avatar-container">
                     <div class="text-amber-500 text-[10px] text-center border border-dashed border-amber-900 p-4 mt-2">
-                        NO VESSEL DETECTED<br>DISEMBODIED STATE
+                        NO VESSEL DETECTED
                     </div>
                 </div>
-                
-                <!-- LIVE TOPOLOGY MAP -->
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">SYSTEM.TOPOLOGY</div>
-                <div id="map-canvas-container" class="w-full bg-black/50 border border-green-900/50 rounded mb-4 flex items-center justify-center overflow-hidden h-40">
-                    <canvas id="map-canvas" width="230" height="150" class="max-w-full opacity-80"></canvas>
-                </div>
+            </div>
 
-                <!-- COMPASS WIDGET -->
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">SYSTEM.COMPASS</div>
-                <div id="compass-widget" class="grid grid-cols-3 gap-1 mb-6 w-32 mx-auto aspect-square">
-                    <div class="bg-transparent"></div>
-                    <button id="btn-n" class="compass-btn border border-green-900 text-[10px] flex items-center justify-center hover:bg-green-900/30 disabled:opacity-20">N</button>
-                    <div class="bg-transparent"></div>
-                    <button id="btn-w" class="compass-btn border border-green-900 text-[10px] flex items-center justify-center hover:bg-green-900/30 disabled:opacity-20">W</button>
-                    <div class="bg-green-900/10 flex items-center justify-center text-[8px] text-green-800 font-bold">NAV</div>
-                    <button id="btn-e" class="compass-btn border border-green-900 text-[10px] flex items-center justify-center hover:bg-green-900/30 disabled:opacity-20">E</button>
-                    <div class="bg-transparent"></div>
-                    <button id="btn-s" class="compass-btn border border-green-900 text-[10px] flex items-center justify-center hover:bg-green-900/30 disabled:opacity-20">S</button>
-                    <div class="bg-transparent"></div>
-                </div>
-                
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-2">SYSTEM.INVENTORY</div>
-                <div id="inventory-container" class="text-xs text-gray-500 flex flex-col gap-2">
-                    [EMPTY]
-                </div>
-
-                <!-- ROOM ITEMS / LOCAL MATERIA -->
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">LOCAL.MATERIA</div>
-                <div id="room-items-container" class="text-xs text-gray-500 flex flex-col gap-2">
-                    [EMPTY]
-                </div>
-
-                <!-- ROOM NPCS / LOCAL ENTITIES -->
-                <div class="text-[10px] text-green-600 uppercase tracking-widest border-b border-green-900 pb-2 mb-2 mt-6">LOCAL.ENTITIES</div>
-                <div id="room-entities-container" class="text-xs text-gray-500 flex flex-col gap-2 pb-6">
-                    [NONE]
-                </div>
+            <!-- INVENTORY -->
+            <div class="sidebar-section">
+                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1">SYSTEM.INVENTORY</div>
+                <div id="inventory-container" class="text-xs text-gray-500 flex flex-col gap-2">[EMPTY]</div>
             </div>
         </div>
     </div>
 
-    <div id="system-hud" style="
-    position: fixed; 
-    bottom: 0; 
-    left: 0;
-    width: 100%; 
-    background: rgba(0, 5, 15, 0.95); 
-    border-top: 1px solid #003366; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center;
-    padding: 10px 30px; 
-    font-family: 'Courier New', monospace; 
-    font-size: 11px; 
-    z-index: 9999;
-    box-sizing: border-box;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    box-shadow: 0 -5px 20px rgba(0, 51, 102, 0.3);">
-    
-    <div style="color: #004488;">
-        SYSTEM_STATUS: <span id="hud-status" style="color: #00ccff; animation: pulse 2.5s infinite;">// AUTHENTICATING... //</span>
-    </div>
-
-    <div style="display: flex; gap: 35px;">
-        <a href="https://github.com/mindframegames/terraagnostum" target="_blank" style="color: #666; text-decoration: none; transition: 0.3s;" onmouseover="this.style.color='#fff'; this.style.textShadow='0 0 5px #fff'" onmouseout="this.style.color='#666'; this.style.textShadow='none'">[ SOURCE ]</a>
-        <a href="https://discord.com/channels/1478441091513581628/1478441095468945551" target="_blank" style="color: #00ccff; text-decoration: none; transition: 0.3s;" onmouseover="this.style.textShadow='0 0 10px #00ccff'" onmouseout="this.style.color='#00ccff'; this.style.textShadow='none'">[ COMMS ]</a>
-        
-        <a id="become-architect-link" 
-           style="color: #ffcc00; text-decoration: none; font-weight: bold; transition: 0.3s; cursor: pointer;" 
-           onmouseover="this.style.textShadow='0 0 10px #ffcc00'" 
-           onmouseout="this.style.textShadow='none'">
-           [ BECOME_ARCHITECT ]
-        </a>
-    </div>
-</div>
-
-<style>
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-</style>
-
-    <!-- FORGE MODAL (Character Creation) -->
+    <!-- MODALS -->
     <div id="forge-modal" class="terminal-window hidden">
         <div class="terminal-header flex justify-between px-2 py-1 bg-green-900/30 border-b border-green-500 text-[10px] tracking-[3px] uppercase">
             <span>VESSEL_FORGE_v1.0.4</span>
             <button id="close-forge" class="hover:text-red-500 cursor-pointer">[ ESC ]</button>
         </div>
-        
         <div class="forge-body p-4 flex flex-col md:flex-row gap-6 min-h-[400px]">
-            <!-- Left: Drafting & Input -->
-            <div class="flex-1 flex flex-col gap-4">
-                <div class="forge-field">
-                    <label class="block text-[10px] text-green-700 uppercase mb-1 italic">Identity Designation</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="forge-name" placeholder="Enter name..." class="flex-1 bg-black border border-green-900 p-2 text-green-400 text-sm focus:border-green-500 outline-none font-mono">
-                        <button id="btn-suggest-name" class="px-3 border border-green-900 text-green-700 hover:text-green-400 hover:border-green-500 transition-all cursor-pointer" title="Suggest Name">[ 🎲 ]</button>
-                    </div>
-                </div>
-
-                <div class="forge-field">
-                    <label class="block text-[10px] text-green-700 uppercase mb-1 italic">Biometric Seed (Backstory)</label>
-                    <div class="relative">
-                        <textarea id="forge-desc" rows="4" placeholder="Describe the vessel's origins..." class="w-full bg-black border border-green-900 p-2 text-green-400 text-xs focus:border-green-500 outline-none font-mono resize-none"></textarea>
-                        <button id="btn-suggest-desc" class="absolute bottom-2 right-2 px-2 py-1 bg-black/80 border border-green-900 text-green-700 hover:text-green-400 transition-all cursor-pointer text-[10px]" title="Suggest Backstory">[ 🎲 SUGGEST ]</button>
-                    </div>
-                </div>
-
-                <button id="btn-analyze-biometrics" class="w-full py-2 bg-green-900/20 border border-green-500 text-green-400 hover:bg-green-500 hover:text-black font-bold text-xs tracking-widest transition-all cursor-pointer uppercase">
-                    [ ANALYZE BIOMETRICS ]
-                </button>
-
-                <!-- Stats Readout (Hidden until Analyzed) -->
-                <div id="forge-stats-readout" class="hidden border border-dashed border-green-900 p-3 bg-green-950/10">
-                    <div class="flex justify-between text-[10px] mb-2">
-                        <span class="text-green-800">ARCHETYPE:</span>
-                        <span id="forge-archetype" class="text-green-400 font-bold tracking-widest">---</span>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div class="text-center">
-                            <div class="text-[8px] text-green-800">WILL</div>
-                            <div id="stat-will" class="text-xl text-amber-500 font-mono">00</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-[8px] text-green-800">AWR</div>
-                            <div id="stat-awr" class="text-xl text-amber-500 font-mono">00</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-[8px] text-green-800">PHYS</div>
-                            <div id="stat-phys" class="text-xl text-amber-500 font-mono">00</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right: Visual Manifestation -->
-            <div class="w-full md:w-64 flex flex-col gap-4 items-center justify-center border-l border-green-900/30 md:pl-6">
-                <div id="forge-visual-target" class="w-48 h-64 border border-green-900 bg-black flex items-center justify-center relative overflow-hidden">
-                    <div id="forge-ascii-placeholder" class="ascii-placeholder text-[8px] leading-[6px] text-green-900 font-mono text-center select-none opacity-40">
-                        &nbsp; &nbsp; &nbsp;.--. &nbsp; &nbsp; &nbsp;<br>
-                        &nbsp; &nbsp; / _ &nbsp;\ &nbsp; &nbsp; <br>
-                        &nbsp; &nbsp;| ( ) | &nbsp; &nbsp;<br>
-                        &nbsp; &nbsp; \ _ / &nbsp; &nbsp; <br>
-                        &nbsp; _ / &nbsp; \ _ &nbsp; <br>
-                        &nbsp;( &nbsp; &nbsp; &nbsp; &nbsp; ) &nbsp;<br>
-                        &nbsp; / &nbsp; &nbsp; &nbsp; \ &nbsp; <br>
-                        &nbsp;| &nbsp; &nbsp; &nbsp; &nbsp; | &nbsp;<br>
-                        &nbsp; \ _ _ _ / &nbsp; <br>
-                        [ AWAITING INPUT ]
-                    </div>
+             <!-- Forge Body Content -->
+             <div class="flex-1 flex flex-col gap-4">
+                 <div class="space-y-4">
+                     <div class="input-group">
+                         <label class="text-[9px] text-green-800 tracking-widest mb-1 block uppercase">VESSEL DESIGNATION</label>
+                         <div class="flex gap-2">
+                             <input type="text" id="forge-name" class="flex-grow bg-black border border-green-900 p-2 text-green-400 outline-none font-mono text-sm" placeholder="Identity...">
+                             <button id="btn-suggest-name" class="px-3 border border-green-900 text-amber-500 hover:bg-amber-950/20" title="AI: Suggest Name">[ 🎲 ]</button>
+                         </div>
+                     </div>
+                 
+                     <div class="input-group">
+                         <label class="text-[9px] text-green-800 tracking-widest mb-1 block uppercase">BIOMETRIC SEED (HISTORY)</label>
+                         <div class="flex gap-2">
+                             <textarea id="forge-desc" class="flex-grow bg-black border border-green-900 p-2 text-green-400 outline-none font-mono text-sm h-24 resize-none" placeholder="Seed..."></textarea>
+                             <button id="btn-suggest-desc" class="px-3 border border-green-900 text-amber-500 hover:bg-amber-950/20" title="AI: Suggest History">[ 🎲 ]</button>
+                         </div>
+                     </div>
+                 </div>
+                 <button id="btn-analyze-biometrics" class="py-2 bg-green-900/20 border border-green-500 text-green-400 uppercase">[ ANALYZE ]</button>
+                 <div id="forge-stats-readout" class="hidden text-xs">
+                     ARCHETYPE: <span id="forge-archetype">---</span><br>
+                     WILL: <span id="stat-will">00</span> AWR: <span id="stat-awr">00</span> PHYS: <span id="stat-phys">00</span>
+                 </div>
+             </div>
+             <div class="w-64">
+                 <div id="forge-image-display" class="w-full h-64 border border-green-900 bg-black flex items-center justify-center relative overflow-hidden">
+                    <div id="forge-ascii-placeholder" class="text-xs text-green-900">[ AWAITING ]</div>
                     <img id="forge-portrait-img" class="hidden absolute inset-0 w-full h-full object-cover">
-                    <div id="forge-manifest-loading" class="hidden absolute inset-0 bg-black/80 flex items-center justify-center text-[10px] text-amber-500 italic text-center px-4">
-                        WEAVING VISUAL IMPRINT...
-                    </div>
-                </div>
-                
-                <button id="btn-manifest-vessel" disabled class="w-full py-2 border border-gray-800 text-gray-800 font-bold text-xs tracking-widest uppercase transition-all">
-                    [ MANIFEST IMPRINT ]
-                </button>
-                <p class="text-[8px] text-green-900 italic text-center">WARNING: Manifestation requires localized quantum stability. Ensure biometrics are finalized.</p>
-            </div>
+                    <div id="forge-manifest-loading" class="hidden absolute inset-0 bg-black/80 flex items-center justify-center text-amber-500">WEAVING...</div>
+                 </div>
+                 <button id="btn-manifest-vessel" disabled class="w-full mt-4 py-2 border border-gray-800 text-gray-800 uppercase">[ MANIFEST ]</button>
+             </div>
         </div>
     </div>
 
