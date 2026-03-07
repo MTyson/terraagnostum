@@ -3,6 +3,13 @@ const API_GENERATE = "/api/generate";
 const API_IMAGE = "/api/image";
 
 /**
+ * GLOBAL COST CONTROL
+ * Set this to true to suppress room generation costs during development.
+ * In a professional CI/CD pipeline, this can be injected via build-time environment variables.
+ */
+const DISABLE_ROOM_GENERATION = false; 
+
+/**
  * Compresses an image data URI to prevent Firestore document size limits.
  */
 export async function compressImage(base64Str, maxWidth = 400, quality = 0.7) {
@@ -55,6 +62,7 @@ export async function callGemini(userInput, systemPrompt) {
         try {
             return JSON.parse(text);
         } catch (initialError) {
+            // Aggressive recursive parsing for partial JSON returns
             for (let i = lastBrace; i > firstBrace; i--) {
                 if (text[i - firstBrace] === '}') {
                     try {
@@ -76,6 +84,12 @@ export async function callGemini(userInput, systemPrompt) {
 export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewUrl = null) {
     if (pinnedViewUrl) return pinnedViewUrl;
 
+    // --- COST CONTROL INTERCEPT ---
+    if (DISABLE_ROOM_GENERATION) {
+        if (addLogCallback) addLogCallback("[SYSTEM]: Room generation suppressed. Reality buffer standby...", "var(--term-amber)");
+        return "https://placehold.co/1024x512/051505/4ade80.png?text=REALITY_BUFFER_STANDBY";
+    }
+
     const envStyleMap = {
         'technate': 'clinical brutalism, sterile white-on-cyan, severe geometric architecture, dystopian corporation, high contrast, oppressive',
         'mundane': 'gritty 1980s cyberpunk, claustrophobic dystopian sci-fi, Neuromancer aesthetic, dark and dirty, decaying, exposed wiring, CRT glow, heavy VHS tracking noise',
@@ -84,7 +98,7 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
     };
     const style = envStyleMap[stratum?.toLowerCase()] || envStyleMap.mundane;
     
-    // CRITICAL FIX: Ensure vibrant, full-color rendering and lock the perspective.
+    // Ensure vibrant, full-color rendering and lock the perspective.
     const styledPrompt = `Environmental concept art, highly detailed, vibrant full color. DO NOT INCLUDE PEOPLE UNLESS EXPLICITLY REQUESTED. Subject: [ ${prompt} ]. Atmosphere and rendering style MUST BE: ${style}.`;
 
     try {
@@ -93,11 +107,16 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ instances: [{ prompt: styledPrompt }] })
         });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
         const data = await res.json();
         if (data.predictions && data.predictions[0]) {
             return data.predictions[0].bytesBase64Encoded;
         }
-    } catch (e) { console.error("Image Projection Error:", e); }
+    } catch (e) { 
+        console.error("Image Projection Error:", e); 
+    }
     return null;
 }
 
@@ -110,8 +129,8 @@ export async function generatePortrait(prompt, stratum) {
     };
     const style = styleMap[stratum?.toLowerCase()] || styleMap.mundane;
     
-    // RESTORE THE MAGIC: Explicitly demand full color, digital painting, and MTG styling.
-    // ADDED: Extreme focus on humanoid/character features to prevent the AI from drawing buildings.
+    // HIGH FIDELITY CHARACTER PROMPT
+    // Focuses strictly on personhood to prevent the model from drifting into cityscapes.
     const combinedPrompt = `Masterpiece digital painting, hyper-vibrant full color, high saturation, MTG card art style. 
         SUBJECT: A close-up high-end character portrait of a humanoid person. 
         Focus on face, eyes, and clothing. NO BUILDINGS. NO EXTERIORS. 
@@ -124,10 +143,15 @@ export async function generatePortrait(prompt, stratum) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ instances: [{ prompt: combinedPrompt }] })
         });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
         const data = await res.json();
         if (data.predictions && data.predictions[0]) {
             return data.predictions[0].bytesBase64Encoded;
         }
-    } catch (e) { console.error("Portrait Generation Error:", e); }
+    } catch (e) { 
+        console.error("Portrait Generation Error:", e); 
+    }
     return null;
 }
