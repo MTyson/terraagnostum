@@ -331,7 +331,7 @@ export function renderMapHUD(activeMap, currentRoomKey, stratum) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // --- ASTRAL INTERFERENCE ---
-    if (stratum === 'astral') {
+    if (stratum === 'astral' || currentRoomKey.startsWith('astral_')) {
         // Draw digital static
         for (let i = 0; i < 200; i++) {
             const x = Math.random() * canvas.width;

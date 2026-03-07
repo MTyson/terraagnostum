@@ -6,7 +6,7 @@ import * as stateManager from './stateManager.js';
 import * as syncEngine from './syncEngine.js';
 
 // MODULE VARS
-window.DISABLE_ROOM_GENERATION = true; // SET TO TRUE TO DISABLE API CALLS FOR ROOM IMAGES
+window.DISABLE_ROOM_GENERATION = false; // DEFAULT TO ENABLED (Server-side environment still protects if desired)
 
 let activeVisualTicket = 0;
 let lastRenderedUrl = null;
