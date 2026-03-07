@@ -6,6 +6,8 @@ import * as stateManager from './stateManager.js';
 import * as syncEngine from './syncEngine.js';
 
 // MODULE VARS
+window.DISABLE_ROOM_GENERATION = false; // SET TO TRUE TO DISABLE API CALLS FOR ROOM IMAGES
+
 let activeVisualTicket = 0;
 let lastRenderedUrl = null;
 let lastRenderedRoom = null;
@@ -124,6 +126,13 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
         // 3. BLACKOUT (ONLY FOR NEW GENERATION)
         const loader = document.getElementById('visual-loading');
         if (loader) loader.classList.remove('hidden');
+
+        if (window.DISABLE_ROOM_GENERATION) {
+            UI.addLog("[SYSTEM]: Room image generation skipped (DEV MODE).", "var(--term-amber)");
+            if (loader) loader.innerHTML = "DEV MODE: VISUALS OFFLINE";
+            isManifesting = false;
+            return;
+        }
 
         // Start projection and track it
         const projectionPromise = projectVisual(overridePrompt || room.visualPrompt || room.description, localPlayer.stratum, UI.addLog);
