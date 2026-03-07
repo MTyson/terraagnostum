@@ -9,6 +9,50 @@
     --astral-pink: #ff00ff;
 }
 
+/* --- MOBILE NAV RAIL --- */
+.nav-rail-btn {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--term-green);
+    color: var(--term-green);
+    background: transparent;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.1s;
+    opacity: 0.6;
+}
+.nav-rail-btn:hover, .nav-rail-btn.active {
+    background: var(--term-green);
+    color: black;
+    opacity: 1;
+    box-shadow: 0 0 8px var(--term-green);
+}
+
+/* --- RESPONSIVE SIDEBAR (MOBILE DRAWER) --- */
+@media (max-width: 1023px) {
+    #right-sidebar {
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 100;
+        transform: translateX(100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        width: 280px;
+        background: rgba(0, 0, 0, 0.95);
+        backdrop-filter: blur(10px);
+        border-left: 1px solid var(--term-green);
+        display: flex !important; /* Force display flex but control with transform */
+    }
+    #right-sidebar.active {
+        transform: translateX(0);
+        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.9);
+    }
+}
+
 #header-row { z-index: 100; }
 /* Ensure the root containers occupy full screen */
 html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }

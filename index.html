@@ -10,6 +10,13 @@
 <body class="crt bg-black text-green-500 font-mono overflow-hidden">
 
     <div class="flex h-screen w-screen overflow-hidden bg-black text-green-500 font-mono">
+        <!-- 0. MOBILE NAV RAIL (Visible on small screens) -->
+        <div id="mobile-nav-rail" class="flex lg:hidden flex-col w-10 border-r border-[#1a3a1a] bg-black items-center py-4 gap-6 z-50">
+            <button id="nav-map" class="nav-rail-btn" title="TOPOLOGY">M</button>
+            <button id="nav-bio" class="nav-rail-btn" title="BIOMETRICS">B</button>
+            <button id="nav-inv" class="nav-rail-btn" title="INVENTORY">I</button>
+        </div>
+
         <!-- 1. MAIN COCKPIT COLUMN -->
         <div id="main-terminal-area" class="flex flex-col flex-grow min-w-0 border-r border-[#1a3a1a] h-full">
             

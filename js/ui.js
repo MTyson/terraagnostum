@@ -30,6 +30,44 @@ stateManager.subscribe((state) => {
 });
 
 export function initHUDWidgets() {
+    // Mobile Nav Rail Listeners
+    const railButtons = {
+        'nav-map': 'SYSTEM.TOPOLOGY',
+        'nav-bio': 'SYSTEM.BIOMETRICS',
+        'nav-inv': 'SYSTEM.INVENTORY'
+    };
+
+    const sidebar = document.getElementById('right-sidebar');
+
+    Object.keys(railButtons).forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const wasActive = sidebar.classList.contains('active');
+                
+                // Toggle active class on sidebar
+                sidebar.classList.toggle('active');
+                
+                // If opening, scroll to the relevant section
+                if (!wasActive) {
+                    const sectionHeader = [...sidebar.querySelectorAll('.section-header')]
+                        .find(el => el.innerText.includes(railButtons[id]));
+                    if (sectionHeader) {
+                        sectionHeader.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }
+            };
+        }
+    });
+
+    // Close sidebar when clicking main terminal area (on mobile)
+    document.getElementById('main-terminal-area').onclick = () => {
+        if (window.innerWidth < 1024) {
+            sidebar.classList.remove('active');
+        }
+    };
+
     // Compass Listeners
     const compassButtons = {
         'compass-n': 'n',
