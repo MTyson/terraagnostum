@@ -33,11 +33,15 @@ body::before {
 }
 
 /* --- DOSSIER PORTRAIT --- */
+#avatar-container {
+    max-height: 250px;
+    overflow: hidden;
+}
 #avatar-container img {
-    filter: sepia(0.8) contrast(1.4) brightness(0.9);
+    filter: contrast(1.1) brightness(1.1); /* Vibrant full color */
     width: 100%;
     height: 100%;
-    object-cover: cover;
+    object-fit: cover;
 }
 
 /* --- FLEX DENSITY --- */
