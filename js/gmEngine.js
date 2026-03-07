@@ -12,7 +12,7 @@ export async function handleGMIntent(
     isSilent = false
 ) {
     const { localPlayer, user, activeAvatar } = state;
-    const { shiftStratum, savePlayerState, setActiveAvatar, syncAvatarStats } = actions;
+    const { shiftStratum, savePlayerState, setActiveAvatar, syncAvatarStats, updateMapListener, triggerVisualUpdate: triggerVisual } = actions;
 
     if (!isSilent) {
         UI.addLog(`<span id="thinking-indicator" class="italic" style="color: var(--gm-purple)">EVALUATING INTENT...</span>`);
@@ -88,9 +88,12 @@ export async function handleGMIntent(
                 if (syncAvatarStats) syncAvatarStats();
                 stateManager.updatePlayer({ 
                     currentRoom: "bedroom", 
+                    currentArea: `apartment_${user.uid}`,
                     stratum: "mundane",
                     combat: { active: false, opponent: null }
                 });
+                if (updateMapListener) await updateMapListener();
+                if (triggerVisual) triggerVisual();
                 shiftStratum('mundane');
                 stateChanged = true;
                 if (!isSilent) UI.addLog(`[NARRATOR]: You gasp as you wake up in your bedroom, the astral nightmare fading into a cold sweat.`, "#888");
@@ -149,7 +152,13 @@ export async function handleGMIntent(
                         }
                         
                         if (currentLocalPlayer.stratum !== 'mundane') {
-                            stateManager.updatePlayer({ currentRoom: 'bedroom', stratum: 'mundane' });
+                            stateManager.updatePlayer({ 
+                                currentRoom: 'closet', 
+                                currentArea: `apartment_${user.uid}`,
+                                stratum: 'mundane' 
+                            });
+                            if (updateMapListener) await updateMapListener();
+                            if (triggerVisual) triggerVisual();
                             shiftStratum('mundane');
                             if (!isSilent) UI.addLog(`[SYSTEM]: Harmonic resonance achieved. Shifting back to mundane stratum...`, "var(--term-green)");
                             
@@ -197,7 +206,13 @@ export async function handleGMIntent(
             const currentAvatar = stateManager.getState().activeAvatar;
             if (currentAvatar && user) syncEngine.markCharacterDeceased(currentAvatar.id);
             setActiveAvatar(null);
-            stateManager.updatePlayer({ currentRoom: "bedroom", stratum: "mundane" });
+            stateManager.updatePlayer({ 
+                currentRoom: "bedroom", 
+                currentArea: `apartment_${user.uid}`,
+                stratum: "mundane" 
+            });
+            if (updateMapListener) await updateMapListener();
+            if (triggerVisual) triggerVisual();
             stateChanged = true;
             if (!isSilent) UI.addLog(`Vessel destroyed. Connection severed.`, "var(--term-red)"); 
             shiftStratum('mundane');
@@ -233,7 +248,24 @@ export async function handleGMIntent(
                 stateManager.updateMapNode(t.new_room_id, newRoom);
                 syncEngine.updateMapNode(t.new_room_id, newRoom);
             }
-            stateManager.updatePlayer({ currentRoom: t.new_room_id }); 
+            // Area detection for teleportation
+            let newArea = currentLocalPlayer.currentArea;
+            if (t.new_room_id === 'outside') {
+                newArea = 'public_void';
+            } else if (t.new_room_id.startsWith('astral_')) {
+                newArea = `astral_${user.uid}`;
+            } else if (['lore1', 'lore2', 'kitchen', 'spare_room', 'bedroom', 'closet', 'character_room', 'hallway'].includes(t.new_room_id)) {
+                newArea = `apartment_${user.uid}`;
+            }
+
+            if (newArea !== currentLocalPlayer.currentArea) {
+                stateManager.updatePlayer({ currentRoom: t.new_room_id, currentArea: newArea }); 
+                if (updateMapListener) await updateMapListener();
+                if (triggerVisual) triggerVisual(t.visualPrompt);
+            } else {
+                stateManager.updatePlayer({ currentRoom: t.new_room_id }); 
+                if (triggerVisual) triggerVisual(t.visualPrompt);
+            }
             stateChanged = true;
             if (!isSilent) UI.addLog(`Reality warp successful.`, "var(--gm-purple)");
         }

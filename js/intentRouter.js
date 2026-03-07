@@ -44,6 +44,7 @@ export async function executeMovement(targetDir) {
     
     if (!currentRoom) {
         UI.addLog('[SYSTEM]: Dimensional synchronization in progress. Please wait for the sector to stabilize.', 'var(--term-amber)');
+        UI.addLog('[SYSTEM]: If synchronization fails, type "RECALIBRATE" to return to your primary anchor.', 'var(--term-amber)');
         return;
     }
     
@@ -123,6 +124,7 @@ export async function executeMovement(targetDir) {
         // --- CACHE VALIDATION (Only for internal area movement) ---
         if (!activeMap[targetRoomId]) {
             UI.addLog("[SYSTEM]: Dimensional synchronization in progress. Please wait for the sector to stabilize.", "var(--term-amber)");
+            UI.addLog('[SYSTEM]: Type "RECALIBRATE" if you are stuck.', 'var(--term-amber)');
             return;
         }
 
@@ -193,6 +195,21 @@ export async function handleCommand(val) {
         syncEngine.savePlayerState(); 
         
         UI.addLog(`[SYSTEM]: Architect flag: ${stateManager.getState().localPlayer.isArchitect ? 'ENABLED' : 'DISABLED'}`, "var(--term-amber)");
+        return;
+    }
+
+    if (cmd === 'recalibrate' || cmd === 'home' || cmd === 'unstuck') {
+        const homeArea = `apartment_${user.uid}`;
+        stateManager.updatePlayer({ 
+            currentRoom: 'bedroom', 
+            currentArea: homeArea,
+            stratum: 'mundane',
+            combat: { active: false, opponent: null }
+        });
+        await syncEngine.updateAreaListener(homeArea);
+        shiftStratum('mundane');
+        UI.addLog("[SYSTEM]: Recalibrating reality to primary anchor (Bedroom)...", "var(--term-green)");
+        triggerVisualUpdate(null, stateManager.getState().localPlayer, stateManager.getActiveMap(), user);
         return;
     }
 
@@ -592,7 +609,7 @@ export async function handleCommand(val) {
         else localPlayer.inventory.forEach(item => UI.addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
         return;
     } else if (cmd === 'help') {
-        UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT, INVESTIGATE.", "var(--term-amber)");
+        UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT, INVESTIGATE, RECALIBRATE.", "var(--term-amber)");
         return;
     }
 
@@ -612,7 +629,8 @@ export async function handleCommand(val) {
                 renderMapHUD: UI.renderMapHUD,
                 setActiveAvatar: stateManager.setActiveAvatar,
                 syncAvatarStats: () => syncEngine.syncAvatarStats(stateManager.getState().activeAvatar?.id, stateManager.getState().activeAvatar?.stats),
-                updateMapListener: () => syncEngine.updateAreaListener(stateManager.getState().localPlayer.currentArea)
+                updateMapListener: () => syncEngine.updateAreaListener(stateManager.getState().localPlayer.currentArea),
+                triggerVisualUpdate: (prompt) => triggerVisualUpdate(prompt, stateManager.getState().localPlayer, stateManager.getActiveMap(), stateManager.getState().user)
             }
         );
         stateManager.setSuggestions(suggestions);

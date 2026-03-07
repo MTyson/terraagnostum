@@ -6,7 +6,7 @@ import {
 import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 import { db, appId, storage, isSyncEnabled } from './firebaseConfig.js';
 import * as stateManager from './stateManager.js';
-import { blueprintApartment } from './mapData.js';
+import { blueprintApartment, isArchiveRoom } from './mapData.js';
 
 let mapUnsubscribe = null;
 let currentMapPath = null;
@@ -21,6 +21,7 @@ export async function bootSyncEngine(mergeAndRefreshCallback) {
 
     let startRoom = 'bedroom';
     let startArea = `apartment_${user.uid}`;
+    let needsCorrectionSave = false;
     try {
         const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
         const snap = await getDoc(stateRef);
@@ -28,11 +29,21 @@ export async function bootSyncEngine(mergeAndRefreshCallback) {
             const data = snap.data();
             startRoom = data.currentRoom || startRoom;
             startArea = data.currentArea || startArea;
+
+            // Area/Room consistency check
+            if (isArchiveRoom(startRoom)) {
+                if (!startArea || !startArea.startsWith('apartment_')) {
+                    console.log("[SYNC]: Inconsistent room/area detected on boot. Forcing apartment area.");
+                    startArea = `apartment_${user.uid}`;
+                    needsCorrectionSave = true;
+                }
+            }
         }
     } catch(e) {}
 
     // Set initial area before loading
     stateManager.updatePlayer({ currentArea: startArea, currentRoom: startRoom });
+    if (needsCorrectionSave) savePlayerState();
     await updateAreaListener(startArea);
     await loadPlayerState(user);
     await loadUserCharacters(user);
@@ -48,12 +59,20 @@ export async function loadPlayerState(user) {
         onSnapshot(stateRef, (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
+                const prevState = stateManager.getState();
+                const areaChanged = data.currentArea && data.currentArea !== prevState.localPlayer.currentArea;
+                
                 stateManager.updatePlayer({ 
                     ...data, 
                     inventory: data.inventory || [], 
                     stratum: data.stratum || "mundane" 
                 });
                 
+                if (areaChanged) {
+                    console.log(`[SYNC]: Area transition detected in Firestore: ${data.currentArea}. Updating listener...`);
+                    updateAreaListener(data.currentArea);
+                }
+
                 if (data.isArchitect) {
                     console.log("[SYSTEM]: Architect status verified via uplink.");
                 }
