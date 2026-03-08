@@ -167,10 +167,11 @@ export async function savePlayerState() {
 
 export async function syncAvatarStats(avatarId, stats) {
     const { user } = stateManager.getState();
-    if (!db || !user || !isSyncEnabled) return;
+    if (!db || !user || !isSyncEnabled || !avatarId) return;
     try {
         const charRef = doc(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION, avatarId);
-        await updateDoc(charRef, { stats });
+        // Ensure we merge stats to not overwrite other fields if passing partials
+        await setDoc(charRef, stats, { merge: true });
     } catch (e) { console.error("SyncEngine: Failed to sync avatar stats:", e); }
 }
 

@@ -82,67 +82,32 @@
             <!-- TERMINAL LOG -->
             <div id="output" class="flex-grow overflow-y-auto p-4 bg-black/40 min-h-0 relative">
                 <div id="log" class="max-w-full break-words text-sm"></div>
+            </div>
 
-                <!-- COMBAT OVERLAY -->
-                <div id="combat-overlay" class="hidden absolute inset-0 bg-black/90 z-40 flex flex-col p-6 items-center justify-between border-y border-red-900/50">
-                    <!-- Opponent Card -->
-                    <div class="combat-card opponent-card w-full max-w-md border border-red-900 bg-red-950/10 p-4 rounded flex flex-col gap-2">
-                        <div class="flex justify-between items-center border-b border-red-900 pb-1">
-                            <span id="opponent-name" class="text-red-500 font-bold uppercase tracking-widest text-xs">UNKNOWN ENTITY</span>
-                            <span id="opponent-type" class="text-red-900 text-[10px] uppercase">STRATUM-X</span>
-                        </div>
-                        <div class="flex gap-4">
-                            <div class="w-20 h-24 border border-red-900/50 bg-black/40 overflow-hidden flex-shrink-0">
-                                <img id="opponent-portrait" src="" class="w-full h-full object-cover grayscale contrast-125">
-                            </div>
-                            <div class="flex-1 flex flex-col justify-center gap-2">
-                                <div class="space-y-1">
-                                    <div class="flex justify-between text-[9px] text-red-800"><span>WILLPOWER</span> <span id="opponent-will-val">??/??</span></div>
-                                    <div class="w-full h-1 bg-red-950 border border-red-900/30">
-                                        <div id="opponent-will-bar" class="h-full bg-red-600 w-[100%]"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <!-- THE ARCHIVE BUFFER (Dossier Takeover) -->
+            <div id="dossier-buffer" class="hidden flex-grow overflow-y-auto p-4 bg-black/40 min-h-0 flex-col items-center">
+                <!-- Full-color, un-cropped portrait goes here -->
+                <div id="dossier-portrait-large" class="w-64 h-80 border border-green-900 mb-4 bg-black/60 overflow-hidden"></div>
 
-                    <!-- Combat Status Message -->
-                    <div id="combat-message" class="text-amber-500 text-xs italic animate-pulse">
-                        INITIATING PSYCHIC CONFLICT...
-                    </div>
+                <!-- ASCII Stat bars and Biography -->
+                <div id="dossier-stats" class="w-full max-w-md text-green-400 font-mono text-sm mb-4"></div>
 
-                    <!-- Player Card -->
-                    <div class="combat-card player-card w-full max-w-md border border-blue-900 bg-blue-950/10 p-4 rounded flex flex-col gap-2">
-                         <div class="flex justify-between items-center border-b border-blue-900 pb-1">
-                            <span id="player-combat-name" class="text-blue-500 font-bold uppercase tracking-widest text-xs">VESSEL ALPHA</span>
-                            <div class="flex gap-2 text-[9px] text-blue-900">
-                                <span id="player-combat-awr">AWR: --</span>
-                                <span id="player-combat-phys">PHYS: --</span>
-                            </div>
-                        </div>
-                        <div class="flex gap-4">
-                            <div class="flex-1 flex flex-col justify-center gap-2">
-                                <div class="space-y-1">
-                                    <div class="flex justify-between text-[9px] text-blue-800"><span>WILLPOWER</span> <span id="player-combat-will-val">??/??</span></div>
-                                    <div class="w-full h-1 bg-blue-950 border border-blue-900/30">
-                                        <div id="player-combat-will-bar" class="h-full bg-blue-600 w-[100%]"></div>
-                                    </div>
-                                </div>
-                                <div class="text-[8px] text-blue-400 mt-2 uppercase tracking-tighter">
-                                    >> SELECT RESPONSE OR CHANNELED ACTION
-                                </div>
-                            </div>
-                            <div class="w-20 h-24 border border-blue-900/50 bg-black/40 overflow-hidden flex-shrink-0">
-                                <img id="player-combat-portrait" src="" class="w-full h-full object-cover">
-                            </div>
-                        </div>
-                        
-                        <!-- Turn Timer -->
-                        <div class="w-full h-0.5 bg-gray-900 mt-2 relative overflow-hidden">
-                            <div id="combat-timer-bar" class="absolute inset-0 bg-amber-500 w-full origin-left"></div>
-                        </div>
-                    </div>
-                </div>
+                <button id="btn-jack-out" class="mt-auto border border-amber-500 text-amber-500 px-4 py-2 hover:bg-amber-900/50 transition-colors">[ ESCAPE TO COMMAND ]</button>
+            </div>
+
+            <!-- THE COMBAT OVERLAY (The Theater) -->
+            <div id="combat-overlay" class="hidden flex-grow overflow-y-auto p-4 bg-black/40 min-h-0 flex-col gap-4">
+                <!-- Opponent Card (Top) -->
+                <div id="combat-opponent" class="w-full border border-amber-500 p-2 bg-black/80 backdrop-blur-sm"></div>
+
+                <!-- Narrative Resolution (Center) -->
+                <div id="combat-log" class="flex-grow border-y border-[#1a3a1a] p-2 overflow-y-auto text-sm"></div>
+
+                <!-- Player Card (Bottom) -->
+                <div id="combat-player" class="w-full border border-blue-500 p-2 bg-black/80 backdrop-blur-sm"></div>
+
+                <!-- Turn Timer -->
+                <div id="combat-timer-bar" class="w-full h-1 bg-[#1a3a1a]"><div class="h-full bg-amber-500 w-full transition-all duration-1000"></div></div>
             </div>
 
             <!-- BOTTOM: INTERACTION HUB (Fixed height container) -->
@@ -186,7 +151,7 @@
             <!-- BIOMETRICS (Dossier style) -->
             <div class="sidebar-section mb-6">
                 <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1 uppercase">System.Dossier</div>
-                <div id="avatar-container" class="relative w-full aspect-[3/4] border border-[#1a3a1a] bg-black/40 overflow-hidden">
+                <div id="avatar-container" class="relative w-full aspect-[3/4] border border-[#1a3a1a] bg-black/40 overflow-hidden cursor-pointer">
                     <div class="text-amber-500 text-[10px] absolute inset-0 flex items-center justify-center text-center border border-dashed border-amber-900 p-4 m-2">
                         NO VESSEL DETECTED
                     </div>

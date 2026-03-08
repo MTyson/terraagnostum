@@ -62,7 +62,7 @@ ITEMS PRESENT: ${(currentRoomData.items || []).map(i => i.name).join(', ') || "N
 `;
 
     const entityLayer = `
-PLAYER STATS: HP ${localPlayer.hp}/20
+PLAYER STATS: HP ${localPlayer.hp}/20, WILL ${localPlayer.will || 10}, AWR ${localPlayer.awr || 10}
 PLAYER INVENTORY: ${inventoryNames || "Empty"}
 
 NPCS PRESENT:

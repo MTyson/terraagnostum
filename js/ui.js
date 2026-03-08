@@ -90,6 +90,11 @@ export function initHUDWidgets() {
         'compass-w': 'w'
     };
 
+    const jackOutBtn = document.getElementById('btn-jack-out');
+    if (jackOutBtn) {
+        jackOutBtn.onclick = () => toggleDossierBuffer(false);
+    }
+
     Object.entries(compassButtons).forEach(([id, dir]) => {
         const btn = document.getElementById(id);
         if (btn) {
@@ -265,10 +270,10 @@ export function updateAvatarUI(activeAvatar) {
         </div>
     `;
 
-    // Add click listener to the portrait
+    // Add click listener to the portrait to trigger Dossier
     const portraitImg = document.getElementById('avatar-portrait-main');
     if (portraitImg) {
-        portraitImg.onclick = () => openForgeModal(activeAvatar);
+        portraitImg.onclick = () => toggleDossierBuffer(true);
     }
 }
 
@@ -502,42 +507,102 @@ export function toggleMapModal() {
     }
 }
 
-export function toggleCombatUI(active, opponentData = null) {
-    const overlay = document.getElementById('combat-overlay');
-    const timerBar = document.getElementById('combat-timer-bar');
-    if (!overlay) return;
+export function toggleDossierBuffer(show) {
+    const output = document.getElementById('output');
+    const buffer = document.getElementById('dossier-buffer');
+    if (!output || !buffer) return;
 
-    if (active && opponentData) {
-        overlay.classList.remove('hidden');
-        document.getElementById('opponent-name').innerText = opponentData.name.toUpperCase();
-        document.getElementById('opponent-type').innerText = opponentData.archetype || "UNKNOWN ENTITY";
-        document.getElementById('opponent-portrait').src = opponentData.image || "";
-        
-        const oppWill = opponentData.will || opponentData.stats?.WILL || 10;
-        document.getElementById('opponent-will-val').innerText = `${oppWill}/${oppWill}`;
-        document.getElementById('opponent-will-bar').style.width = '100%';
-
+    if (show) {
         const { activeAvatar } = stateManager.getState();
-        if (activeAvatar) {
-            document.getElementById('player-combat-name').innerText = activeAvatar.name.toUpperCase();
-            document.getElementById('player-combat-awr').innerText = `AWR: ${activeAvatar.stats.AWR}`;
-            document.getElementById('player-combat-phys').innerText = `PHYS: ${activeAvatar.stats.PHYS}`;
-            document.getElementById('player-combat-portrait').src = activeAvatar.image || "";
-            
-            const pWill = activeAvatar.will || activeAvatar.stats.WILL;
-            document.getElementById('player-combat-will-val').innerText = `${pWill}/${activeAvatar.stats.WILL}`;
-            document.getElementById('player-combat-will-bar').style.width = `${(pWill / activeAvatar.stats.WILL) * 100}%`;
+        if (!activeAvatar) return;
+
+        output.classList.add('hidden');
+        buffer.classList.remove('hidden');
+        buffer.classList.add('flex');
+
+        // Populate Dossier
+        const portraitLarge = document.getElementById('dossier-portrait-large');
+        const statsArea = document.getElementById('dossier-stats');
+        
+        if (portraitLarge) {
+            portraitLarge.innerHTML = activeAvatar.image 
+                ? `<img src="${activeAvatar.image}" class="w-full h-full object-cover">`
+                : `<div class="w-full h-full flex items-center justify-center text-gray-700">[ NO VISUAL ]</div>`;
         }
 
-        // Start timer animation
-        if (timerBar) {
-            timerBar.classList.remove('timer-active');
-            void timerBar.offsetWidth; // Trigger reflow
-            timerBar.classList.add('timer-active');
+        if (statsArea) {
+            const willBar = generateAsciiBar(activeAvatar.will || activeAvatar.stats.WILL, activeAvatar.stats.WILL, 20);
+            const physBar = generateAsciiBar(activeAvatar.hp || activeAvatar.stats.PHYS, activeAvatar.stats.PHYS, 20);
+            
+            statsArea.innerHTML = `
+                <div class="mb-4">
+                    <div class="text-amber-500 font-bold text-lg mb-1">${activeAvatar.name.toUpperCase()}</div>
+                    <div class="text-gray-500 text-xs italic mb-2">${activeAvatar.archetype || 'VESSEL'}</div>
+                    <div class="text-gray-400 leading-relaxed">${activeAvatar.description || 'No biometric history on file.'}</div>
+                </div>
+                <div class="space-y-2 border-t border-green-900 pt-4">
+                    <div class="flex justify-between"><span>WILLPOWER</span> <span>${willBar}</span></div>
+                    <div class="flex justify-between"><span>PHYSIQUE</span>  <span>${physBar}</span></div>
+                    <div class="flex justify-between"><span>AWARENESS</span> <span>[${'|'.repeat(activeAvatar.stats.AWR)}${' '.repeat(20 - activeAvatar.stats.AWR)}] ${activeAvatar.stats.AWR}/20</span></div>
+                </div>
+            `;
+        }
+    } else {
+        buffer.classList.add('hidden');
+        buffer.classList.remove('flex');
+        output.classList.remove('hidden');
+    }
+}
+
+export function toggleCombatUI(active, opponentData = null) {
+    const output = document.getElementById('output');
+    const overlay = document.getElementById('combat-overlay');
+    if (!output || !overlay) return;
+
+    if (active && opponentData) {
+        output.classList.add('hidden');
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+
+        // Populate Combat UI
+        const opponentArea = document.getElementById('combat-opponent');
+        const playerArea = document.getElementById('combat-player');
+        const { activeAvatar } = stateManager.getState();
+
+        if (opponentArea) {
+            const oppWill = opponentData.will || opponentData.stats?.WILL || 10;
+            const maxWill = opponentData.stats?.WILL || 10;
+            opponentArea.innerHTML = `
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-amber-500 font-bold">${opponentData.name.toUpperCase()}</span>
+                    <span class="text-xs text-amber-900">${opponentData.archetype || 'ENTITY'}</span>
+                </div>
+                <div class="text-[10px] font-mono text-amber-700">
+                    WILL: ${generateAsciiBar(oppWill, maxWill, 15)}
+                </div>
+            `;
+        }
+
+        if (playerArea && activeAvatar) {
+            const pWill = activeAvatar.will || activeAvatar.stats.WILL;
+            const maxWill = activeAvatar.stats.WILL;
+            playerArea.innerHTML = `
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-blue-500 font-bold">${activeAvatar.name.toUpperCase()}</span>
+                    <span class="text-xs text-blue-900">VESSEL</span>
+                </div>
+                <div class="text-[10px] font-mono text-blue-700">
+                    WILL: ${generateAsciiBar(pWill, maxWill, 15)}
+                </div>
+            `;
         }
     } else {
         overlay.classList.add('hidden');
-        if (timerBar) timerBar.classList.remove('timer-active');
+        overlay.classList.remove('flex');
+        // Only show output if dossier is not active
+        if (document.getElementById('dossier-buffer').classList.contains('hidden')) {
+            output.classList.remove('hidden');
+        }
     }
 }
 

@@ -99,7 +99,7 @@ export const blueprintApartment = {
         name: "Lore Room (West)",
         shortName: "LORE1",
         description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall. The console hums with a strange energy, and the air feels thick with forgotten secrets.",
-        visualPrompt: "A cypherpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.  A closet door to the north is scrawled on with black marker 'Schrödinger's Closet'.  There is a hint of esoteric quantum light spilling out of the edges of the closet.A cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture. A hint of esoteric quantum light spilling out of the edges of the closet.",
+        visualPrompt: "A cypherpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.  A closet door to the north is scrawled on with black marker 'Schrödinger's Closet'.  There is a hint of esoteric quantum light spilling out of the edges of the closet.",
         exits: { east: "lore2", north: "closet", south: "bedroom" },
         metadata: { stratum: "mundane", isEditable: false }
     },

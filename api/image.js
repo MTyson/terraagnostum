@@ -16,15 +16,6 @@ if (fs.existsSync(envPath)) {
 }
 
 export default async function handler(req, res) {
-  const disableEnv = process.env.DISABLE_ROOM_GENERATION;
-  const disableGen = disableEnv === 'true' || disableEnv === true || (disableEnv && String(disableEnv).trim().toLowerCase() === 'true');
-  if (disableGen) {
-    return res.status(200).json({ 
-      predictions: [{ bytesBase64Encoded: null }],
-      info: "DEV MODE: Room image generation is disabled via environment variable."
-    });
-  }
-
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.error("CRITICAL: GEMINI_API_KEY is missing from environment.");
@@ -40,11 +31,13 @@ export default async function handler(req, res) {
 
   // --- GET: DIAGNOSTIC MODE ---
   if (req.method === 'GET') {
+    const disableEnv = process.env.DISABLE_ROOM_GENERATION;
+    const isRoomDisable = disableEnv === 'true' || disableEnv === true || (disableEnv && String(disableEnv).trim().toLowerCase() === 'true');
     return res.status(200).json({ 
       status: "Active",
       activeEngine: imageEngine,
-      disableGen: disableGen,
-      message: "Send a POST request to generate an image." 
+      disableGen: isRoomDisable,
+      message: "Send a POST request to generate an image. Rooms may be blocked by DISABLE_ROOM_GENERATION." 
     });
   }
 
@@ -61,6 +54,19 @@ export default async function handler(req, res) {
       promptText = incomingPayload.instances[0].prompt;
     } else if (incomingPayload.contents?.[0]?.parts?.[0]?.text) {
       promptText = incomingPayload.contents[0].parts[0].text;
+    }
+
+    // --- DEV MODE ROOM BLOCK ---
+    // Only block if DISABLE_ROOM_GENERATION is true AND it's a room prompt (not a portrait)
+    const disableEnv = process.env.DISABLE_ROOM_GENERATION;
+    const isRoomDisable = disableEnv === 'true' || disableEnv === true || (disableEnv && String(disableEnv).trim().toLowerCase() === 'true');
+    const isPortrait = promptText.toLowerCase().includes("portrait") || promptText.toLowerCase().includes("character portrait");
+
+    if (isRoomDisable && !isPortrait) {
+      return res.status(200).json({ 
+        predictions: [{ bytesBase64Encoded: null }],
+        info: "DEV MODE: Room image generation is disabled via environment variable."
+      });
     }
 
     let url, finalPayload;
