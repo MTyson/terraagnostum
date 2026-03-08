@@ -256,6 +256,19 @@ export async function markCharacterDeceased(avatarId) {
     } catch (e) { console.error("SyncEngine: Failed to mark character deceased:", e); }
 }
 
+export async function saveLoreFragment(areaId, loreData) {
+    const { user } = stateManager.getState();
+    if (!db || !user || !isSyncEnabled) return;
+    try {
+        const loreCol = collection(db, 'artifacts', appId, 'public', 'data', 'areas', areaId, 'lore');
+        await addDoc(loreCol, {
+            ...loreData,
+            timestamp: serverTimestamp(),
+            author: user.uid
+        });
+    } catch (e) { console.error("SyncEngine: Failed to save lore fragment:", e); }
+}
+
 export async function logManifestation(roomId, text) {
     // This needs to be updated or removed for the new architecture.
     // For now, logging to a central doc is fine if it still exists, 

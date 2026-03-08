@@ -155,6 +155,16 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
 
         const shouldRender = (myTicket === activeVisualTicket);
 
+        // --- BUDGET PROTECTION: Anonymous users always use storedImageUrl anchor if available ---
+        if (!user || user.isAnonymous) {
+            if (validStoredUrl) {
+                if (shouldRender) {
+                    renderToCanvas(validStoredUrl, roomId, myTicket);
+                }
+                return;
+            }
+        }
+
         if (overridePrompt || !user || user.isAnonymous) {
             if (shouldRender) {
                 renderToCanvas(sessionVisualCache.get(roomId), roomId, myTicket);

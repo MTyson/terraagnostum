@@ -22,12 +22,24 @@ stateManager.subscribe((state) => {
     updateAvatarUI(activeAvatar);
     updateInventoryUI(localPlayer.inventory);
     
+    // Header Vitals Sync
+    syncHeaderVitals(activeAvatar);
+    
     const room = activeMap[localPlayer.currentRoom];
     updateRoomItemsUI(room?.items);
     updateRoomEntitiesUI(room?.npcs);
     updateCompassUI(room);
     renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
     updateContextualSuggestions(state.suggestions);
+
+    // Combat UI Toggle
+    if (localPlayer.combat.active) {
+        // Find opponent in current room
+        const opponent = room?.npcs?.find(n => n.name === localPlayer.combat.opponent);
+        toggleCombatUI(true, opponent || { name: localPlayer.combat.opponent });
+    } else {
+        toggleCombatUI(false);
+    }
 });
 
 export function initHUDWidgets() {
@@ -172,6 +184,15 @@ export function updateStatusUI(roomShort, stratum = 'MUNDANE') {
     
     const stratumEl = document.getElementById('stratum-name');
     if (stratumEl) stratumEl.innerText = stratum.toUpperCase();
+
+    // Update Prompt Inspector
+    const { localPlayer } = stateManager.getState();
+    const activeMap = stateManager.getActiveMap();
+    const room = activeMap[localPlayer.currentRoom];
+    const inspector = document.getElementById('prompt-text-display');
+    if (inspector && room) {
+        inspector.innerText = room.visualPrompt || room.description || "[ NO DATA ]";
+    }
 }
 
 export function updateVitalsUI(activeAvatar) {
@@ -186,14 +207,32 @@ export function updateVitalsUI(activeAvatar) {
         return;
     }
 
-    // Assuming stats are 1-20 or similar, mapping to % for now or just 100% if not specified
+    // Assuming stats are 1-20 or similar, mapping to % for now
     const will = activeAvatar.stats.WILL || 10;
     const awr = activeAvatar.stats.AWR || 10;
     const phys = activeAvatar.stats.PHYS || 10;
+    
+    // For now use phys as HP base
+    const currentHP = activeAvatar.hp || phys;
+    const maxHP = phys;
+    const currentWill = activeAvatar.will || will;
+    const maxWill = will;
 
-    if (hpBar) hpBar.style.width = `${(phys / 20) * 100}%`;
-    if (willBar) willBar.style.width = `${(will / 20) * 100}%`;
+    if (hpBar) hpBar.style.width = `${Math.max(0, Math.min(100, (currentHP / maxHP) * 100))}%`;
+    if (willBar) willBar.style.width = `${Math.max(0, Math.min(100, (currentWill / maxWill) * 100))}%`;
     if (awrBar) awrBar.style.width = `${(awr / 20) * 100}%`;
+}
+
+function syncHeaderVitals(activeAvatar) {
+    if (!activeAvatar) return;
+    updateVitalsUI(activeAvatar);
+}
+
+function generateAsciiBar(current, max, length = 10) {
+    const filledLength = Math.round((current / max) * length);
+    const emptyLength = length - filledLength;
+    const bar = '|'.repeat(Math.max(0, filledLength)) + ' '.repeat(Math.max(0, emptyLength));
+    return `[${bar}] ${current}/${max}`;
 }
 
 export function updateAvatarUI(activeAvatar) {
@@ -212,10 +251,17 @@ export function updateAvatarUI(activeAvatar) {
         ? `<img src="${activeAvatar.image}" id="avatar-portrait-main" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity">`
         : `<div class="w-full h-full bg-gray-900 flex items-center justify-center text-[10px] text-gray-700">[ NO VISUAL DATA ]</div>`;
 
+    const willBar = generateAsciiBar(activeAvatar.will || activeAvatar.stats.WILL, activeAvatar.stats.WILL);
+    const physBar = generateAsciiBar(activeAvatar.hp || activeAvatar.stats.PHYS, activeAvatar.stats.PHYS);
+
     container.innerHTML = `
-        ${portrait}
-        <div class="absolute bottom-0 left-0 right-0 bg-black/60 p-2 text-[10px] text-amber-500 font-bold uppercase tracking-widest border-t border-[#1a3a1a]">
-            ${activeAvatar.name}
+        <div class="relative w-full h-full">
+            ${portrait}
+            <div class="absolute bottom-0 left-0 right-0 bg-black/80 p-2 border-t border-[#1a3a1a]">
+                <div class="text-[10px] text-amber-500 font-bold uppercase mb-1">${activeAvatar.name}</div>
+                <div class="text-[8px] font-mono text-green-500">HP:   ${physBar}</div>
+                <div class="text-[8px] font-mono text-blue-400">WILL: ${willBar}</div>
+            </div>
         </div>
     `;
 
@@ -453,6 +499,45 @@ export function toggleMapModal() {
     const modal = document.getElementById('map-modal');
     if (modal) {
         modal.classList.toggle('hidden');
+    }
+}
+
+export function toggleCombatUI(active, opponentData = null) {
+    const overlay = document.getElementById('combat-overlay');
+    const timerBar = document.getElementById('combat-timer-bar');
+    if (!overlay) return;
+
+    if (active && opponentData) {
+        overlay.classList.remove('hidden');
+        document.getElementById('opponent-name').innerText = opponentData.name.toUpperCase();
+        document.getElementById('opponent-type').innerText = opponentData.archetype || "UNKNOWN ENTITY";
+        document.getElementById('opponent-portrait').src = opponentData.image || "";
+        
+        const oppWill = opponentData.will || opponentData.stats?.WILL || 10;
+        document.getElementById('opponent-will-val').innerText = `${oppWill}/${oppWill}`;
+        document.getElementById('opponent-will-bar').style.width = '100%';
+
+        const { activeAvatar } = stateManager.getState();
+        if (activeAvatar) {
+            document.getElementById('player-combat-name').innerText = activeAvatar.name.toUpperCase();
+            document.getElementById('player-combat-awr').innerText = `AWR: ${activeAvatar.stats.AWR}`;
+            document.getElementById('player-combat-phys').innerText = `PHYS: ${activeAvatar.stats.PHYS}`;
+            document.getElementById('player-combat-portrait').src = activeAvatar.image || "";
+            
+            const pWill = activeAvatar.will || activeAvatar.stats.WILL;
+            document.getElementById('player-combat-will-val').innerText = `${pWill}/${activeAvatar.stats.WILL}`;
+            document.getElementById('player-combat-will-bar').style.width = `${(pWill / activeAvatar.stats.WILL) * 100}%`;
+        }
+
+        // Start timer animation
+        if (timerBar) {
+            timerBar.classList.remove('timer-active');
+            void timerBar.offsetWidth; // Trigger reflow
+            timerBar.classList.add('timer-active');
+        }
+    } else {
+        overlay.classList.add('hidden');
+        if (timerBar) timerBar.classList.remove('timer-active');
     }
 }
 

@@ -92,14 +92,14 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
 
     const envStyleMap = {
         'technate': 'clinical brutalism, sterile white-on-cyan, severe geometric architecture, dystopian corporation, high contrast, oppressive',
-        'mundane': 'gritty 1980s cyberpunk, claustrophobic dystopian sci-fi, Neuromancer aesthetic, dark and dirty, decaying, exposed wiring, CRT glow, heavy VHS tracking noise',
+        'mundane': 'gritty 1980s cyberpunk, claustrophobic dystopian sci-fi, Neuromancer aesthetic, dark and dirty, decaying, exposed wiring, CRT glow, heavy VHS tracking noise, indoors, enclosed architecture',
         'faen': 'dark surrealism, ethereal watercolor, fluid glitch-art, twisted nature, psychic resonance',
         'astral': 'abstract fractal, non-euclidean geometry, cosmic horror, shimmering neon purple and gold static'
     };
     const style = envStyleMap[stratum?.toLowerCase()] || envStyleMap.mundane;
     
     // Ensure vibrant, full-color rendering and lock the perspective.
-    const styledPrompt = `Environmental concept art, highly detailed, vibrant full color. DO NOT INCLUDE PEOPLE UNLESS EXPLICITLY REQUESTED. Subject: [ ${prompt} ]. Atmosphere and rendering style MUST BE: ${style}.`;
+    const styledPrompt = `Cinematic interior shot, highly detailed, vibrant full color. DO NOT INCLUDE PEOPLE UNLESS EXPLICITLY REQUESTED. Subject: [ ${prompt} ]. Atmosphere and rendering style MUST BE: ${style}. Claustrophobic, indoors, enclosed.`;
 
     try {
         const res = await fetch(API_IMAGE, {

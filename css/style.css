@@ -7,10 +7,11 @@ body::before {
     left: 0;
     bottom: 0;
     right: 0;
-    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
     z-index: 2000;
-    background-size: 100% 2px, 3px 100%;
+    background-size: 100% 3px, 3px 100%;
     pointer-events: none;
+    opacity: 0.5;
 }
 
 /* --- RADAR SWEEP --- */
@@ -34,14 +35,25 @@ body::before {
 
 /* --- DOSSIER PORTRAIT --- */
 #avatar-container {
-    max-height: 250px;
+    max-height: 200px;
+    aspect-ratio: 3/4;
     overflow: hidden;
+    border: 1px solid #1a3a1a;
 }
 #avatar-container img {
     filter: contrast(1.1) brightness(1.1); /* Vibrant full color */
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+/* --- COMBAT ANIMATIONS --- */
+@keyframes timer-shrink {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
+.timer-active {
+    animation: timer-shrink 45s linear forwards;
 }
 
 /* --- FLEX DENSITY --- */
@@ -51,6 +63,20 @@ body::before {
 #output {
     flex-grow: 1;
     min-height: 0;
+}
+
+/* --- PROMPT INSPECTOR --- */
+#prompt-text-display {
+    transition: all 0.2s ease-in-out;
+    opacity: 0.4;
+}
+#prompt-text-display:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.95);
+    border-color: var(--term-green);
+    color: var(--term-green);
+    max-width: 400px;
+    font-size: 10px;
 }
 
 :root {

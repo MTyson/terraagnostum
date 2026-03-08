@@ -74,8 +74,15 @@ export async function handleGMIntent(
 
         // Handle Damage to Player
         if (res.damage_to_player && activeAvatar) {
-            const newWill = Math.max(0, (activeAvatar.stats.WILL || 20) - res.damage_to_player);
-            const updatedAvatar = { ...activeAvatar, stats: { ...activeAvatar.stats, WILL: newWill } };
+            const currentWill = activeAvatar.will !== undefined ? activeAvatar.will : (activeAvatar.stats.WILL || 20);
+            const newWill = Math.max(0, currentWill - res.damage_to_player);
+            
+            // Update both the stats and the temporary 'will' tracker
+            const updatedAvatar = { 
+                ...activeAvatar, 
+                will: newWill
+            };
+            
             stateManager.setActiveAvatar(updatedAvatar);
             if (!isSilent) UI.addLog(`[COMBAT]: You took ${res.damage_to_player} WILL damage!`, "var(--term-red)");
             if (syncAvatarStats) syncAvatarStats();
@@ -83,7 +90,7 @@ export async function handleGMIntent(
             if (newWill <= 0) {
                 if (!isSilent) UI.addLog(`[SYSTEM]: Your Will has withered. Your vessel collapses...`, "var(--term-red)");
                 // Defeat Sequence: Teleport to bedroom, restore WILL
-                const restoredAvatar = { ...updatedAvatar, stats: { ...updatedAvatar.stats, WILL: 20 } };
+                const restoredAvatar = { ...updatedAvatar, will: activeAvatar.stats.WILL || 20 };
                 stateManager.setActiveAvatar(restoredAvatar);
                 if (syncAvatarStats) syncAvatarStats();
                 stateManager.updatePlayer({ 
@@ -98,6 +105,12 @@ export async function handleGMIntent(
                 stateChanged = true;
                 if (!isSilent) UI.addLog(`[NARRATOR]: You gasp as you wake up in your bedroom, the astral nightmare fading into a cold sweat.`, "#888");
             }
+        }
+
+        // Handle Lore Creation
+        if (res.create_lore) {
+            syncEngine.saveLoreFragment(localPlayer.currentArea, res.create_lore);
+            if (!isSilent) UI.addLog(`[SYSTEM]: Lore fragment crystallized: ${res.create_lore.title}`, "var(--term-amber)");
         }
 
         // Handle Damage to NPC (Battle of Wills)
