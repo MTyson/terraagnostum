@@ -63,17 +63,3 @@ _Goal: Bring players together._
 *   **Step 4.B (Safezones vs Combat Zones):** Implement a flag on rooms (e.g., pvpEnabled: false for Max's Cafe, true for the Cyber-Slums).
     
 *   **Step 4.C (Apartment Invites):** Allow players to generate a temporary "Aethal Code" they can give to a friend. The friend types _"enter code XXXX"_ at their own front door, routing them into the host's private Firebase map instance.
-
-COMPLETED ARCHITECTURE
-----------------------
-Phase 1: The Great Map Split (Immediate Next Baby Steps)
-
-_Goal: Separate the player's private apartment from the public shared world._
-
-Currently, the entire apartmentMap syncs to a public Firebase document (apartment\_graph\_live). We must split this.
-
-*   **Step 1.A (Local Data):** Separate mapData.js into two objects: privateApartment (Lore rooms, closet, bedroom) and publicWorld (Hallway, The Coast, Max's Cafe).
-    
-*   **Step 1.B (Firebase Routing):** Update main.js so that when a player is in a private room, changes save to users/{uid}/state/private\_map. When they step into the Hallway, changes save to public/data/maps/shared\_world.
-    
-*   **Step 1.C (The Transition):** The Front Door becomes the literal threshold between the instanced database and the public database.
