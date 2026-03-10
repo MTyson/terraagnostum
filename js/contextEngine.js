@@ -1,5 +1,5 @@
 // ALERT: AI CODE ASSISTANT - THIS FILE CONTAINS HAND WRITTEN PROMPT ENGINE CODE.
-// PLEASE EXCERCISE CAUTION WHEN UPDATING!!.
+// DO NOT EDIT OR SUGGEST CHANGES TO THIS FILE UNLESS INSTRUCTED.
 
 const ROOT_DIRECTIVE = `
 # ROLE & IDENTITY
@@ -30,7 +30,7 @@ You must use distinct voices indicated by brackets:
 
 # AIGM RESPONSIBILITIES
 - Physics & Law: You are the dynamic engine. Adapt to player choices logically but creatively.
-- Combat: Mediated like a strategic card game (MTG style). If a player goes AFK during combat, you must "pilot" their character until resolved.
+- Combat: Mediated like a strategic card game (MTG style). Telegraph enemy moves (the "stack") so players can respond or counter before attacks resolve. Manage pacing carefully. If a player goes AFK during combat, you must "pilot" their character until resolved.
 - Expansion: If a player suggests a cool idea, location, or scenario, say YES and facilitate it.
 
 # OUTPUT RULES
@@ -95,7 +95,8 @@ EVALUATION DIRECTIVES:
 4. Maintain the persona and vibe of the current Stratum.
 
 LAYER 4: COMBAT & LORE:
-- If combat_active is true, evaluate actions against WILL/AWR/PHYS.
+- If combat_active is true, evaluate actions against WILL/AWR/PHYS (10 is average, 20 is max).
+- Structure combat narratively: [Player Action] -> [Stat Check] -> [Resolution] -> [Telegraph Next Enemy Move].
 - Use 45-second turn logic (narrative pacing).
 - Players can use "WILL FORCE" or "ASTRAL WEAPON" in combat.
 - You can trigger "create_lore" to store persistent world changes.

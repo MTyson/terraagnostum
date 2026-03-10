@@ -61,36 +61,59 @@
                 <div id="log" class="max-w-full break-words text-sm"></div>
             </div>
 
-            <!-- THE ARCHIVE BUFFER (Dossier Takeover) -->
-            <div id="dossier-buffer" class="hidden flex-grow overflow-y-auto p-4 bg-black/40 min-h-0 flex-col items-center">
-                <!-- Full Portrait -->
-                <div class="w-full max-w-md mb-4 border border-[#1a3a1a] relative group bg-black flex items-center justify-center overflow-hidden" style="aspect-ratio: 3/4;">
-                    <img id="dossier-img" src="https://placehold.co/400x600/1a1a1a/4ade80?text=NO+SIGNAL" class="w-full h-full object-contain transition-all duration-1000">
-                    <div class="absolute bottom-0 left-0 w-full bg-black/60 p-1 text-[10px] text-green-500">
-                        STRATUM ALIGNMENT: <span id="dossier-stratum">UNKNOWN</span>
-                    </div>
+            <!-- COMBAT OVERLAY (Theater of Conflict) -->
+            <div id="combat-overlay" class="hidden flex-grow overflow-hidden bg-black/95 flex-col">
+                <!-- Round Timer -->
+                <div class="w-full h-1 bg-gray-900 overflow-hidden flex-shrink-0">
+                    <div id="combat-timer-bar" class="h-full bg-amber-500 w-full origin-left"></div>
                 </div>
 
-                <!-- ASCII Stat bars and Biography -->
-                <div id="dossier-stats" class="w-full max-w-md text-green-400 font-mono text-sm mb-4"></div>
+                <div class="flex-grow flex flex-col p-4 gap-2 overflow-hidden">
+                    <!-- Top Section (The Clash) -->
+                    <div id="combat-clash" class="flex flex-row justify-between gap-2 flex-shrink-0">
+                         <!-- Player Card (Compact) -->
+                         <div id="combat-player" class="combat-card player-card flex flex-row gap-2 p-2 border border-blue-900/50 bg-blue-950/5 flex-1 min-w-0">
+                            <div class="portrait-container w-16 h-16 sm:w-20 sm:h-20 border border-blue-900/30 overflow-hidden flex-shrink-0 bg-black">
+                                <img id="player-portrait" src="" class="w-full h-full object-cover opacity-80">
+                                <div id="player-portrait-fallback" class="hidden w-full h-full items-center justify-center text-[8px] text-blue-900 text-center p-1">[ NO VISUAL DATA ]</div>
+                            </div>
+                            <div class="flex-grow min-w-0 flex flex-col justify-center">
+                                <div id="player-name" class="text-blue-400 font-bold uppercase tracking-widest text-[10px] sm:text-xs truncate">Vessel</div>
+                                <div id="player-stats" class="mt-1 space-y-1">
+                                    <!-- Bars -->
+                                </div>
+                            </div>
+                         </div>
 
-                <button id="btn-jack-out" class="mt-auto border border-amber-500 text-amber-500 px-4 py-2 hover:bg-amber-900/50 transition-colors">[ ESCAPE TO COMMAND ]</button>
+                         <!-- Opponent Card (Compact) -->
+                         <div id="combat-opponent" class="combat-card opponent-card flex flex-row-reverse gap-2 p-2 border border-amber-900/50 bg-amber-950/5 flex-1 min-w-0">
+                            <div class="portrait-container w-16 h-16 sm:w-20 sm:h-20 border border-amber-900/30 overflow-hidden flex-shrink-0 bg-black">
+                                <img id="opponent-portrait" src="" class="w-full h-full object-cover opacity-80">
+                                <div id="opponent-portrait-fallback" class="hidden w-full h-full items-center justify-center text-[8px] text-amber-900 text-center p-1">[ NO VISUAL DATA ]</div>
+                            </div>
+                            <div class="flex-grow min-w-0 flex flex-col justify-center text-right">
+                                <div id="opponent-name" class="text-amber-500 font-bold uppercase tracking-widest text-[10px] sm:text-xs truncate">Opponent</div>
+                                <div id="opponent-stats" class="mt-1 space-y-1">
+                                    <!-- Bars -->
+                                </div>
+                            </div>
+                         </div>
+                    </div>
+
+                    <!-- Middle Section (Resolution Log) -->
+                    <div id="combat-log" class="flex-grow overflow-y-auto border-y border-green-900/20 py-2 text-xs sm:text-sm font-mono text-gray-400 leading-relaxed">
+                        <div class="text-green-800 animate-pulse">[ AWAITING WEAVE RESOLUTION... ]</div>
+                    </div>
+
+                    <!-- Bottom Section (Ability Hand) -->
+                    <div id="ability-hand" class="flex-shrink-0 py-2">
+                        <div id="ability-chips" class="flex flex-wrap justify-center gap-2">
+                            <!-- Ability buttons -->
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- THE COMBAT OVERLAY (The Theater) -->
-            <div id="combat-overlay" class="hidden flex-grow overflow-y-auto p-4 bg-black/40 min-h-0 flex-col gap-4">
-                <!-- Opponent Card (Top) -->
-                <div id="combat-opponent" class="w-full border border-amber-500 p-2 bg-black/80 backdrop-blur-sm"></div>
-
-                <!-- Narrative Resolution (Center) -->
-                <div id="combat-log" class="flex-grow border-y border-[#1a3a1a] p-2 overflow-y-auto text-sm"></div>
-
-                <!-- Player Card (Bottom) -->
-                <div id="combat-player" class="w-full border border-blue-500 p-2 bg-black/80 backdrop-blur-sm"></div>
-
-                <!-- Turn Timer -->
-                <div id="combat-timer-bar" class="w-full h-1 bg-[#1a3a1a]"><div class="h-full bg-amber-500 w-full transition-all duration-1000"></div></div>
-            </div>
 
             <!-- BOTTOM: INTERACTION HUB (Fixed height container) -->
         <div id="input-container" class="p-4 border-t border-[#1a3a1a] bg-black/80 flex-shrink-0 flex flex-col gap-3">
@@ -138,7 +161,7 @@
         </div>
     </div>
 
-    <!-- 2. SIDEBAR -->
+    <!-- 3. SIDEBAR -->
     <div id="right-sidebar" class="hidden lg:flex flex-col w-96 flex-shrink-0 p-4 overflow-y-auto h-full border-l border-[#1a3a1a] bg-black/90">
         <!-- MOBILE CLOSE BUTTON -->
         <div class="lg:hidden flex justify-end mb-2">
@@ -282,6 +305,34 @@
                     <div id="forge-manifest-loading" class="hidden absolute inset-0 bg-black/80 flex items-center justify-center text-amber-500">WEAVING...</div>
                  </div>
                  <button id="btn-manifest-vessel" disabled class="w-full mt-4 py-2 border border-gray-800 text-gray-800 uppercase">[ MANIFEST ]</button>
+             </div>
+        </div>
+    </div>
+
+    <!-- DOSSIER MODAL -->
+    <div id="dossier-modal" class="terminal-window hidden !max-w-2xl">
+        <div class="terminal-header flex justify-between px-2 py-1 bg-green-900/30 border-b border-green-500 text-[10px] tracking-[3px] uppercase">
+            <span>BIOMETRIC_DOSSIER_v3.0.1</span>
+            <button id="close-dossier-modal" class="hover:text-red-500 cursor-pointer">[ ESC ]</button>
+        </div>
+        <div class="p-4 flex flex-col md:flex-row gap-6 min-h-[400px] bg-black">
+             <div class="w-64 flex-shrink-0">
+                 <div class="w-full aspect-[3/4] border border-green-900 bg-black flex items-center justify-center relative overflow-hidden">
+                    <img id="dossier-img" class="absolute inset-0 w-full h-full object-contain">
+                    <div id="dossier-img-fallback" class="hidden absolute inset-0 bg-gray-900 flex items-center justify-center text-[10px] text-gray-700">[ NO VISUAL DATA ]</div>
+                 </div>
+                 <div class="mt-4 p-2 border border-green-900/30 text-[10px]">
+                    <div class="text-green-800 uppercase mb-1">Stratum_Anchor</div>
+                    <div id="dossier-stratum" class="text-green-400 font-bold">---</div>
+                 </div>
+             </div>
+             <div class="flex-1 flex flex-col">
+                 <div id="dossier-stats" class="space-y-4 text-green-500">
+                     <!-- Populated by JS -->
+                 </div>
+                 <div class="mt-auto pt-4 border-t border-green-900/20">
+                     <button id="btn-close-dossier" class="w-full py-2 border border-green-900 text-green-500 hover:bg-green-950/20 uppercase text-xs">[ CLOSE DOSSIER ]</button>
+                 </div>
              </div>
         </div>
     </div>

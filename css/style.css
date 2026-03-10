@@ -56,6 +56,81 @@ body::before {
     animation: timer-shrink 45s linear forwards;
 }
 
+/* --- COMBAT OVERLAY STYLES --- */
+.combat-card {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.opponent-card {
+    border-left: 4px solid var(--term-amber) !important;
+    box-shadow: inset 5px 0 15px rgba(255, 176, 0, 0.05);
+}
+
+.player-card {
+    border-left: 4px solid var(--crayola-blue) !important;
+    box-shadow: inset 5px 0 15px rgba(59, 130, 246, 0.05);
+}
+
+.active-intent-box {
+    background: rgba(255, 176, 0, 0.02);
+    animation: intent-pulse 2s infinite ease-in-out;
+}
+
+@keyframes intent-pulse {
+    0% { border-color: rgba(255, 176, 0, 0.2); background: rgba(255, 176, 0, 0.02); }
+    50% { border-color: rgba(255, 176, 0, 0.6); background: rgba(255, 176, 0, 0.08); }
+    100% { border-color: rgba(255, 176, 0, 0.2); background: rgba(255, 176, 0, 0.02); }
+}
+
+.ability-chip {
+    border: 1px solid var(--crayola-blue);
+    color: var(--crayola-blue);
+    background: rgba(59, 130, 246, 0.05);
+    font-size: 9px;
+    padding: 3px 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: 0.1s;
+}
+
+.ability-chip:hover {
+    background: var(--crayola-blue);
+    color: black;
+    box-shadow: 0 0 10px var(--crayola-blue);
+}
+
+.combat-stat-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 9px;
+}
+
+.combat-stat-label {
+    width: 45px;
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.combat-stat-bar-bg {
+    flex-grow: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.combat-stat-bar-fill {
+    height: 100%;
+    transition: width 0.5s ease-out;
+    box-shadow: 0 0 5px currentColor;
+}
+
 /* --- FLEX DENSITY --- */
 #header-row, #visuals, #input-container, #footer-hud {
     flex-shrink: 0;
@@ -211,6 +286,11 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
     100% { transform: scale(1); opacity: 0.9; }
 }
 
+.npc-thumbnail-mini[data-stratum="mundane"] { border-color: var(--term-amber); }
+.npc-thumbnail-mini[data-stratum="astral"] { border-color: var(--gm-purple); }
+.npc-thumbnail-mini[data-stratum="technate"] { border-color: var(--crayola-blue); }
+.npc-thumbnail-mini[data-stratum="faen"] { border-color: var(--term-green); }
+
 #map-canvas {
     width: 100%;
     height: 100%;
@@ -331,6 +411,11 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
     50% { transform: scale(1.05); opacity: 1; }
     100% { transform: scale(1); opacity: 0.9; }
 }
+
+.npc-thumbnail-mini[data-stratum="mundane"] { border-color: var(--term-amber); }
+.npc-thumbnail-mini[data-stratum="astral"] { border-color: var(--gm-purple); }
+.npc-thumbnail-mini[data-stratum="technate"] { border-color: var(--crayola-blue); }
+.npc-thumbnail-mini[data-stratum="faen"] { border-color: var(--term-green); }
 
 #map-canvas {
     width: 100%;

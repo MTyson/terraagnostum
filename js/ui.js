@@ -51,10 +51,10 @@ export function initHUDWidgets() {
         'compass-w': 'w'
     };
 
-    const jackOutBtn = document.getElementById('btn-jack-out');
-    if (jackOutBtn) {
-        jackOutBtn.onclick = () => toggleDossierBuffer(false);
-    }
+    const closeDossierBtn = document.getElementById('close-dossier-modal');
+    const closeDossierBtn2 = document.getElementById('btn-close-dossier');
+    if (closeDossierBtn) closeDossierBtn.onclick = () => toggleDossierBuffer(false);
+    if (closeDossierBtn2) closeDossierBtn2.onclick = () => toggleDossierBuffer(false);
 
     Object.entries(compassButtons).forEach(([id, dir]) => {
         const btn = document.getElementById(id);
@@ -371,9 +371,13 @@ export function updateRoomEntitiesUI(npcs) {
     npcs.forEach((npc, index) => {
         const stats = npc.stats || { WILL: '??', AWR: '??', PHYS: '??' };
             
+        const stratum = npc.stratum || 'MUNDANE';
         const card = document.createElement('div');
         card.className = "flex justify-between items-center p-1 border border-[#1a3a1a] bg-black/40 cursor-pointer hover:border-blue-500 transition-colors";
         card.innerHTML = `
+            <div class="w-8 h-8 flex-shrink-0 mr-2 border border-[#1a3a1a] bg-black overflow-hidden npc-thumbnail-mini" data-stratum="${stratum.toLowerCase()}">
+                ${npc.image ? `<img src="${npc.image}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-[6px] text-blue-900">[?]</div>`}
+            </div>
             <div class="flex-grow min-w-0 pointer-events-none">
                 <div class="text-blue-400 font-bold uppercase truncate">${npc.name}</div>
             </div>
@@ -441,6 +445,18 @@ export function addLog(text, color = 'var(--term-green)') {
     
     const output = document.getElementById('output');
     if (output) output.scrollTop = output.scrollHeight;
+
+    // Route to combat log if active
+    const combatOverlay = document.getElementById('combat-overlay');
+    const combatLog = document.getElementById('combat-log');
+    if (combatOverlay && !combatOverlay.classList.contains('hidden') && combatLog) {
+        const pCombat = document.createElement('div');
+        pCombat.style.color = color;
+        pCombat.className = 'mb-1';
+        pCombat.innerHTML = `> ${text.replace(/\n/g, '<br>')}`;
+        combatLog.appendChild(pCombat);
+        combatLog.scrollTop = combatLog.scrollHeight;
+    }
 }
 
 export function renderContextualCommands(commands) {
@@ -594,22 +610,35 @@ export function toggleMapModal() {
 }
 
 export function toggleDossierBuffer(show, data = null) {
-    const output = document.getElementById('output');
-    const buffer = document.getElementById('dossier-buffer');
-    if (!output || !buffer) return;
+    const modal = document.getElementById('dossier-modal');
+    if (!modal) return;
 
     if (show) {
         const displayData = data || stateManager.getState().activeAvatar;
         if (!displayData) return;
 
-        output.classList.add('hidden');
-        buffer.classList.remove('hidden');
-        buffer.classList.add('flex');
+        modal.classList.remove('hidden');
 
         // Populate Dossier
         const imgElement = document.getElementById('dossier-img');
-        if (imgElement && displayData.image) {
-            imgElement.src = displayData.image;
+        const imgFallback = document.getElementById('dossier-img-fallback');
+        if (imgElement && imgFallback) {
+            if (displayData.image) {
+                imgElement.src = displayData.image;
+                imgElement.classList.remove('hidden');
+                imgFallback.classList.add('hidden');
+            } else {
+                imgElement.classList.add('hidden');
+                imgFallback.classList.remove('hidden');
+                imgFallback.classList.add('flex');
+                
+                // Special stylized fallback for Shadow/Unknown
+                if (displayData.name.toLowerCase().includes('shadow') || displayData.name.toLowerCase().includes('unknown')) {
+                    imgFallback.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-purple-900 to-black border border-purple-500 flex items-center justify-center text-[8px] text-purple-300 text-center p-1 uppercase">SHADOW<br>ENTITY</div>`;
+                } else {
+                    imgFallback.innerHTML = `[ NO VISUAL DATA ]`;
+                }
+            }
         }
 
         const stratumElement = document.getElementById('dossier-stratum');
@@ -634,9 +663,9 @@ export function toggleDossierBuffer(show, data = null) {
                 <div class="mb-4">
                     <div class="text-amber-500 font-bold text-lg mb-1">${displayData.name.toUpperCase()}</div>
                     <div class="text-gray-500 text-xs italic mb-2">${displayData.archetype || 'VESSEL'}</div>
-                    <div class="text-gray-400 leading-relaxed">${displayData.description || 'No biometric history on file.'}</div>
+                    <div class="text-gray-400 leading-relaxed text-sm">${displayData.description || 'No biometric history on file.'}</div>
                 </div>
-                <div class="space-y-2 border-t border-green-900 pt-4 mb-4">
+                <div class="space-y-2 border-t border-green-900 pt-4 mb-4 font-mono text-xs">
                     <div class="flex justify-between"><span>WILLPOWER</span> <span>${willBar}</span></div>
                     <div class="flex justify-between"><span>PHYSIQUE</span>  <span>${physBar}</span></div>
                     <div class="flex justify-between"><span>AWARENESS</span> <span>[${'|'.repeat(displayData.stats?.AWR || 0)}${' '.repeat(20 - (displayData.stats?.AWR || 0))}] ${displayData.stats?.AWR || 0}/20</span></div>
@@ -650,15 +679,15 @@ export function toggleDossierBuffer(show, data = null) {
             `;
         }
     } else {
-        buffer.classList.add('hidden');
-        buffer.classList.remove('flex');
-        output.classList.remove('hidden');
+        modal.classList.add('hidden');
     }
 }
 
 export function toggleCombatUI(active, opponentData = null) {
     const output = document.getElementById('output');
     const overlay = document.getElementById('combat-overlay');
+    const timerBar = document.getElementById('combat-timer-bar');
+    const visualsEl = document.getElementById('visuals');
     if (!output || !overlay) return;
 
     if (active && opponentData) {
@@ -666,46 +695,158 @@ export function toggleCombatUI(active, opponentData = null) {
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
 
-        // Populate Combat UI
-        const opponentArea = document.getElementById('combat-opponent');
-        const playerArea = document.getElementById('combat-player');
+        // Shrink visuals during combat
+        if (visualsEl) {
+            visualsEl.classList.add('h-[10vh]', 'sm:h-[20%]');
+            visualsEl.classList.remove('h-[25vh]', 'sm:h-[45%]', 'max-h-[250px]');
+        }
+
+        // Reset and start timer animation
+        if (timerBar) {
+            timerBar.classList.remove('timer-active');
+            void timerBar.offsetWidth; // Trigger reflow
+            timerBar.classList.add('timer-active');
+        }
+
         const { activeAvatar } = stateManager.getState();
 
-        if (opponentArea) {
-            const oppWill = opponentData.will || opponentData.stats?.WILL || 10;
-            const maxWill = opponentData.stats?.WILL || 10;
-            opponentArea.innerHTML = `
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-amber-500 font-bold">${opponentData.name.toUpperCase()}</span>
-                    <span class="text-xs text-amber-900">${opponentData.archetype || 'ENTITY'}</span>
-                </div>
-                <div class="text-[10px] font-mono text-amber-700">
-                    WILL: ${generateAsciiBar(oppWill, maxWill, 15)}
-                </div>
+        // 1. POPULATE OPPONENT CARD
+        const oppPortrait = document.getElementById('opponent-portrait');
+        const oppFallback = document.getElementById('opponent-portrait-fallback');
+        const oppName = document.getElementById('opponent-name');
+        const oppStats = document.getElementById('opponent-stats');
+        
+        if (oppPortrait && oppFallback) {
+            if (opponentData.image) {
+                oppPortrait.src = opponentData.image;
+                oppPortrait.classList.remove('hidden');
+                oppFallback.classList.add('hidden');
+            } else {
+                oppPortrait.classList.add('hidden');
+                oppFallback.classList.remove('hidden');
+                oppFallback.classList.add('flex');
+                // Stylized placeholder for missing image
+                oppFallback.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-purple-900 to-black border border-purple-500 flex items-center justify-center text-[8px] text-purple-300 text-center p-1 uppercase">SHADOW<br>ENTITY</div>`;
+            }
+        }
+
+        if (oppName) oppName.innerText = opponentData.name.toUpperCase();
+        
+        if (oppStats) {
+            const currentConsc = opponentData.consc !== undefined ? opponentData.consc : 10;
+            const maxConsc = opponentData.stats?.CONSC || 10;
+            const currentPhys = opponentData.hp !== undefined ? opponentData.hp : 10;
+            const maxPhys = opponentData.stats?.PHYS || 10;
+
+            oppStats.innerHTML = `
+                ${renderStatBarHTML('WILL', currentConsc, maxConsc, 'var(--term-amber)')}
+                ${renderStatBarHTML('PHYS', currentPhys, maxPhys, 'var(--term-red)')}
             `;
         }
 
-        if (playerArea && activeAvatar) {
-            const pWill = activeAvatar.will || activeAvatar.stats.WILL;
-            const maxWill = activeAvatar.stats.WILL;
-            playerArea.innerHTML = `
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-blue-500 font-bold">${activeAvatar.name.toUpperCase()}</span>
-                    <span class="text-xs text-blue-900">VESSEL</span>
-                </div>
-                <div class="text-[10px] font-mono text-blue-700">
-                    WILL: ${generateAsciiBar(pWill, maxWill, 15)}
-                </div>
-            `;
+        // 2. POPULATE PLAYER CARD
+        const playerPortrait = document.getElementById('player-portrait');
+        const playerFallback = document.getElementById('player-portrait-fallback');
+        const playerName = document.getElementById('player-name');
+        const playerStats = document.getElementById('player-stats');
+        const abilityContainer = document.getElementById('ability-chips');
+
+        if (activeAvatar) {
+            if (playerPortrait && playerFallback) {
+                if (activeAvatar.image) {
+                    playerPortrait.src = activeAvatar.image;
+                    playerPortrait.classList.remove('hidden');
+                    playerFallback.classList.add('hidden');
+                } else {
+                    playerPortrait.classList.add('hidden');
+                    playerFallback.classList.remove('hidden');
+                    playerFallback.classList.add('flex');
+                }
+            }
+
+            if (playerName) playerName.innerText = activeAvatar.name.toUpperCase();
+
+            if (playerStats) {
+                const curWill = activeAvatar.will !== undefined ? activeAvatar.will : activeAvatar.stats?.WILL || 10;
+                const maxWill = activeAvatar.stats?.WILL || 10;
+                const curPhys = activeAvatar.hp !== undefined ? activeAvatar.hp : activeAvatar.stats?.PHYS || 10;
+                const maxPhys = activeAvatar.stats?.PHYS || 10;
+
+                playerStats.innerHTML = `
+                    ${renderStatBarHTML('WILL', curWill, maxWill, 'var(--gm-purple)')}
+                    ${renderStatBarHTML('PHYS', curPhys, maxPhys, 'var(--term-green)')}
+                `;
+            }
+
+            if (abilityContainer) {
+                renderAbilityChips(abilityContainer);
+            }
         }
     } else {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
-        // Only show output if dossier is not active
-        if (document.getElementById('dossier-buffer').classList.contains('hidden')) {
-            output.classList.remove('hidden');
+        if (timerBar) timerBar.classList.remove('timer-active');
+        
+        // Restore original visuals height
+        if (visualsEl) {
+            visualsEl.classList.remove('h-[10vh]', 'sm:h-[20%]');
+            visualsEl.classList.add('h-[25vh]', 'sm:h-[45%]', 'max-h-[250px]');
         }
+
+        output.classList.remove('hidden');
     }
+}
+
+/**
+ * Renders a blocky HTML stat bar.
+ */
+function renderStatBarHTML(label, current, max, color) {
+    const percent = Math.max(0, Math.min(100, (current / max) * 100));
+    return `
+        <div class="combat-stat-row">
+            <div class="combat-stat-label">${label}</div>
+            <div class="combat-stat-bar-bg">
+                <div class="combat-stat-bar-fill" style="width: ${percent}%; background-color: ${color}; color: ${color};"></div>
+            </div>
+            <div class="text-[8px] text-gray-500 w-8 text-right">${current}/${max}</div>
+        </div>
+    `;
+}
+
+/**
+ * Renders interactive ability chips.
+ */
+function renderAbilityChips(container) {
+    container.innerHTML = '';
+    const abilities = [
+        { name: 'Force Weave', stat: 'WILL', cmd: 'Force Weave' },
+        { name: 'Kinetic Strike', stat: 'PHYS', cmd: 'Kinetic Strike' },
+        { name: 'Defensive Glitch', stat: 'AWR', cmd: 'Defensive Glitch' }
+    ];
+
+    abilities.forEach(ability => {
+        const btn = document.createElement('button');
+        btn.className = 'ability-chip';
+        btn.innerHTML = `${ability.name} <span class="opacity-50 text-[7px]">(${ability.stat})</span>`;
+        btn.onclick = () => {
+            const input = document.getElementById('cmd-input');
+            if (input) {
+                input.value = ability.cmd;
+                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+                // Immediate feedback in the combat log
+                const combatLog = document.getElementById('combat-log');
+                if (combatLog) {
+                    const echo = document.createElement('div');
+                    echo.className = 'text-blue-400 mb-1';
+                    echo.innerHTML = `> [INTENT LOCKED]: ${ability.name.toUpperCase()}`;
+                    combatLog.appendChild(echo);
+                    combatLog.scrollTop = combatLog.scrollHeight;
+                }
+            }
+        };
+        container.appendChild(btn);
+    });
 }
 
 export function toggleStratumModal(currentStratum) {
