@@ -175,6 +175,42 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
 }
 
 /* --- MAP CANVAS --- */
+/* --- NPC THUMBNAILS --- */
+.npc-thumbnail-token {
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    position: relative;
+    overflow: hidden;
+    animation: npc-pulse 4s ease-in-out infinite;
+}
+
+.npc-thumbnail-token[data-stratum="mundane"] {
+    border-color: var(--term-amber);
+}
+
+.npc-thumbnail-token[data-stratum="astral"] {
+    border-color: var(--gm-purple);
+}
+
+.npc-thumbnail-token[data-stratum="technate"] {
+    border-color: var(--crayola-blue);
+}
+
+.npc-thumbnail-token[data-stratum="faen"] {
+    border-color: var(--term-green);
+}
+
+.npc-thumbnail-token:hover {
+    box-shadow: 0 0 15px currentColor;
+    z-index: 50;
+    animation-play-state: paused;
+}
+
+@keyframes npc-pulse {
+    0% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 0.9; }
+}
+
 #map-canvas {
     width: 100%;
     height: 100%;
@@ -258,6 +294,42 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
 .loading-dots:after {
     content: '.';
     animation: dots 1.5s steps(5, end) infinite;
+}
+
+/* --- NPC THUMBNAILS --- */
+.npc-thumbnail-token {
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    position: relative;
+    overflow: hidden;
+    animation: npc-pulse 4s ease-in-out infinite;
+}
+
+.npc-thumbnail-token[data-stratum="mundane"] {
+    border-color: var(--term-amber);
+}
+
+.npc-thumbnail-token[data-stratum="astral"] {
+    border-color: var(--gm-purple);
+}
+
+.npc-thumbnail-token[data-stratum="technate"] {
+    border-color: var(--crayola-blue);
+}
+
+.npc-thumbnail-token[data-stratum="faen"] {
+    border-color: var(--term-green);
+}
+
+.npc-thumbnail-token:hover {
+    box-shadow: 0 0 15px currentColor;
+    z-index: 50;
+    animation-play-state: paused;
+}
+
+@keyframes npc-pulse {
+    0% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 0.9; }
 }
 
 #map-canvas {

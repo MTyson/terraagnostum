@@ -27,6 +27,7 @@ stateManager.subscribe((state) => {
     const room = activeMap[localPlayer.currentRoom];
     updateRoomItemsUI(room?.items);
     updateRoomEntitiesUI(room?.npcs);
+    updateRoomNPCPreviews(room?.npcs);
     updateCompassUI(room);
     renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
     updateContextualSuggestions(state.suggestions);
@@ -393,6 +394,39 @@ export function updateRoomEntitiesUI(npcs) {
         };
         
         container.appendChild(card);
+    });
+}
+
+export function updateRoomNPCPreviews(npcs) {
+    const container = document.getElementById('room-npc-overlays');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (!npcs || npcs.length === 0) return;
+
+    npcs.forEach(npc => {
+        if (!npc.image) return;
+        
+        const thumb = document.createElement('div');
+        thumb.className = `npc-thumbnail-token w-12 h-12 rounded-full border-2 bg-cover bg-center pointer-events-auto cursor-pointer transition-all hover:scale-110`;
+        thumb.style.backgroundImage = `url('${npc.image}')`;
+        thumb.title = npc.name;
+        
+        // Determine border color based on stratum if npc has one, or default to current
+        const stratum = npc.stratum || stateManager.getState().localPlayer.stratum || 'MUNDANE';
+        thumb.setAttribute('data-stratum', stratum.toLowerCase());
+
+        thumb.onclick = (e) => {
+            e.stopPropagation();
+            // Map NPC data to Forge schema for dossier
+            const detailData = {
+                ...npc,
+                description: npc.behavior || npc.visualPrompt || npc.visual_prompt || "No additional data available."
+            };
+            toggleDossierBuffer(true, detailData);
+        };
+        
+        container.appendChild(thumb);
     });
 }
 
