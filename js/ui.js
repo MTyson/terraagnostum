@@ -623,16 +623,29 @@ export function toggleDossierBuffer(show, data = null) {
             const willBar = generateAsciiBar(displayData.will || displayData.stats?.WILL || 0, displayData.stats?.WILL || 10, 20);
             const physBar = generateAsciiBar(displayData.hp || displayData.stats?.PHYS || 0, displayData.stats?.PHYS || 10, 20);
             
+            const inventoryHtml = displayData.inventory && displayData.inventory.length > 0 
+                ? displayData.inventory.map(item => `
+                    <div class="border border-[#1a3a1a] p-1 bg-black/40 border-l-2 border-l-green-900 mb-1">
+                        <span class="text-gray-400 font-bold block truncate text-xs">${item.name}</span>
+                    </div>`).join('')
+                : '<div class="text-gray-600 italic text-xs">[ NO ITEMS ]</div>';
+
             statsArea.innerHTML = `
                 <div class="mb-4">
                     <div class="text-amber-500 font-bold text-lg mb-1">${displayData.name.toUpperCase()}</div>
                     <div class="text-gray-500 text-xs italic mb-2">${displayData.archetype || 'VESSEL'}</div>
                     <div class="text-gray-400 leading-relaxed">${displayData.description || 'No biometric history on file.'}</div>
                 </div>
-                <div class="space-y-2 border-t border-green-900 pt-4">
+                <div class="space-y-2 border-t border-green-900 pt-4 mb-4">
                     <div class="flex justify-between"><span>WILLPOWER</span> <span>${willBar}</span></div>
                     <div class="flex justify-between"><span>PHYSIQUE</span>  <span>${physBar}</span></div>
                     <div class="flex justify-between"><span>AWARENESS</span> <span>[${'|'.repeat(displayData.stats?.AWR || 0)}${' '.repeat(20 - (displayData.stats?.AWR || 0))}] ${displayData.stats?.AWR || 0}/20</span></div>
+                </div>
+                <div class="border-t border-green-900 pt-4">
+                    <div class="text-[10px] text-green-500 font-bold mb-2 tracking-widest uppercase">Possessions</div>
+                    <div id="dossier-inventory-list">
+                        ${inventoryHtml}
+                    </div>
                 </div>
             `;
         }

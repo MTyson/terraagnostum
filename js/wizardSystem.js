@@ -172,6 +172,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 visual_prompt: currentVal,
                 image: finalImage,
                 stats: { WILL: 20, AWR: 20, PHYS: 20 },
+                inventory: [],
                 deceased: false, deployed: false, timestamp: Date.now()
             };
 
@@ -312,6 +313,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             visualPrompt: activeAvatar.visual_prompt || activeAvatar.visualPrompt || "A vacant shell.",
             image: activeAvatar.image || null,
             stats: activeAvatar.stats || { WILL: 20, AWR: 20, PHYS: 20 },
+            inventory: activeAvatar.inventory || [],
             behavior: currentVal
         };
         const npcs = [...(room.npcs || []), newNpc];
@@ -364,6 +366,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 archetype: wizardState.pendingData.archetype,
                 visualPrompt: currentVal,
                 image: npcImg,
+                inventory: [],
                 behavior: "Standing idle."
             };
             

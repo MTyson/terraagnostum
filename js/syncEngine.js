@@ -181,7 +181,7 @@ export async function savePlayerState() {
         const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
         const stateToSave = { 
             ...localPlayer, 
-            activeAvatarId: activeAvatar ? activeAvatar.id : null 
+            activeAvatarId: activeAvatar?.id || null 
         };
         await setDoc(stateRef, stateToSave, { merge: true });
     } catch (e) { console.error("SyncEngine: Failed to save player state:", e); }
@@ -361,7 +361,7 @@ export async function loadRoom(roomId, areaId = null) {
     const rawNpcs = [
         ...(sharedData.npcs || []),
         ...(areaData.npcs || [])
-    ];
+    ].map(npc => ({ ...npc, inventory: npc.inventory || [] }));
 
     return {
         ...blueprint,
@@ -369,8 +369,25 @@ export async function loadRoom(roomId, areaId = null) {
         ...areaData,
         // Ensure we combine items and npcs from all sources and deduplicate
         items: Array.from(new Map(rawItems.map(item => [item.id || item.name, item])).values()),
-        npcs: Array.from(new Map(rawNpcs.map(npc => [npc.id || npc.name, npc])).values())
+        npcs: Array.from(new Map(rawNpcs.map(npc => [npc.id || (npc.name + (npc.inventory?.length || 0)), npc])).values())
     };
+}
+
+/**
+ * Updates a specific NPC in a room.
+ */
+export async function updateNPCInRoom(roomId, npcId, updates) {
+    if (!auth.currentUser) return;
+    const { localPlayer } = stateManager.getState();
+    const room = await loadRoom(roomId);
+    if (!room.npcs) return;
+
+    const npcIndex = room.npcs.findIndex(n => n.id === npcId || n.name === npcId);
+    if (npcIndex === -1) return;
+
+    room.npcs[npcIndex] = { ...room.npcs[npcIndex], ...updates };
+
+    await updateRoom(roomId, { npcs: room.npcs });
 }
 
 /**
@@ -380,15 +397,18 @@ export async function spawnNPCInRoom(roomId, npcData) {
     if (!auth.currentUser) return;
     const { localPlayer } = stateManager.getState();
 
+    // Ensure inventory exists
+    const finalNpc = { ...npcData, inventory: npcData.inventory || [] };
+
     // We save to BOTH to ensure it's found regardless of loading method
     const sharedRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
     const areaRef = doc(db, 'artifacts', appId, 'public', 'data', 'areas', localPlayer.currentArea, 'rooms', roomId);
     
-    const p1 = setDoc(sharedRef, { npcs: arrayUnion(npcData) }, { merge: true });
-    const p2 = setDoc(areaRef, { npcs: arrayUnion(npcData) }, { merge: true });
+    const p1 = setDoc(sharedRef, { npcs: arrayUnion(finalNpc) }, { merge: true });
+    const p2 = setDoc(areaRef, { npcs: arrayUnion(finalNpc) }, { merge: true });
 
     await Promise.all([p1, p2]);
-    console.log(`[SYSTEM]: ${npcData.name} persisted to ${roomId} state.`);
+    console.log(`[SYSTEM]: ${finalNpc.name} persisted to ${roomId} state.`);
 }
 
 /**

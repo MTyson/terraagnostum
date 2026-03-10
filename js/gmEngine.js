@@ -212,8 +212,38 @@ export async function handleGMIntent(
         
         if (res.give_item) {
             const updatedLocalPlayer = stateManager.getState().localPlayer;
-            stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
-            if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
+            const target = res.give_item.target;
+            
+            if (target && target !== 'player') {
+                const activeMap = stateManager.getActiveMap();
+                const currentRoomData = activeMap[updatedLocalPlayer.currentRoom];
+                
+                // Find NPC in current room
+                const npc = currentRoomData.npcs?.find(n => 
+                    n.name.toLowerCase() === target.toLowerCase() || 
+                    n.id === target
+                );
+
+                if (npc) {
+                    if (!npc.inventory) npc.inventory = [];
+                    npc.inventory.push(res.give_item);
+                    
+                    // Update locally
+                    stateManager.updateMapNode(updatedLocalPlayer.currentRoom, { npcs: currentRoomData.npcs });
+                    
+                    // Persist to Firestore
+                    await syncEngine.updateNPCInRoom(updatedLocalPlayer.currentRoom, npc.id || npc.name, { inventory: npc.inventory });
+                    
+                    if (!isSilent) UI.addLog(`[SYSTEM]: ${npc.name} has received [${res.give_item.name}].`, "var(--term-amber)");
+                } else {
+                    // Fallback to player if target not found
+                    stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
+                    if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
+                }
+            } else {
+                stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
+                if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
+            }
             stateChanged = true;
         }
 

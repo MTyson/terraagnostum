@@ -1,10 +1,10 @@
 **Month 1: Frictionless Play & The Core Hook (Retention)**
 
-*   **The "Airlock" Onboarding:** Finalize the transition from the "Disembodied" state to the "Resonant" state. The mystery of starting as an "itinerate void" in the Schrödinger Closet creates a massive curiosity gap that will drive initial engagement. Push them through a quick CYOA to earn their first Meaning (BTC) and anchor their soul at the Tandem Terminal.
+*  ** !COMPLETED! The "Airlock" Onboarding:** Finalize the transition from the "Disembodied" state to the "Resonant" state. The mystery of starting as an "itinerate void" in the Schrödinger Closet creates a massive curiosity gap that will drive initial engagement. Push them through a quick CYOA to earn their first Meaning (BTC) and anchor their soul at the Tandem Terminal.
     
-*   **Mobile-First "Wanderer" UI:** Implement contextual Smart Chips and Somatic Navigation (like swiping to move or tapping exits). Casual players must be able to navigate the world, engage in combat, and experience the story in short bursts without being forced to type complex commands.
+*   ** !COMPLETED! Mobile-First "Wanderer" UI:** Implement contextual Smart Chips and Somatic Navigation (like swiping to move or tapping exits). Casual players must be able to navigate the world, engage in combat, and experience the story in short bursts without being forced to type complex commands.
     
-*   **The Great Map Split:** Execute Phase 1 of the World Architecture roadmap to separate the instanced safezones from the public shared world. Leveraging a local-first data architecture for the privateApartment data before routing it to the Firebase users/{uid}/state/private\_map will keep the initial experience lightning-fast while minimizing backend reads. Once they step out the front door, plunge them into the gritty, Deus Ex-style conspiracy thriller elements of the Mundane stratum.
+*   ** !COMPLETED! The Great Map Split:** Execute Phase 1 of the World Architecture roadmap to separate the instanced safezones from the public shared world. Leveraging a local-first data architecture for the privateApartment data before routing it to the Firebase users/{uid}/state/private\_map will keep the initial experience lightning-fast while minimizing backend reads. Once they step out the front door, plunge them into the gritty, Deus Ex-style conspiracy thriller elements of the Mundane stratum.
     
 
 **Month 2: The "Amn" Economy & Premium Tiers (Revenue)**
