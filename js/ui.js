@@ -560,14 +560,14 @@ export function toggleMapModal() {
     }
 }
 
-export function toggleDossierBuffer(show) {
+export function toggleDossierBuffer(show, data = null) {
     const output = document.getElementById('output');
     const buffer = document.getElementById('dossier-buffer');
     if (!output || !buffer) return;
 
     if (show) {
-        const { activeAvatar } = stateManager.getState();
-        if (!activeAvatar) return;
+        const displayData = data || stateManager.getState().activeAvatar;
+        if (!displayData) return;
 
         output.classList.add('hidden');
         buffer.classList.remove('hidden');
@@ -575,31 +575,31 @@ export function toggleDossierBuffer(show) {
 
         // Populate Dossier
         const imgElement = document.getElementById('dossier-img');
-        if (imgElement && activeAvatar.image) {
-            imgElement.src = activeAvatar.image;
+        if (imgElement && displayData.image) {
+            imgElement.src = displayData.image;
         }
 
         const stratumElement = document.getElementById('dossier-stratum');
         if (stratumElement) {
-            stratumElement.innerText = activeAvatar.stratum?.toUpperCase() || 'UNKNOWN';
+            stratumElement.innerText = displayData.stratum?.toUpperCase() || 'UNKNOWN';
         }
 
         const statsArea = document.getElementById('dossier-stats');
 
         if (statsArea) {
-            const willBar = generateAsciiBar(activeAvatar.will || activeAvatar.stats.WILL, activeAvatar.stats.WILL, 20);
-            const physBar = generateAsciiBar(activeAvatar.hp || activeAvatar.stats.PHYS, activeAvatar.stats.PHYS, 20);
+            const willBar = generateAsciiBar(displayData.will || displayData.stats?.WILL || 0, displayData.stats?.WILL || 10, 20);
+            const physBar = generateAsciiBar(displayData.hp || displayData.stats?.PHYS || 0, displayData.stats?.PHYS || 10, 20);
             
             statsArea.innerHTML = `
                 <div class="mb-4">
-                    <div class="text-amber-500 font-bold text-lg mb-1">${activeAvatar.name.toUpperCase()}</div>
-                    <div class="text-gray-500 text-xs italic mb-2">${activeAvatar.archetype || 'VESSEL'}</div>
-                    <div class="text-gray-400 leading-relaxed">${activeAvatar.description || 'No biometric history on file.'}</div>
+                    <div class="text-amber-500 font-bold text-lg mb-1">${displayData.name.toUpperCase()}</div>
+                    <div class="text-gray-500 text-xs italic mb-2">${displayData.archetype || 'VESSEL'}</div>
+                    <div class="text-gray-400 leading-relaxed">${displayData.description || 'No biometric history on file.'}</div>
                 </div>
                 <div class="space-y-2 border-t border-green-900 pt-4">
                     <div class="flex justify-between"><span>WILLPOWER</span> <span>${willBar}</span></div>
                     <div class="flex justify-between"><span>PHYSIQUE</span>  <span>${physBar}</span></div>
-                    <div class="flex justify-between"><span>AWARENESS</span> <span>[${'|'.repeat(activeAvatar.stats.AWR)}${' '.repeat(20 - activeAvatar.stats.AWR)}] ${activeAvatar.stats.AWR}/20</span></div>
+                    <div class="flex justify-between"><span>AWARENESS</span> <span>[${'|'.repeat(displayData.stats?.AWR || 0)}${' '.repeat(20 - (displayData.stats?.AWR || 0))}] ${displayData.stats?.AWR || 0}/20</span></div>
                 </div>
             `;
         }

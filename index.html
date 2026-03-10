@@ -251,15 +251,31 @@
                      </div>
                  </div>
                  <button id="btn-analyze-biometrics" class="py-2 bg-green-900/20 border border-green-500 text-green-400 uppercase">[ ANALYZE ]</button>
-                 <div id="forge-stats-readout" class="hidden text-xs">
-                     ARCHETYPE: <span id="forge-archetype">---</span><br>
-                     WILL: <span id="stat-will">00</span> AWR: <span id="stat-awr">00</span> PHYS: <span id="stat-phys">00</span>
+                 <div id="forge-stats-readout" class="hidden mt-auto pt-4 border-t border-green-900/20 space-y-3">
+                     <div class="flex justify-between items-center border-b border-green-900/30 pb-1">
+                         <span class="text-[9px] text-green-800 uppercase tracking-tighter">Vessel_Archetype</span>
+                         <span id="forge-archetype" class="text-xs text-green-400 font-bold uppercase">---</span>
+                     </div>
+                     <div class="grid grid-cols-3 gap-2">
+                         <div class="border border-green-900/40 p-2 bg-green-950/10 text-center">
+                             <div class="text-[8px] text-green-800 uppercase mb-1">WILL</div>
+                             <div id="stat-will" class="text-lg text-green-400 font-bold">00</div>
+                         </div>
+                         <div class="border border-green-900/40 p-2 bg-green-950/10 text-center">
+                             <div class="text-[8px] text-green-800 uppercase mb-1">AWR</div>
+                             <div id="stat-awr" class="text-lg text-green-400 font-bold">00</div>
+                         </div>
+                         <div class="border border-green-900/40 p-2 bg-green-950/10 text-center">
+                             <div class="text-[8px] text-green-800 uppercase mb-1">PHYS</div>
+                             <div id="stat-phys" class="text-lg text-green-400 font-bold">00</div>
+                         </div>
+                     </div>
                  </div>
              </div>
              <div class="w-64">
                  <div id="forge-image-display" class="w-full h-64 border border-green-900 bg-black flex items-center justify-center relative overflow-hidden">
                     <div id="forge-ascii-placeholder" class="text-xs text-green-900">[ AWAITING ]</div>
-                    <img id="forge-portrait-img" class="hidden absolute inset-0 w-full h-full object-cover">
+                    <img id="forge-portrait-img" class="hidden absolute inset-0 w-full h-full object-cover cursor-pointer">
                     <div id="forge-manifest-loading" class="hidden absolute inset-0 bg-black/80 flex items-center justify-center text-amber-500">WEAVING...</div>
                  </div>
                  <button id="btn-manifest-vessel" disabled class="w-full mt-4 py-2 border border-gray-800 text-gray-800 uppercase">[ MANIFEST ]</button>

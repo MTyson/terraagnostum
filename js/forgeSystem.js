@@ -106,18 +106,18 @@ async function analyzeBiometrics() {
     
     const archetypeEl = document.getElementById('forge-archetype');
     const oldArchetype = archetypeEl.innerText;
-    archetypeEl.innerText = "ANALYZING...";
+    archetypeEl.innerText = "CHECKING VITALS...";
     
-    UI.addLog("[SYSTEM]: Analyzing vessel biometrics...", "var(--term-amber)");
+    UI.addLog("[SYSTEM]: Checking vessel vitals...", "var(--term-amber)");
     const prompt = `Analyze this biometric seed: "${desc}". Determine stats for a character in the ${currentDraftStratum} stratum. Return JSON: {"WILL": int, "AWR": int, "PHYS": int, "archetype": "string"}`;
     
     const res = await callGemini(prompt, "You are a biometric scanner.");
     if (res) {
         currentDraftStats = res;
         archetypeEl.innerText = (res.archetype || "UNKNOWN").toUpperCase();
-        document.getElementById('stat-will').innerText = res.WILL || 10;
-        document.getElementById('stat-awr').innerText = res.AWR || 10;
-        document.getElementById('stat-phys').innerText = res.PHYS || 10;
+        document.getElementById('stat-will').innerText = (res.WILL || 10).toString().padStart(2, '0');
+        document.getElementById('stat-awr').innerText = (res.AWR || 10).toString().padStart(2, '0');
+        document.getElementById('stat-phys').innerText = (res.PHYS || 10).toString().padStart(2, '0');
         document.getElementById('forge-stats-readout').classList.remove('hidden');
         
         const manifestBtn = document.getElementById('btn-manifest-vessel');
@@ -125,7 +125,7 @@ async function analyzeBiometrics() {
         manifestBtn.classList.remove('border-gray-800', 'text-gray-800');
         manifestBtn.classList.add('border-amber-500', 'text-amber-500', 'animate-pulse');
         
-        UI.addLog("[SYSTEM]: Analysis complete. Stats synchronized.", "var(--term-green)");
+        UI.addLog("[SYSTEM]: Vitals verified. Stats synchronized.", "var(--term-green)");
     } else {
         archetypeEl.innerText = oldArchetype;
     }
@@ -166,4 +166,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-suggest-desc').onclick = suggestBackstory;
     document.getElementById('btn-analyze-biometrics').onclick = analyzeBiometrics;
     document.getElementById('btn-manifest-vessel').onclick = manifestVessel;
+    document.getElementById('forge-portrait-img').onclick = () => {
+        const src = document.getElementById('forge-portrait-img').src;
+        if (src) {
+            UI.toggleDossierBuffer(true, {
+                name: document.getElementById('forge-name').value || "Unknown Vessel",
+                stratum: currentDraftStratum,
+                archetype: document.getElementById('forge-archetype').innerText,
+                description: document.getElementById('forge-desc').value,
+                image: src,
+                stats: currentDraftStats || { WILL: 0, AWR: 0, PHYS: 0 }
+            });
+            document.getElementById('forge-modal').classList.add('hidden');
+        }
+    };
 });
