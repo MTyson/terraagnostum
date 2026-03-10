@@ -9,56 +9,30 @@
 </head>
 <body class="crt bg-black text-green-500 font-mono overflow-hidden">
 
-    <div class="flex h-screen w-screen overflow-hidden bg-black text-green-500 font-mono">
-        <!-- 0. MOBILE NAV RAIL (Visible on small screens) -->
-        <div id="mobile-nav-rail" class="flex lg:hidden flex-col w-10 border-r border-[#1a3a1a] bg-black items-center py-4 gap-6 z-50">
-            <button id="nav-map" class="nav-rail-btn" title="TOPOLOGY">M</button>
-            <button id="nav-bio" class="nav-rail-btn" title="BIOMETRICS">B</button>
-            <button id="nav-ent" class="nav-rail-btn" title="ENTITIES">E</button>
-            <button id="nav-inv" class="nav-rail-btn" title="INVENTORY">I</button>
-        </div>
-
+    <div class="flex h-full w-full overflow-hidden bg-black text-green-500 font-mono">
         <!-- 1. MAIN COCKPIT COLUMN -->
-        <div id="main-terminal-area" class="flex flex-col flex-grow min-w-0 border-r border-[#1a3a1a] h-full">
+        <div id="main-terminal-area" class="flex flex-col flex-grow w-full min-w-0 border-r border-[#1a3a1a] h-full">
             
-            <!-- TOP HUD: STRATA & SYNC (THE MISSING BAR) -->
-            <div id="header-row" class="flex justify-between items-center px-4 py-1 border-b border-[#1a3a1a] bg-black text-[9px] text-green-800 uppercase tracking-widest flex-shrink-0">
+            <!-- TOP HUD -->
+            <div id="header-row" class="flex justify-between items-center px-4 py-2 border-b border-[#1a3a1a] bg-black text-[9px] text-green-800 uppercase tracking-widest flex-shrink-0">
                 <div class="flex gap-4">
                     <div id="stratum-display" class="cursor-pointer hover:text-green-400">[ STRATA: <span id="stratum-name">MUNDANE</span> ]</div>
                     <div id="node-display">NODE: <span id="room-display">BEDROOM</span></div>
                 </div>
                 
-                <!-- VITALS HUD -->
-                <div id="vitals-hud" class="flex gap-6 items-center">
-                    <div class="flex items-center gap-2">
-                        <span>HP:</span>
-                        <div class="w-20 h-1.5 bg-green-950 border border-green-900">
-                            <div id="hp-bar" class="h-full bg-green-500 w-[100%] transition-all"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span>WILL:</span>
-                        <div class="w-20 h-1.5 bg-blue-950 border border-blue-900">
-                            <div id="will-bar" class="h-full bg-blue-500 w-[100%] transition-all"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span>AWR:</span>
-                        <div class="w-20 h-1.5 bg-amber-950 border border-amber-900">
-                            <div id="awr-bar" class="h-full bg-amber-500 w-[100%] transition-all"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex gap-4">
-                    <div id="sync-status">SYNC: READY</div>
-                    <div id="time-display">T+00:00:00</div>
+                <div class="flex gap-4 items-center">
+                    <div id="sync-status" class="hidden sm:block">SYNC: READY</div>
+                    <div id="time-display" class="hidden sm:block">T+00:00:00</div>
+                    <!-- NEW MOBILE TOGGLE -->
+                    <button id="mobile-menu-toggle" class="sm:hidden text-amber-500 border border-amber-900 px-2 py-1 hover:bg-amber-900/30">
+                        [ ≡ INTEL ]
+                    </button>
                 </div>
             </div>
 
             <!-- VISUALS -->
-            <div id="visuals" class="relative h-[35%] sm:h-[45%] border-b border-[#1a3a1a] bg-black overflow-hidden flex-shrink-0 group">
-                 <div class="visual-overlay z-30">Source Projection</div>
+            <div id="visuals" class="relative h-[25vh] sm:h-[45%] max-h-[250px] sm:max-h-none border-b border-[#1a3a1a] bg-black overflow-hidden flex-shrink-0 group">
+                 <div class="visual-overlay z-30 absolute top-2 left-2 text-[10px] text-green-900 uppercase tracking-widest pointer-events-none">Source Projection</div>
                  <canvas id="visual-canvas" class="absolute inset-0 w-full h-full object-cover opacity-70 z-10"></canvas>
                  <img id="visual-image" src="" alt="" class="hidden absolute inset-0 w-full h-full object-cover opacity-70 z-10">
                  
@@ -86,8 +60,13 @@
 
             <!-- THE ARCHIVE BUFFER (Dossier Takeover) -->
             <div id="dossier-buffer" class="hidden flex-grow overflow-y-auto p-4 bg-black/40 min-h-0 flex-col items-center">
-                <!-- Full-color, un-cropped portrait goes here -->
-                <div id="dossier-portrait-large" class="w-64 h-80 border border-green-900 mb-4 bg-black/60 overflow-hidden"></div>
+                <!-- Full Portrait -->
+                <div class="w-full aspect-[3/4] mb-4 border border-[#1a3a1a] relative overflow-hidden group">
+                    <img id="dossier-img" src="https://placehold.co/400x600/1a1a1a/4ade80?text=NO+SIGNAL" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000">
+                    <div class="absolute bottom-0 left-0 w-full bg-black/60 p-1 text-[10px] text-green-500">
+                        STRATUM ALIGNMENT: <span id="dossier-stratum">UNKNOWN</span>
+                    </div>
+                </div>
 
                 <!-- ASCII Stat bars and Biography -->
                 <div id="dossier-stats" class="w-full max-w-md text-green-400 font-mono text-sm mb-4"></div>
@@ -116,9 +95,9 @@
             <!-- Context chips stay at the top of the container -->
             <div id="context-bar" class="flex flex-wrap gap-2"></div>
             
-            <div class="flex flex-row items-center gap-4 w-full">
+            <div class="flex flex-col sm:flex-row items-start sm:items-end gap-3 w-full">
                 <!-- THE COMPASS -->
-                <div id="compass-widget" class="flex-none">
+                <div id="compass-widget" class="flex-none self-center sm:self-auto">
                     <div class="compass-grid">
                         <button id="compass-n" class="compass-btn" data-cmd="n">N</button>
                         <button id="compass-w" class="compass-btn" data-cmd="w">W</button>
@@ -128,10 +107,10 @@
                     </div>
                 </div>
 
-                <!-- COMMAND PROMPT (FIXED ALIGNMENT) -->
-                <div id="prompt-line" class="flex-1 flex flex-row items-center min-w-0 bg-[#050a05] border border-[#1a3a1a] p-2 rounded">
-                    <span id="prompt-prefix" class="flex-none font-mono whitespace-nowrap mr-2 text-green-700"></span>
-                    <input id="cmd-input" type="text" autocomplete="off" autofocus class="flex-1 min-w-0 bg-transparent outline-none border-none text-green-400 p-0 m-0 font-mono">
+                <!-- COMMAND PROMPT (FULL WIDTH ON MOBILE) -->
+                <div id="prompt-line" class="flex-1 w-full flex flex-row items-center min-w-0 bg-[#050a05] border border-[#1a3a1a] p-2 rounded mt-2 sm:mt-0">
+                    <span id="prompt-prefix" class="flex-none font-mono whitespace-nowrap mr-2 text-green-700 text-xs sm:text-sm"></span>
+                    <input id="cmd-input" type="text" autocomplete="off" autofocus class="flex-1 w-full min-w-0 bg-transparent outline-none border-none text-green-400 p-0 m-0 font-mono text-sm sm:text-base" placeholder="Enter command...">
                 </div>
             </div>
         </div>
@@ -147,7 +126,13 @@
     </div>
 
     <!-- 2. SIDEBAR -->
-        <div id="right-sidebar" class="hidden lg:flex flex-col w-96 flex-shrink-0 p-4 overflow-y-auto h-full border-l border-[#1a3a1a] bg-black/90">
+    <div id="right-sidebar" class="hidden lg:flex flex-col w-96 flex-shrink-0 p-4 overflow-y-auto h-full border-l border-[#1a3a1a] bg-black/90">
+        <!-- MOBILE CLOSE BUTTON -->
+        <div class="lg:hidden flex justify-end mb-2">
+            <button id="mobile-menu-close" class="text-red-500 border border-red-900 px-3 py-1 hover:bg-red-900/30">
+                [ X CLOSE ]
+            </button>
+        </div>
             <!-- BIOMETRICS (Dossier style) -->
             <div class="sidebar-section mb-6">
                 <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1 uppercase">System.Dossier</div>

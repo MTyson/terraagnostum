@@ -43,45 +43,6 @@ stateManager.subscribe((state) => {
 });
 
 export function initHUDWidgets() {
-    // Mobile Nav Rail Listeners
-    const railButtons = {
-        'nav-map': 'SYSTEM.TOPOLOGY',
-        'nav-bio': 'SYSTEM.BIOMETRICS',
-        'nav-ent': 'SYSTEM.ENTITIES',
-        'nav-inv': 'SYSTEM.INVENTORY'
-    };
-
-    const sidebar = document.getElementById('right-sidebar');
-
-    Object.keys(railButtons).forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                const wasActive = sidebar.classList.contains('active');
-                
-                // Toggle active class on sidebar
-                sidebar.classList.toggle('active');
-                
-                // If opening, scroll to the relevant section
-                if (!wasActive) {
-                    const sectionHeader = [...sidebar.querySelectorAll('.section-header')]
-                        .find(el => el.innerText.includes(railButtons[id]));
-                    if (sectionHeader) {
-                        sectionHeader.scrollIntoView({ behavior: 'smooth' });
-                    }
-                }
-            };
-        }
-    });
-
-    // Close sidebar when clicking main terminal area (on mobile)
-    document.getElementById('main-terminal-area').onclick = () => {
-        if (window.innerWidth < 1024) {
-            sidebar.classList.remove('active');
-        }
-    };
-
     // Compass Listeners
     const compassButtons = {
         'compass-n': 'n',
@@ -108,6 +69,31 @@ export function initHUDWidgets() {
         }
     });
 }
+
+export function initMobileDrawer() {
+    const sidebar = document.getElementById('right-sidebar');
+    const toggleBtn = document.getElementById('mobile-menu-toggle');
+    const closeBtn = document.getElementById('mobile-menu-close');
+
+    if (!sidebar) return;
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.add('open');
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+        });
+    }
+}
+
+// Call it on load
+document.addEventListener('DOMContentLoaded', () => {
+    initMobileDrawer();
+});
 
 export function updateCompassUI(room) {
     const directions = ['north', 'south', 'east', 'west'];
@@ -173,7 +159,9 @@ export function updateCommandPrompt(tier, roomShort, activeTerminal = false, wiz
         inputEl.placeholder = "Enter command...";
     }
 
-    const displayName = activeAvatar ? activeAvatar.name.toUpperCase() : tier;
+    // Truncate long names to save space on mobile (e.g. "ARCHITECT" -> "ARCHITECT", "LONG_AVATAR_NAME" -> "LONG_AVA...")
+    let displayName = activeAvatar ? activeAvatar.name.toUpperCase() : tier;
+    if (displayName.length > 10) displayName = displayName.substring(0, 8) + '..';
     let colorClass = "text-green-400";
     if (tier === 'VOID') colorClass = "text-purple-500";
     if (tier === 'GUEST') colorClass = "text-gray-500";
@@ -531,14 +519,17 @@ export function toggleDossierBuffer(show) {
         buffer.classList.add('flex');
 
         // Populate Dossier
-        const portraitLarge = document.getElementById('dossier-portrait-large');
-        const statsArea = document.getElementById('dossier-stats');
-        
-        if (portraitLarge) {
-            portraitLarge.innerHTML = activeAvatar.image 
-                ? `<img src="${activeAvatar.image}" class="w-full h-full object-cover">`
-                : `<div class="w-full h-full flex items-center justify-center text-gray-700">[ NO VISUAL ]</div>`;
+        const imgElement = document.getElementById('dossier-img');
+        if (imgElement && activeAvatar.image) {
+            imgElement.src = activeAvatar.image;
         }
+
+        const stratumElement = document.getElementById('dossier-stratum');
+        if (stratumElement) {
+            stratumElement.innerText = activeAvatar.stratum?.toUpperCase() || 'UNKNOWN';
+        }
+
+        const statsArea = document.getElementById('dossier-stats');
 
         if (statsArea) {
             const willBar = generateAsciiBar(activeAvatar.will || activeAvatar.stats.WILL, activeAvatar.stats.WILL, 20);

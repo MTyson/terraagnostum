@@ -59,6 +59,12 @@ body::before {
 /* --- FLEX DENSITY --- */
 #header-row, #visuals, #input-container, #footer-hud {
     flex-shrink: 0;
+    width: 100%;
+}
+#visuals canvas, #visuals img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
 }
 #output {
     flex-grow: 1;
@@ -113,24 +119,40 @@ body::before {
 }
 
 /* --- RESPONSIVE SIDEBAR (MOBILE DRAWER) --- */
-@media (max-width: 1023px) {
-    #right-sidebar {
-        position: fixed;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        z-index: 100;
-        transform: translateX(100%);
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        width: 320px;
-        background: rgba(0, 0, 0, 0.95);
-        backdrop-filter: blur(10px);
-        border-left: 1px solid var(--term-green);
-        display: flex !important; /* Force display flex but control with transform */
+@media (max-width: 768px) {
+    /* Main terminal takes full width */
+    #main-terminal-area {
+        width: 100vw !important;
+        flex: 1 1 100% !important;
     }
-    #right-sidebar.active {
-        transform: translateX(0);
-        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.9);
+
+    /* Transform Sidebar into a sliding drawer overlay */
+    #right-sidebar {
+        position: fixed !important;
+        top: 0;
+        right: -100%; /* Hidden off-screen to the right */
+        width: 85vw !important; /* Covers 85% of the screen */
+        height: 100dvh !important;
+        z-index: 9999;
+        background: rgba(5, 10, 5, 0.98) !important;
+        backdrop-filter: blur(10px);
+        border-left: 2px solid var(--term-green) !important;
+        transition: right 0.3s ease-in-out;
+        
+        /* Enforce vertical stacking */
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+    }
+
+    /* When the .open class is added via JS, it slides in */
+    #right-sidebar.open {
+        right: 0 !important;
+    }
+
+    /* Ensure Map is visible in the mobile drawer */
+    #map-canvas-container {
+        display: block !important; 
     }
 }
 

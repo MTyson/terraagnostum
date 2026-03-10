@@ -56,7 +56,7 @@ function renderToCanvas(imageUrl, roomId, myTicket) {
         if (!domImg) {
             domImg = document.createElement('img');
             domImg.id = 'sovereign-dom-image';
-            domImg.style = "position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:10; pointer-events:none;";
+            domImg.className = "absolute inset-0 w-full h-full object-cover z-10 pointer-events-none";
             canvas.parentElement.style.position = 'relative';
             canvas.parentElement.appendChild(domImg);
         }
