@@ -305,14 +305,14 @@ export function updateAvatarUI(activeAvatar) {
         : `<div class="absolute inset-0 w-full h-full bg-gray-900 flex items-center justify-center text-[10px] text-gray-700">[ NO VISUAL DATA ]</div>`;
 
     container.innerHTML = `
-        <div class="relative w-full aspect-[3/4] group overflow-hidden border border-[#1a3a1a] rounded-sm">
+        <div class="relative w-full aspect-square group overflow-hidden border border-[#1a3a1a] rounded-sm bg-black">
             <!-- Full Un-obscured Portrait -->
             ${portrait}
             
-            <!-- Always-visible Name Bar (Top) -->
-            <div class="absolute top-0 left-0 w-full bg-gradient-to-b from-black/90 to-transparent p-2">
-                <div class="font-bold text-green-400 text-sm tracking-widest">${activeAvatar.name.toUpperCase()}</div>
-                <div class="text-[9px] text-green-600">${activeAvatar.stratum?.toUpperCase() || 'UNKNOWN'}</div>
+            <!-- Always-visible Name Bar (Top Overlay) -->
+            <div class="absolute top-0 left-0 w-full bg-gradient-to-b from-black/80 via-black/40 to-transparent p-3 z-10 pointer-events-none">
+                <div class="font-bold text-green-400 text-sm tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">${activeAvatar.name.toUpperCase()}</div>
+                <div class="text-[10px] text-green-500/80 font-bold tracking-tighter drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">${activeAvatar.stratum?.toUpperCase() || 'UNKNOWN'}</div>
             </div>
 
             <!-- Stats Overlay (Slides up on Hover) -->

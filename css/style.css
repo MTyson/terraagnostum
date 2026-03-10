@@ -35,8 +35,8 @@ body::before {
 
 /* --- DOSSIER PORTRAIT --- */
 #avatar-container {
-    max-height: 200px;
-    aspect-ratio: 3/4;
+    max-height: 250px;
+    aspect-ratio: 1/1;
     overflow: hidden;
     border: 1px solid #1a3a1a;
 }
