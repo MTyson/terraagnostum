@@ -44,7 +44,7 @@ body::before {
     filter: contrast(1.1) brightness(1.1); /* Vibrant full color */
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 /* --- COMBAT ANIMATIONS --- */

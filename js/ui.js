@@ -301,7 +301,7 @@ export function updateAvatarUI(activeAvatar) {
     }
     
     const portrait = activeAvatar.image 
-        ? `<img src="${activeAvatar.image}" id="avatar-portrait-main" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer">`
+        ? `<img src="${activeAvatar.image}" id="avatar-portrait-main" class="absolute inset-0 w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 cursor-pointer">`
         : `<div class="absolute inset-0 w-full h-full bg-gray-900 flex items-center justify-center text-[10px] text-gray-700">[ NO VISUAL DATA ]</div>`;
 
     container.innerHTML = `
