@@ -1,6 +1,6 @@
 // js/intentRouter.js
+import { auth as firebaseAuth, isSyncEnabled } from './firebaseConfig.js';
 import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { isSyncEnabled } from './firebaseConfig.js';
 import * as stateManager from './stateManager.js';
 import * as syncEngine from './syncEngine.js';
 import * as UI from './ui.js';
@@ -154,13 +154,21 @@ export async function handleCommand(val) {
             return;
         }
         UI.addLog("[SYSTEM]: Severing connection to the Technate...", "var(--term-amber)");
-        signOut(auth).then(() => window.location.href = window.location.pathname);
+        if (firebaseAuth) {
+            signOut(firebaseAuth).then(() => window.location.href = window.location.pathname);
+        } else {
+            window.location.href = window.location.pathname;
+        }
         return;
     }
 
     if (cmd === 'force logout') {
         UI.addLog("[SYSTEM]: Purging guest signature...", "var(--term-red)");
-        signOut(auth).then(() => window.location.href = window.location.pathname);
+        if (firebaseAuth) {
+            signOut(firebaseAuth).then(() => window.location.href = window.location.pathname);
+        } else {
+            window.location.href = window.location.pathname;
+        }
         return;
     }
 
@@ -453,11 +461,13 @@ export async function handleCommand(val) {
                     stateManager.setActiveAvatar(newCharData);
                     const { localCharacters } = stateManager.getState();
                     stateManager.setLocalCharacters([...localCharacters, newCharData]);
+                    syncEngine.savePlayerState(); // Update presence with new avatar
                 });
             } else {
                 stateManager.setActiveAvatar(newCharData);
                 const { localCharacters } = stateManager.getState();
                 stateManager.setLocalCharacters([...localCharacters, newCharData]);
+                syncEngine.savePlayerState(); // Update presence with new avatar
             }
         } else {
             UI.addLog(`[SYSTEM]: No unoccupied vessel matching '${assumeMatch[1]}' found here.`, "var(--term-amber)");

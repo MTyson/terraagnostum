@@ -15,8 +15,8 @@ const firebaseConfig = {
 
 export const appId = 'terra-agnostum-shared';
 
-let app, auth, db, storage;
-let isSyncEnabled = false;
+export let app, auth, db, storage;
+export let isSyncEnabled = false;
 
 try {
     app = initializeApp(firebaseConfig);
@@ -34,5 +34,3 @@ try {
     const statusEl = document.getElementById('sync-status');
     if (statusEl) statusEl.innerText = "SYNC: OFFLINE";
 }
-
-export { app, auth, db, storage, isSyncEnabled };

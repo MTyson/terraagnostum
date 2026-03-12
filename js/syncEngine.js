@@ -34,6 +34,20 @@ export async function bootSyncEngine(mergeAndRefreshCallback) {
     await updateGlobalMapListener();
     await loadPlayerState(user);
     await loadUserCharacters(user);
+    await startPresenceListener();
+
+    // --- ZOMBIE RULE (Bedroom Respawn) ---
+    // If not in combat and last active was long ago, reset to bedroom
+    const { localPlayer } = stateManager.getState();
+    const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    const isRecentlyActive = localPlayer.lastActive && (Date.now() - localPlayer.lastActive.toMillis?.() || localPlayer.lastActive) < IDLE_TIMEOUT;
+    
+    if (!localPlayer.combat?.active && !isRecentlyActive && localPlayer.currentRoom !== 'bedroom') {
+        console.log("[SYNC]: Idle detected. Reality recalibrating to primary anchor (Bedroom).");
+        startRoom = 'bedroom';
+        stateManager.updatePlayer({ currentRoom: startRoom });
+        await savePlayerState();
+    }
 
     // Ensure the starting room is properly merged
     const roomData = await loadRoom(startRoom);
@@ -136,10 +150,54 @@ export async function savePlayerState() {
         const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
         const stateToSave = { 
             ...localPlayer, 
-            activeAvatarId: activeAvatar?.id || null 
+            activeAvatarId: activeAvatar?.id || null,
+            lastActive: serverTimestamp()
         };
         await setDoc(stateRef, stateToSave, { merge: true });
+        
+        // Also update shared presence
+        await updatePresence(user, localPlayer, activeAvatar);
     } catch (e) { console.error("SyncEngine: Failed to save player state:", e); }
+}
+
+async function updatePresence(user, localPlayer, activeAvatar) {
+    if (!db || !user || !isSyncEnabled) return;
+    try {
+        const presenceRef = doc(db, 'artifacts', appId, 'presence', user.uid);
+        await setDoc(presenceRef, {
+            uid: user.uid,
+            roomId: localPlayer.currentRoom,
+            avatarName: activeAvatar?.name || "Disembodied Void",
+            avatarImage: activeAvatar?.image || null,
+            inCombat: localPlayer.combat?.active || false,
+            lastActive: serverTimestamp()
+        }, { merge: true });
+    } catch (e) { console.warn("SyncEngine: Presence update failed:", e); }
+}
+
+let presenceUnsubscribe = null;
+export async function startPresenceListener() {
+    if (!db || !isSyncEnabled) return;
+    if (presenceUnsubscribe) presenceUnsubscribe();
+
+    const presenceCol = collection(db, 'artifacts', appId, 'presence');
+    presenceUnsubscribe = onSnapshot(presenceCol, (snapshot) => {
+        const players = {};
+        const { user } = stateManager.getState();
+        
+        snapshot.forEach(doc => {
+            // Don't include self in otherPlayers
+            if (user && doc.id === user.uid) return;
+            
+            const data = doc.data();
+            // Filter out stale presence (> 5 mins)
+            const lastActive = data.lastActive?.toMillis?.() || 0;
+            if (Date.now() - lastActive < 5 * 60 * 1000) {
+                players[doc.id] = data;
+            }
+        });
+        stateManager.setOtherPlayers(players);
+    });
 }
 
 export async function syncAvatarStats(avatarId, stats) {

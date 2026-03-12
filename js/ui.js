@@ -25,9 +25,11 @@ stateManager.subscribe((state) => {
     syncHeaderVitals(activeAvatar);
     
     const room = activeMap[localPlayer.currentRoom];
+    const playersInRoom = Object.values(state.otherPlayers || {}).filter(p => p.roomId === localPlayer.currentRoom);
+    
     updateRoomItemsUI(room?.items);
-    updateRoomEntitiesUI(room?.npcs);
-    updateRoomNPCPreviews(room?.npcs);
+    updateRoomEntitiesUI(room?.npcs, playersInRoom);
+    updateRoomNPCPreviews(room?.npcs, playersInRoom);
     updateCompassUI(room);
     renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
     updateContextualSuggestions(state.suggestions);
@@ -363,15 +365,34 @@ export function updateRoomItemsUI(items) {
     container.innerHTML = items.map(item => `<div class="text-amber-600 truncate">> ${item.name}</div>`).join('');
 }
 
-export function updateRoomEntitiesUI(npcs) {
+export function updateRoomEntitiesUI(npcs, players = []) {
     const container = document.getElementById('room-entities-container');
     if (!container) return;
-    if (!npcs || npcs.length === 0) {
+    if ((!npcs || npcs.length === 0) && (!players || players.length === 0)) {
         container.innerHTML = "[NONE]";
         return;
     }
     
     container.innerHTML = '';
+    
+    // Render Players first
+    players.forEach((player) => {
+        const card = document.createElement('div');
+        card.className = "flex justify-between items-center p-1 border border-green-500 bg-green-900/20 cursor-pointer hover:border-green-400 transition-colors mb-1";
+        card.innerHTML = `
+            <div class="w-8 h-8 flex-shrink-0 mr-2 border border-green-500 bg-black overflow-hidden">
+                ${player.avatarImage ? `<img src="${player.avatarImage}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-[6px] text-green-500">[PLAYER]</div>`}
+            </div>
+            <div class="flex-grow min-w-0 pointer-events-none">
+                <div class="text-green-400 font-bold uppercase truncate">${player.avatarName}</div>
+                <div class="text-[8px] text-green-600 font-mono">RESONANT SIGNATURE</div>
+            </div>
+            ${player.inCombat ? `<div class="text-[8px] text-red-500 font-bold ml-2 animate-pulse">[IN COMBAT]</div>` : ''}
+        `;
+        container.appendChild(card);
+    });
+
+    // Render NPCs
     npcs.forEach((npc, index) => {
         const stats = npc.stats || { WILL: '??', AWR: '??', PHYS: '??' };
             
@@ -405,13 +426,31 @@ export function updateRoomEntitiesUI(npcs) {
     });
 }
 
-export function updateRoomNPCPreviews(npcs) {
+export function updateRoomNPCPreviews(npcs, players = []) {
     const container = document.getElementById('room-npc-overlays');
     if (!container) return;
     container.innerHTML = '';
     
-    if (!npcs || npcs.length === 0) return;
+    if ((!npcs || npcs.length === 0) && (!players || players.length === 0)) return;
 
+    // Player Tokens
+    players.forEach(player => {
+        if (!player.avatarImage) return;
+        const thumb = document.createElement('div');
+        thumb.className = `npc-thumbnail-token w-12 h-12 rounded-full border-2 border-green-500 bg-cover bg-center pointer-events-auto cursor-pointer transition-all hover:scale-110 relative`;
+        thumb.style.backgroundImage = `url('${player.avatarImage}')`;
+        thumb.title = player.avatarName;
+        
+        if (player.inCombat) {
+            const badge = document.createElement('div');
+            badge.className = "absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border border-white animate-pulse";
+            thumb.appendChild(badge);
+        }
+
+        container.appendChild(thumb);
+    });
+
+    // NPC Tokens
     npcs.forEach(npc => {
         if (!npc.image) return;
         

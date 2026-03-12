@@ -9,6 +9,7 @@ let state = {
     },
     localAreaCache: {}, // THE ONLY CACHE
     localCharacters: [], activeAvatar: null, user: null,
+    otherPlayers: {}, // Global presence map: { uid: { roomId, avatarName, ... } }
     activeTerminal: false, isProcessing: false, suggestions: [],
     wizardState: { active: false, type: null, step: 0, pendingData: {} }
 };
@@ -80,6 +81,11 @@ export function setActiveAvatar(avatar) {
 
 export function setLocalCharacters(chars) {
     state.localCharacters = chars;
+    notify();
+}
+
+export function setOtherPlayers(players) {
+    state.otherPlayers = players || {};
     notify();
 }
 
