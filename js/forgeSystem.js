@@ -71,8 +71,15 @@ async function suggestName() {
     nameInput.placeholder = "SEARCHING REGISTRY...";
     
     UI.addLog("[SYSTEM]: Accessing naming protocols...", "var(--term-amber)");
-    const lore = STRATA_ARCHIVE[currentDraftStratum];
-    const prompt = `Invent a unique name for a character belonging to this world stratum: ${currentDraftStratum} (${lore}). Return JSON: {"name": "string"}`;
+    // Let's try just a miniamalist prompt first to see if we can get a good name without overloading the model with info. We can always iterate on this.
+    //const lore = STRATA_ARCHIVE[currentDraftStratum];
+    //const prompt = `Invent a unique name for a character belonging to this world stratum: ${currentDraftStratum} (${lore}). Return JSON: {"name": "string"}`;
+    const prompt = `
+      Invent a compelling Player Character name for an RPG where players are humans in the Mundane plane
+      (near future Earth) where an interdimensional battle between The Technate and the magical Faen is 
+      unfolding and humanity is caught in the middle.  A gritty, cypherpunk consipiracy (think NEuromancer/Deus Ex) is the vibe of The Mundane, 
+      and the backdrop is hidden events and planes colliding.  Be creative and avoid repeating names.  It's
+      OK to use real-world sounding names of present-day Earth. Return JSON: {"name": "string"}`;
     const res = await callGemini(prompt, "You are a naming protocol.");
     
     if (res && res.name) {
