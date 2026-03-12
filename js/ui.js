@@ -365,7 +365,7 @@ export function updateRoomItemsUI(items) {
     container.innerHTML = items.map(item => `<div class="text-amber-600 truncate">> ${item.name}</div>`).join('');
 }
 
-export function updateRoomEntitiesUI(npcs, players = []) {
+export function updateRoomEntitiesUI(npcs = [], players = []) {
     const container = document.getElementById('room-entities-container');
     if (!container) return;
     if ((!npcs || npcs.length === 0) && (!players || players.length === 0)) {
@@ -426,7 +426,7 @@ export function updateRoomEntitiesUI(npcs, players = []) {
     });
 }
 
-export function updateRoomNPCPreviews(npcs, players = []) {
+export function updateRoomNPCPreviews(npcs = [], players = []) {
     const container = document.getElementById('room-npc-overlays');
     if (!container) return;
     container.innerHTML = '';
