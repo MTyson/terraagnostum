@@ -77,24 +77,22 @@ async function suggestName() {
     const prompt = `
       Role: You are a world-building consultant specializing in "Uncanny Valley" linguistics.
       Setting: A near-future Earth (The Mundane) is merging with a high-tech plane (The Technate) and a high-fantasy plane (The Faen).
-      Task: Generate 1 Player Character names using a [First Name] "[Nickname]" [Last Name] format.
+      Task: Generate 20 Player Character names using a [First Name] "[Nickname]" [Last Name] format.
       Naming Rules:
 Base: Use common, relatable 21st-century Earth names as the foundation (e.g., Sarah, David, Miller, Smith).
 The Uncanny Valley Filter: Alter the names so they look like "glitched" versions of reality. They should be recognizable but feel slightly "off" or "wrong" to a modern reader.
 Technate Alterations (Sci-Fi): Use "Compression" (dropping vowels, e.g., 'Jennifr'), "Phonetic Flattening" (replacing 'c' with 'k', e.g., 'Kaleb'), or "Data-Tagging" (adding small numerical suffixes or hardware-slang nicknames).
 Faen Alterations (Fantasy): Use "Archaic Drift" (adding extra consonants, e.g., 'Thommas'), "Vowel Shifting" (swapping 'i' for 'y'), or "Nature-Burden" nicknames (nicknames related to plants, shadows, or melodic sounds).
 Avoid "Far Out" Tropes: Do not use random strings of numbers (no "X-J-11") or high-fantasy gibberish (no "Zalathor"). It should look like a typo on a legal document or a name spoken with a strange accent.
-Format:
-Name: First "Nickname" Last
-Origin: (Technate or Faen)
-Explanation: A one-sentence explanation of the base name and why it changed.
-      Return JSON: {"name": "string"}
+Format: Return strictly JSON with a "names" array containing strings.
+      Return JSON: {"names": ["name1", "name2", ...]}
       `;
     const res = await callGemini(prompt, "You are a naming protocol.");
     
-    if (res && res.name) {
-        nameInput.value = res.name;
-        UI.addLog(`[SYSTEM]: Identity suggested: ${res.name}`, "var(--term-green)");
+    if (res && res.names && Array.isArray(res.names) && res.names.length > 0) {
+        const pickedName = res.names[Math.floor(Math.random() * res.names.length)];
+        nameInput.value = pickedName;
+        UI.addLog(`[SYSTEM]: Identity suggested: ${pickedName}`, "var(--term-green)");
     }
     nameInput.placeholder = oldPlaceholder;
 }

@@ -125,8 +125,12 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         if (wizardState.step === 1) {
             if (!currentVal) {
                 UI.addLog("[SYSTEM]: Querying Archive for designation...", "var(--term-amber)");
-                const aiRes = await callGemini("Generate 1 unique character name for a world where cypherpunk, clinical transhumanism, and ancient high-fantasy collide. Randomly lean into ONE of these vibes: a gritty street moniker (e.g., Nyx, Jaxon, etc.), a mystic blend with Sanskrit or Arabic roots (e.g., Tariq Null, Dharma-7, etc.), OR a corporate system designation (e.g., Unit 42, Echo-Prime, etc.). Name only.");
-                currentVal = aiRes.trim();
+                const res = await callGemini("Generate 20 unique character names for a world where cypherpunk, clinical transhumanism, and ancient high-fantasy collide. Randomly lean into these vibes: gritty street monikers, mystic blends with Sanskrit or Arabic roots, OR corporate system designations. Respond strictly in JSON: {\"names\": [\"name1\", \"name2\", ...]}", "You are a naming protocol.");
+                if (res && res.names && Array.isArray(res.names) && res.names.length > 0) {
+                    currentVal = res.names[Math.floor(Math.random() * res.names.length)];
+                } else {
+                    currentVal = "Unidentified Vessel";
+                }
             }
             stateManager.updateWizardState({ pendingData: { ...wizardState.pendingData, name: currentVal }, step: 2 });
             UI.addLog(`[WIZARD]: Name confirmed: '${currentVal}'. Enter Archetype or press ENTER:`, "var(--term-amber)");
