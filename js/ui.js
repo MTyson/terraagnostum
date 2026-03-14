@@ -712,7 +712,7 @@ export function toggleDossierBuffer(show, data = null) {
                     <div class="text-gray-400 leading-relaxed text-sm">${displayData.description || 'No biometric history on file.'}</div>
                 </div>
                 <div class="space-y-2 border-t border-green-900 pt-4 mb-4 font-mono text-xs">
-                    <div class="flex justify-between text-amber-500 font-bold"><span>ROOT AMNESIA</span>  <span>${amnBar}</span></div>
+                    <div class="flex justify-between text-amber-500 font-bold"><span>AMN/span>  <span>${amnBar}</span></div>
                     <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>WILLPOWER</span> <span>${willBar}</span></div>
                     <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>PHYSIQUE</span>  <span>${physBar}</span></div>
                     <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>AWARENESS</span> <span>[${'|'.repeat(displayData.stats?.AWR || 0)}${' '.repeat(20 - (displayData.stats?.AWR || 0))}] ${displayData.stats?.AWR || 0}/20</span></div>

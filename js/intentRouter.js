@@ -303,6 +303,35 @@ export async function handleCommand(val) {
     if (cmd.startsWith('"') || cmd.startsWith("'") || cmd.startsWith("say ")) {
         const speech = val.replace(/^say\s+/i, '').replace(/^["']|["']$/g, '');
         UI.addLog(`[YOU SAY]: "${speech}"`, "#ffffff");
+        
+        // NPC SPEECH REACTION
+        const activeMap = getActiveMap();
+        const room = activeMap[localPlayer.currentRoom];
+        if (room && room.npcs && room.npcs.length > 0) {
+            stateManager.setProcessing(true);
+            try {
+                const suggestions = await handleGMIntent(
+                    `The player said to the room: "${speech}"`,
+                    { 
+                        get activeMap() { return getActiveMap(); }, 
+                        localPlayer, user, activeAvatar, isSyncEnabled: true 
+                    },
+                    { 
+                        shiftStratum, 
+                        savePlayerState: syncEngine.savePlayerState, 
+                        refreshStatusUI: () => {}, 
+                        renderMapHUD: UI.renderMapHUD,
+                        setActiveAvatar: stateManager.setActiveAvatar,
+                        syncAvatarStats: () => syncEngine.syncAvatarStats(stateManager.getState().activeAvatar?.id, stateManager.getState().activeAvatar?.stats),
+                        updateMapListener: () => syncEngine.updateGlobalMapListener(),
+                        triggerVisualUpdate: (prompt) => triggerVisualUpdate(prompt, stateManager.getState().localPlayer, stateManager.getActiveMap(), stateManager.getState().user)
+                    }
+                );
+                stateManager.setSuggestions(suggestions);
+            } finally { 
+                stateManager.setProcessing(false); 
+            }
+        }
         return;
     }
 

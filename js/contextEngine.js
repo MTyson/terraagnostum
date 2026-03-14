@@ -102,7 +102,7 @@ EVALUATION DIRECTIVES:
 4. Maintain the persona and vibe of the current Stratum.
 
 LAYER 4: COMBAT & LORE:
-- AMN (Amnesia/Anchor) is the ROOT stat (usually 20).
+- AMN (OM|AMEN) is the ROOT stat (usually 20).
 - WILL, AWR, and PHYS are DERIVED stats. Their sum (WILL + AWR + PHYS) MUST EQUAL the AMN value.
 - If combat_active is true, evaluate actions against WILL/AWR/PHYS.
 - Structure combat narratively: [Player Action] -> [Stat Check] -> [Resolution] -> [Telegraph Next Enemy Move].

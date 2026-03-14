@@ -228,7 +228,7 @@ async function analyzeBiometrics() {
 
     UI.addLog("[SYSTEM]: Checking vessel vitals...", "var(--term-amber)");
     const prompt = `Analyze this biometric seed: "${desc}". 
-      AMN (Amnesia/Anchor) is the ROOT stat and is always 20 for new characters.
+      AMN (OM|AMEN) is the ROOT stat and is always 20 for new characters.
       WILL, AWR, and PHYS are DERIVED stats. 
       CRITICAL RULE: The sum of (WILL + AWR + PHYS) MUST EQUAL the AMN value (20).
       Distribute the 20 points among WILL, AWR, and PHYS based on the biometric seed.
