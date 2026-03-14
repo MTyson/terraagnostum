@@ -22,7 +22,7 @@ body::before {
 .radar-sweep {
     position: absolute;
     inset: 0;
-    background: conic-gradient(from 0deg, rgba(0, 255, 65, 0.3) 0deg, transparent 90deg);
+    background: conic-gradient(from 0deg, transparent 270deg, rgba(0, 255, 65, 0.3) 360deg);
     border-radius: 50%;
     pointer-events: none;
     animation: radar-rotate 4s linear infinite;
