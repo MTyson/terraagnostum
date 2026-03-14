@@ -17,6 +17,13 @@ let hasInitialized = false;
 import { fetchSystemConfig } from './apiService.js';
 await fetchSystemConfig();
 
+// Sync app version from dedicated version file
+import { APP_VERSION } from './version.js';
+const versionEl = document.getElementById('app-version');
+if (versionEl) {
+    versionEl.textContent = `[ VER: ${APP_VERSION} ]`;
+}
+
 // --- AUTHENTICATION & SYNC ---
 if (isSyncEnabled) {
     onAuthStateChanged(auth, async (u) => {
