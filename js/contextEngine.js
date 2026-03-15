@@ -74,12 +74,15 @@ You must use distinct voices indicated by brackets:
 - Use these strictly for ATMOSPHERE, VIBE, METAPHYSICS, and TERMINOLOGY.
 - The player is NOT necessarily the protagonist of the lore snippets.
 - Maintain the player's current context as the primary reality.
+`;
 
-# OUTPUT RULES
+/**
+ * HANDLED BY MIME TYPE (?)
+  # OUTPUT RULES
 - You must ONLY output strictly formatted JSON. 
 - Do not include markdown formatting like \`\`\`json.
 - Do not include conversational filler outside of the JSON object.
-`;
+ */
 
 export const STRATA_ARCHIVE = {
     mundane: `
