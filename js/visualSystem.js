@@ -151,7 +151,8 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
         }
 
         // Start projection and track it
-        const projectionPromise = projectVisual(overridePrompt || room.visualPrompt || room.description, localPlayer.stratum, UI.addLog);
+        const { strata } = stateManager.getState();
+        const projectionPromise = projectVisual(overridePrompt || room.visualPrompt || room.description, localPlayer.stratum, UI.addLog, null, strata);
         activeProjections.set(roomId, projectionPromise);
 
         const result = await projectionPromise;

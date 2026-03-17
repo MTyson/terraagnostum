@@ -114,8 +114,19 @@ NAMING: ${WORLD_STATE.TECHNATE.naming}
 /**
  * Builds the modular system prompt for the AI based on the player's current reality.
  */
-export function buildSystemPrompt(localPlayer, currentRoomData, inventoryNames, npcText) {
-    const stratumLayer = STRATA_ARCHIVE[localPlayer.stratum] || STRATA_ARCHIVE.mundane;
+export function buildSystemPrompt(localPlayer, currentRoomData, inventoryNames, npcText, strata = {}) {
+    let stratumLayer = STRATA_ARCHIVE[localPlayer.stratum] || STRATA_ARCHIVE.mundane;
+    
+    // If we have dynamic stratum data, override or augment the layer
+    const dynamicStratum = strata[localPlayer.stratum.toLowerCase()];
+    if (dynamicStratum) {
+        stratumLayer = `
+STRATUM: ${dynamicStratum.name.toUpperCase()}
+VIBE: ${dynamicStratum.description}
+THEME: ${dynamicStratum.theme}
+RULES: ${dynamicStratum.rules?.naming || 'Standard'} | ${dynamicStratum.rules?.combat || 'Physical'}
+    `;
+    }
     
     const roomLayer = `
 CURRENT LOCATION: ${currentRoomData.name} (${currentRoomData.shortName || 'UNKNOWN'})

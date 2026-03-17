@@ -125,7 +125,13 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         if (wizardState.step === 1) {
             if (!currentVal) {
                 UI.addLog("[SYSTEM]: Querying Archive for designation...", "var(--term-amber)");
-                const res = await callGemini("Generate 20 unique character names for a world where cypherpunk, clinical transhumanism, and ancient high-fantasy collide. Randomly lean into these vibes: gritty street monikers, mystic blends with Sanskrit or Arabic roots, OR corporate system designations. Respond strictly in JSON: {\"names\": [\"name1\", \"name2\", ...]}", "You are a naming protocol.");
+                const res = await callGemini("Generate 20 unique character names for a world where cypherpunk, clinical transhumanism, and ancient high-fantasy collide. Randomly lean into these vibes: gritty street monikers, mystic blends with Sanskrit or Arabic roots, OR corporate system designations. Respond strictly in JSON: {\"names\": [\"name1\", \"name2\", ...]}", "You are a naming protocol.", {
+                    type: "object",
+                    properties: {
+                        names: { type: "array", items: { type: "string" } }
+                    },
+                    required: ["names"]
+                });
                 if (res && res.names && Array.isArray(res.names) && res.names.length > 0) {
                     currentVal = res.names[Math.floor(Math.random() * res.names.length)];
                 } else {
@@ -138,7 +144,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         else if (wizardState.step === 2) {
             if (!currentVal) {
                 UI.addLog("[SYSTEM]: Querying Archive for archetype...", "var(--term-amber)");
-                const aiRes = await callGemini(`Suggest a 1 to 2-word archetype for ${wizardState.pendingData.name} in a world blending cyberpunk tech, transhumanism, and ancient magic (e.g., Neon Ascendant, Plasteel Mage, Rogue Unit, Data Shaman). Match the origin vibe of the name.`);
+                const aiRes = await callGemini(`Suggest a 1 to 2-word archetype for ${wizardState.pendingData.name} in a world blending cyberpunk tech, transhumanism, and ancient magic (e.g., Neon Ascendant, Plasteel Mage, Rogue Unit, Data Shaman). Match the origin vibe of the name.`, null, null);
                 currentVal = aiRes.replace(/["']/g, '').trim();
             }
             stateManager.updateWizardState({ pendingData: { ...wizardState.pendingData, archetype: currentVal }, step: 3 });
@@ -147,7 +153,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         else if (wizardState.step === 3) {
             if (!currentVal) {
                 UI.addLog("[SYSTEM]: Extrapolating visual imprint...", "var(--term-amber)");
-                currentVal = await callGemini(`1-sentence visual description of ${wizardState.pendingData.name}, a ${wizardState.pendingData.archetype} in a cyberpunk world.`);
+                currentVal = await callGemini(`1-sentence visual description of ${wizardState.pendingData.name}, a ${wizardState.pendingData.archetype} in a cyberpunk world.`, null, null);
             }
             
             UI.addLog(`[SYSTEM]: Collapsing quantum state... Materializing vessel...`, "var(--gm-purple)");
@@ -155,7 +161,8 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             let finalImage = null;
             try {
                 UI.addLog(`[SYSTEM]: Rendering vessel matrix...`, "var(--term-amber)");
-                const b64 = await generatePortrait(currentVal, localPlayer.stratum);
+                const { strata } = stateManager.getState();
+                const b64 = await generatePortrait(currentVal, localPlayer.stratum, strata);
                 
                 if (b64) {
                     UI.addLog(`[SYSTEM]: Optimizing visual signature for stability...`, "var(--term-amber)");
@@ -170,6 +177,8 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             const finalData = {
                 name: wizardState.pendingData.name,
                 archetype: wizardState.pendingData.archetype,
+                description: currentVal || "No biometric history on file.",
+                stratum: localPlayer.stratum || "mundane",
                 visual_prompt: currentVal,
                 image: finalImage,
                 stats: { AMN: 20, WILL: 7, AWR: 7, PHYS: 6 },
@@ -184,6 +193,12 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 const { localCharacters } = stateManager.getState();
                 stateManager.setLocalCharacters([...localCharacters, finalData]);
                 UI.materializeEffect(); 
+                
+                // PERSIST the change to Firestore
+                if (typeof savePlayerState === 'function') {
+                    await savePlayerState();
+                }
+
                 UI.addLog(`[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.`, "var(--term-green)");
                 UI.addLog(`[TANDY]: You have a shape now. Good. But your signature is fragile... a stiff breeze could scatter you. Go to the Lore Archive and use the Tandem Terminal to 'login'. Anchor yourself.`, "#b084e8");
                 
@@ -309,7 +324,15 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
          UI.addLog(`[SYSTEM]: Handing seed phrase to the AI Architect...`, "var(--gm-purple)");
          try {
              const prompt = `Generate a room definition based on this seed: "${currentVal}". Stratum: ${localPlayer.stratum}. Respond strictly in JSON: {"name":"...","description":"...","visual_prompt":"..."}`;
-             const res = await callGemini("Generate room", prompt);
+             const res = await callGemini("Generate room", prompt, {
+                 type: "object",
+                 properties: {
+                     name: { type: "string" },
+                     description: { type: "string" },
+                     visual_prompt: { type: "string" }
+                 },
+                 required: ["name", "description", "visual_prompt"]
+             });
              if (res && res.name) {
                  const newRoomId = 'room_' + crypto.randomUUID().split('-')[0];
                  const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
@@ -386,7 +409,8 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
             
             let npcImg = null;
             try {
-                const b64 = await generatePortrait(currentVal, localPlayer.stratum);
+                const { strata } = stateManager.getState();
+                const b64 = await generatePortrait(currentVal, localPlayer.stratum, strata);
                 if (b64) {
                     const dataUrl = `data:image/png;base64,${b64}`;
                     npcImg = await compressImage(dataUrl, 400, 0.7);
@@ -417,12 +441,15 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
 
     // === 4. TUTORIAL CYOA WIZARD ===
     if (wizardState.type === 'tutorial_cyoa') {
+        const { strata } = stateManager.getState();
+        const stratumData = strata[localPlayer.stratum.toLowerCase()] || { name: 'Astral Plane' };
+
         if (wizardState.step === 1) {
             if (!currentVal) return;
-            UI.addLog(`[SYSTEM]: Processing your action in the Astral Plane...`, "var(--gm-purple)");
-            const prompt = `The player is in the Astral Plane (Astral stratum) in a cyberpunk world. They are facing a fragmented memory-entity. They decided to: "${currentVal}". Describe the atmospheric outcome in 2-3 sentences, and present ONE final obstacle or choice before they can stabilize their connection. Respond in plain text.`;
+            UI.addLog(`[SYSTEM]: Processing your action in the ${stratumData.name}...`, "var(--gm-purple)");
+            const prompt = `The player is in the ${stratumData.name} stratum in a cyberpunk world. They are facing a fragmented memory-entity. They decided to: "${currentVal}". Describe the atmospheric outcome in 2-3 sentences, and present ONE final obstacle or choice before they can stabilize their connection. Respond in plain text.`;
             try {
-                const response = await callGemini("Process CYOA turn 1", prompt);
+                const response = await callGemini("Process CYOA turn 1", prompt, null);
                 UI.addLog(`[NARRATOR]: ${response}`, "#888");
                 UI.addLog(`[WIZARD]: How do you proceed?`, "var(--term-amber)");
                 stateManager.updateWizardState({ step: 2 });
@@ -432,12 +459,16 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         } else if (wizardState.step === 2) {
             if (!currentVal) return;
             UI.addLog(`[SYSTEM]: Resolving final quantum state...`, "var(--gm-purple)");
-            const prompt = `The player is completing a cyberpunk astral plane tutorial. Their final action is: "${currentVal}". Determine if they succeed. Respond STRICTLY in JSON: { "narrative": "A 2-sentence atmospheric conclusion.", "success": true or false }`;
+            const prompt = `The player is completing a cyberpunk ${stratumData.name} tutorial. Their final action is: "${currentVal}". Determine if they succeed. Respond STRICTLY in JSON: { "narrative": "A 2-sentence atmospheric conclusion.", "success": true or false }`;
             try {
-                const responseStr = await callGemini("Process CYOA turn 2", prompt);
-                
-                const cleanJson = responseStr.replace(/```json/g, '').replace(/```/g, '').trim();
-                const response = JSON.parse(cleanJson);
+                const response = await callGemini("Process CYOA turn 2", prompt, {
+                    type: "object",
+                    properties: {
+                        narrative: { type: "string" },
+                        success: { type: "boolean" }
+                    },
+                    required: ["narrative", "success"]
+                });
                 
                 UI.addLog(`[NARRATOR]: ${response.narrative}`, "#888");
                 
@@ -446,12 +477,12 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                     const newItem = { 
                         name: "Resonant Key", 
                         type: "Key Item", 
-                        description: "A fractal shard of crystallized Meaning. It hums with the frequency of the front door." 
+                        description: `A fractal shard of crystallized Meaning. It hums with the frequency of the front door.` 
                     };
                     stateManager.updatePlayer({ inventory: [...localPlayer.inventory, newItem] });
                     UI.addLog(`[TANDY]: You did it. You synthesized a Resonant Key. Returning you to mundane reality now. Go to the front door in the hallway and use the key to exit.`, "#b084e8");
                 } else {
-                    UI.addLog(`[SYSTEM]: ANOMALY UNRESOLVED. YOU WERE EJECTED FROM THE ASTRAL PLANE.`, "var(--term-red)");
+                    UI.addLog(`[SYSTEM]: ANOMALY UNRESOLVED. YOU WERE EJECTED FROM THE ${stratumData.name.toUpperCase()}.`, "var(--term-red)");
                     UI.addLog(`[TANDY]: That was close. The field collapsed. You'll need to tune the generator and try again when you're ready.`, "#b084e8");
                 }
                 
@@ -475,27 +506,38 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
         const dir = wizardState.pendingData.direction;
         const fromId = wizardState.pendingData.fromId;
 
-        UI.addLog(`[SYSTEM]: Committing your vision to the Astral Plane...`, "var(--gm-purple)");
+        const { strata } = stateManager.getState();
+        const stratumData = strata[localPlayer.stratum.toLowerCase()] || { name: 'Astral Plane' };
+
+        UI.addLog(`[SYSTEM]: Committing your vision to the ${stratumData.name}...`, "var(--gm-purple)");
         
         try {
-            const prompt = `The player is navigating the Astral Plane. They move ${dir.toUpperCase()} and describe seeing: "${currentVal}". 
+            const prompt = `The player is navigating the ${stratumData.name}. They move ${dir.toUpperCase()} and describe seeing: "${currentVal}". 
             Generate a thematic room definition based on this vision. 
             Respond STRICTLY in JSON: {"name": "Evocative Name", "description": "Atmospheric narrative description", "visual_prompt": "Detailed prompt for image generation"}`;
             
-            const res = await callGemini("Generate Astral Room", prompt);
+            const res = await callGemini(`Generate ${stratumData.name} Room`, prompt, {
+                type: "object",
+                properties: {
+                    name: { type: "string" },
+                    description: { type: "string" },
+                    visual_prompt: { type: "string" }
+                },
+                required: ["name", "description", "visual_prompt"]
+            });
             if (res && res.name) {
-                const newRoomId = 'astral_' + Date.now();
+                const newRoomId = localPlayer.stratum + '_' + Date.now();
                 const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
                 const backDir = getOpposite(dir);
                 
                 const newRoom = {
                     id: newRoomId,
                     name: res.name || "Unknown Sector",
-                    shortName: (res.name || "ASTRAL").substring(0, 8).toUpperCase(),
+                    shortName: (res.name || localPlayer.stratum.toUpperCase()).substring(0, 8).toUpperCase(),
                     description: res.description || "A shifting expanse of raw potential.",
                     visualPrompt: res.visual_prompt || "A surreal, dream-like landscape.",
                     exits: { [backDir]: fromId },
-                    metadata: { stratum: 'astral', isEditable: true, ownerId: stateManager.getState().user.uid }
+                    metadata: { stratum: localPlayer.stratum, isEditable: true, ownerId: stateManager.getState().user.uid }
                 };
 
                 // 1. Save new room to the global rooms collection

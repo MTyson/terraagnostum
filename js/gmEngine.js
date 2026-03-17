@@ -31,13 +31,16 @@ export async function handleGMIntent(
         }).join('\n') || "None";
         
         // 1. BUILD MODULAR CONTEXT
-        const systemPrompt = buildSystemPrompt(localPlayer, currentRoomData, inventoryNames, npcText);
+        const systemPrompt = buildSystemPrompt(localPlayer, currentRoomData, inventoryNames, npcText, state.strata);
 
         // 2. USER INTENT
         let userPrompt = `PLAYER ACTION: "${val}"\n\nEvaluate this intent against the system rules and current room state. Respond ONLY in the requested JSON format.`;
         
-        // ASTRAL COMBAT INJECTION: Remind AI of mechanics if in combat
-        if (localPlayer.stratum === 'astral' && (localPlayer.combat.active || val.toLowerCase().includes('attack') || val.toLowerCase().includes('will force'))) {
+        // STRATUM-SPECIFIC COMBAT INJECTION
+        const { strata } = stateManager.getState();
+        const stratumData = strata[localPlayer.stratum.toLowerCase()];
+        
+        if (stratumData?.rules?.combat === 'Battle of Wills' && (localPlayer.combat.active || val.toLowerCase().includes('attack') || val.toLowerCase().includes('will force'))) {
             userPrompt += `\n\n[SYSTEM REMINDER]: The player is in ASTRAL COMBAT (Battle of Wills). Attacks like "WILL FORCE" or "ASTRAL WEAPON" MUST deal 5-10 "damage_to_npc". Ensure "combat_active" stays true until the NPC's WILL is 0. Do NOT resolve combat just because the player looks around or examines things.`;
         }
 
@@ -48,7 +51,7 @@ export async function handleGMIntent(
         // Manual Damage Override: Ensure keywords do damage if AI is being stingy
         // Check both current state and the AI's intended state
         const isActuallyCombat = localPlayer.combat.active || res.combat_active;
-        if (state.localPlayer.stratum === 'astral' && isActuallyCombat && !res.damage_to_npc) {
+        if (stratumData?.rules?.combat === 'Battle of Wills' && isActuallyCombat && !res.damage_to_npc) {
             const v = val.toLowerCase();
             if (v.includes('will force') || v.includes('astral weapon') || v.includes('attack')) {
                 res.damage_to_npc = 10; // Increased damage to 10 for better pace
@@ -200,7 +203,8 @@ export async function handleGMIntent(
                 stateManager.setLocalAreaCache({ [entryId]: entryNode });
                 stateManager.updatePlayer({ currentRoom: entryId });
                 stateChanged = true;
-                if (!isSilent) UI.addLog(`[SYSTEM]: Conventional geometry discarded. Welcome to the Astral Plane.`, "var(--astral-pink)");
+                const welcomeMsg = stratumData?.description || "Conventional geometry discarded.";
+                if (!isSilent) UI.addLog(`[SYSTEM]: ${welcomeMsg}`, "var(--astral-pink)");
             } else {
                 if (!isSilent) UI.addLog("[SYSTEM]: Dimensional shift failed. Anchors too strong in this node.", "var(--term-red)");
             }
@@ -368,7 +372,8 @@ export async function handleGMIntent(
                 if (res.combat_active || currentState.localPlayer.combat.active) {
                     (async () => {
                         try {
-                            const b64 = await generatePortrait(newNpc.visual_prompt, currentState.localPlayer.stratum);
+                            const { strata } = stateManager.getState();
+                            const b64 = await generatePortrait(newNpc.visual_prompt, currentState.localPlayer.stratum, strata);
                             if (b64) {
                                 newNpc.image = await compressImage(`data:image/png;base64,${b64}`, 400, 0.7);
                                 stateManager.updateMapNode(roomId, { npcs: currentNpcs });
@@ -407,7 +412,8 @@ export async function handleGMIntent(
 
                 if (npc.visual_prompt && !npc.image) {
                     if (!isSilent) UI.addLog(`[REPAIR]: Re-weaving visual imprint for ${npc.name}...`, "var(--term-amber)");
-                    const b64 = await generatePortrait(npc.visual_prompt, stateManager.getState().localPlayer.stratum);
+                    const { strata } = stateManager.getState();
+                    const b64 = await generatePortrait(npc.visual_prompt, stateManager.getState().localPlayer.stratum, strata);
                     if (b64) {
                         npc.image = await compressImage(`data:image/png;base64,${b64}`, 400, 0.7);
                         stateManager.updateMapNode(stateManager.getState().localPlayer.currentRoom, { npcs: currentRoomData.npcs });

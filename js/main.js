@@ -48,7 +48,9 @@ if (isSyncEnabled) {
             
             const currentRoom = activeMap[stateManager.getState().localPlayer.currentRoom];
             if (currentRoom) {
-                UI.printRoomDescription(currentRoom, updatedState.localPlayer.stratum === 'astral', activeMap, updatedState.activeAvatar);
+                const { strata } = stateManager.getState();
+                const isAstral = updatedState.localPlayer.stratum === 'astral' || strata[updatedState.localPlayer.stratum.toLowerCase()]?.rules?.combat === 'Battle of Wills';
+                UI.printRoomDescription(currentRoom, isAstral, activeMap, updatedState.activeAvatar);
             }
             
             if (!user.isAnonymous && localStorage.getItem('awaitingNewUserHint') === 'true') {

@@ -1,14 +1,16 @@
 // js/syncEngine.js
 import { 
     doc, setDoc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, 
-    serverTimestamp, collection, addDoc, getDocs, writeBatch 
+    serverTimestamp, collection, addDoc, getDocs, writeBatch, query, where 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 import { db, auth, appId, storage, isSyncEnabled } from './firebaseConfig.js';
 import * as stateManager from './stateManager.js';
 import { blueprintApartment } from './mapData.js';
+import { DEFAULT_STRATA } from './stratumData.js';
 
 let mapUnsubscribe = null;
+let strataUnsubscribe = null;
 const CHAR_COLLECTION = 'characters';
 
 /**
@@ -18,33 +20,42 @@ export async function bootSyncEngine(mergeAndRefreshCallback) {
     const { user } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return;
 
-    let startRoom = 'bedroom';
+    let startRoom = `instance_${user.uid}_bedroom`;
     try {
-        const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+        const stateRef = doc(db, 'artifacts', appId, 'playerState', user.uid);
         const snap = await getDoc(stateRef);
         if (snap.exists()) {
             const data = snap.data();
             startRoom = data.currentRoom || startRoom;
+        } else {
+            // New user detection: Ensure private instance exists
+            await seedPlayerInstance(user);
         }
-    } catch(e) {}
+    } catch(e) {
+        console.warn("[SYNC]: Error fetching player state, ensuring instance exists.");
+        await seedPlayerInstance(user);
+    }
 
     // Set initial room before loading
     stateManager.updatePlayer({ currentRoom: startRoom });
     
     await updateGlobalMapListener();
+    await updateStrataListener();
     await loadPlayerState(user);
     await loadUserCharacters(user);
     await startPresenceListener();
 
     // --- ZOMBIE RULE (Bedroom Respawn) ---
-    // If not in combat and last active was long ago, reset to bedroom
+    // If not in combat and last active was long ago, reset to bedroom anchor
     const { localPlayer } = stateManager.getState();
     const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
     const isRecentlyActive = localPlayer.lastActive && (Date.now() - localPlayer.lastActive.toMillis?.() || localPlayer.lastActive) < IDLE_TIMEOUT;
     
-    if (!localPlayer.combat?.active && !isRecentlyActive && localPlayer.currentRoom !== 'bedroom') {
+    const isInsideInstance = localPlayer.currentRoom.startsWith('instance_');
+
+    if (!localPlayer.combat?.active && !isRecentlyActive && localPlayer.currentRoom !== `instance_${user.uid}_bedroom` && isInsideInstance) {
         console.log("[SYNC]: Idle detected. Reality recalibrating to primary anchor (Bedroom).");
-        startRoom = 'bedroom';
+        startRoom = `instance_${user.uid}_bedroom`;
         stateManager.updatePlayer({ currentRoom: startRoom });
         await savePlayerState();
     }
@@ -55,11 +66,63 @@ export async function bootSyncEngine(mergeAndRefreshCallback) {
 }
 
 /**
+ * Seeds a private instance of the apartment for a new user.
+ */
+async function seedPlayerInstance(user) {
+    const globalRoomsRef = collection(db, 'artifacts', appId, 'rooms');
+    const primaryAnchorRef = doc(globalRoomsRef, `instance_${user.uid}_bedroom`);
+    
+    // Quick check to avoid redundant seeding
+    const snap = await getDoc(primaryAnchorRef);
+    if (snap.exists()) return;
+
+    console.log(`[SYNC]: Generating private apartment instance for ${user.uid.substring(0,8)}...`);
+    const batch = writeBatch(db);
+
+    for (const [blueprintKey, data] of Object.entries(blueprintApartment)) {
+        const instancedId = `instance_${user.uid}_${blueprintKey}`;
+        const roomRef = doc(globalRoomsRef, instancedId);
+        
+        // Remap exits to point to the user's private rooms
+        const remappedExits = {};
+        if (data.exits) {
+            for (const [dir, target] of Object.entries(data.exits)) {
+                const targetId = typeof target === 'string' ? target : target.target;
+                
+                if (blueprintApartment[targetId]) {
+                    const instancedTarget = `instance_${user.uid}_${targetId}`;
+                    if (typeof target === 'string') {
+                        remappedExits[dir] = instancedTarget;
+                    } else {
+                        remappedExits[dir] = { ...target, target: instancedTarget };
+                    }
+                } else {
+                    remappedExits[dir] = target; // Global exit (e.g. "outside")
+                }
+            }
+        }
+
+        batch.set(roomRef, {
+            ...data,
+            id: instancedId,
+            exits: remappedExits,
+            metadata: { 
+                ...(data.metadata || {}), 
+                isInstance: true, 
+                owner: user.uid,
+                authorizedUids: [user.uid] // Foundation for future "Share with Friend" feature
+            }
+        });
+    }
+    await batch.commit();
+}
+
+/**
  * Loads player state and maintains a real-time listener for updates.
  */
 export async function loadPlayerState(user) {
     try {
-        const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+        const stateRef = doc(db, 'artifacts', appId, 'playerState', user.uid);
         
         onSnapshot(stateRef, (snap) => {
             if (snap.exists()) {
@@ -81,8 +144,9 @@ export async function loadPlayerState(user) {
 
 async function loadUserCharacters(user) {
     try {
-        const charCol = collection(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION);
-        const snap = await getDocs(charCol);
+        const charCol = collection(db, 'artifacts', appId, CHAR_COLLECTION);
+        const q = query(charCol, where("ownerUid", "==", user.uid));
+        const snap = await getDocs(q);
         const characters = [];
         snap.forEach(doc => {
             characters.push({ id: doc.id, ...doc.data() });
@@ -102,6 +166,57 @@ async function loadUserCharacters(user) {
             }
         }
     } catch (e) { console.error("SyncEngine: Failed to load characters:", e); }
+}
+
+/**
+ * Attaches a real-time listener to the global strata collection.
+ * Performs initial seeding if the collection is empty.
+ * Caches results in localStorage for fast subsequent loads.
+ */
+export async function updateStrataListener() {
+    const { user } = stateManager.getState();
+    if (!db || !user) return;
+    if (strataUnsubscribe) strataUnsubscribe();
+
+    // 1. Initial Load from Cache (Fast Boot)
+    try {
+        const cached = localStorage.getItem(`strata_cache_${appId}`);
+        if (cached) {
+            const strata = JSON.parse(cached);
+            stateManager.setStrata(strata);
+            console.log("[SYNC]: Strata definitions loaded from local cache.");
+        }
+    } catch (e) {
+        console.warn("[SYNC]: Failed to parse strata cache.", e);
+    }
+
+    const strataRef = collection(db, 'artifacts', appId, 'strata');
+    
+    return new Promise((resolve) => {
+        strataUnsubscribe = onSnapshot(strataRef, async (snapshot) => {
+            const strata = {};
+            snapshot.forEach(doc => { strata[doc.id] = doc.data(); });
+            
+            // Seeding logic: if strata collection is empty, seed with DEFAULT_STRATA
+            if (snapshot.empty) {
+                console.log("[SYNC]: Strata collection empty. Seeding from DEFAULT_STRATA...");
+                const batch = writeBatch(db);
+                
+                for (const [id, data] of Object.entries(DEFAULT_STRATA)) {
+                    const docRef = doc(strataRef, id);
+                    batch.set(docRef, data);
+                }
+                await batch.commit();
+                return;
+            }
+
+            // 2. Update State & Local Cache
+            stateManager.setStrata(strata);
+            localStorage.setItem(`strata_cache_${appId}`, JSON.stringify(strata));
+            
+            resolve();
+        });
+    });
 }
 
 /**
@@ -147,7 +262,7 @@ export async function savePlayerState() {
     const { user, localPlayer, activeAvatar } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return;
     try {
-        const stateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'state', 'player');
+        const stateRef = doc(db, 'artifacts', appId, 'playerState', user.uid);
         const stateToSave = { 
             ...localPlayer, 
             activeAvatarId: activeAvatar?.id || null,
@@ -204,7 +319,7 @@ export async function syncAvatarStats(avatarId, stats) {
     const { user } = stateManager.getState();
     if (!db || !user || !isSyncEnabled || !avatarId) return;
     try {
-        const charRef = doc(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION, avatarId);
+        const charRef = doc(db, 'artifacts', appId, CHAR_COLLECTION, avatarId);
         await setDoc(charRef, stats, { merge: true });
     } catch (e) { console.error("SyncEngine: Failed to sync avatar stats:", e); }
 }
@@ -268,11 +383,24 @@ export async function createCharacter(charData) {
             }
         }
 
-        const charCol = collection(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION);
+        const charCol = collection(db, 'artifacts', appId, CHAR_COLLECTION);
         const finalCharData = {
-            ...charData,
-            deployed: charData.deployed ?? false
+            name: charData.name || "Unnamed Vessel",
+            archetype: charData.archetype || "Unknown",
+            description: charData.description || "No biometric history on file.",
+            stratum: charData.stratum || "mundane",
+            visual_prompt: charData.visual_prompt || charData.visualPrompt || "A mysterious figure.",
+            stats: charData.stats || { AMN: 20, WILL: 10, AWR: 10, PHYS: 10 },
+            image: charData.image || null,
+            deceased: charData.deceased ?? false,
+            deployed: charData.deployed ?? false,
+            ownerUid: user.uid,
+            timestamp: serverTimestamp()
         };
+
+        // Filter out any undefined keys to prevent Firestore errors
+        Object.keys(finalCharData).forEach(key => finalCharData[key] === undefined && delete finalCharData[key]);
+
         const docRef = await addDoc(charCol, finalCharData);
         return docRef.id;
     } catch (e) { 
@@ -286,7 +414,7 @@ export async function markCharacterDeceased(avatarId) {
     if (!db || !user || !isSyncEnabled) return;
     
     try {
-        const charRef = doc(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION, avatarId);
+        const charRef = doc(db, 'artifacts', appId, CHAR_COLLECTION, avatarId);
         await updateDoc(charRef, { deceased: true });
     } catch (e) { console.error("SyncEngine: Failed to mark character deceased:", e); }
 }
@@ -296,7 +424,7 @@ export async function markCharacterDeployed(avatarId) {
     if (!db || !user || !isSyncEnabled) return;
     
     try {
-        const charRef = doc(db, 'artifacts', appId, 'users', user.uid, CHAR_COLLECTION, avatarId);
+        const charRef = doc(db, 'artifacts', appId, CHAR_COLLECTION, avatarId);
         await updateDoc(charRef, { deployed: true });
     } catch (e) { console.error("SyncEngine: Failed to mark character deployed:", e); }
 }
@@ -305,10 +433,11 @@ export async function saveLoreFragment(roomId, loreData) {
     const { user } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return;
     try {
-        // Lore is now associated with a room in the global space
-        const loreCol = collection(db, 'artifacts', appId, 'rooms', roomId, 'lore');
+        // Lore is now flattened at the root of the app namespace
+        const loreCol = collection(db, 'artifacts', appId, 'lore');
         await addDoc(loreCol, {
             ...loreData,
+            roomId: roomId, // Reference to the room it belongs to
             timestamp: serverTimestamp(),
             author: user.uid
         });

@@ -128,30 +128,39 @@ export async function compressImage(base64Str, maxWidth = 400, quality = 0.7) {
     });
 }
 
-export async function callGemini(userInput, systemPrompt) {
+export async function callGemini(userInput, systemPrompt, customSchema = RESPONSE_SCHEMA) {
     try {
+        const body = {
+            contents: [{ role: "user", parts: [{ text: userInput }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: { 
+                temperature: 0.7 
+            }
+        };
+
+        if (customSchema) {
+            body.generationConfig.responseMimeType = "application/json";
+            body.generationConfig.responseSchema = customSchema;
+        } else {
+            body.generationConfig.responseMimeType = "text/plain";
+        }
+
         const res = await fetch(API_GENERATE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: userInput }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: { 
-                    responseMimeType: "application/json",
-                    responseSchema: RESPONSE_SCHEMA,
-                    temperature: 0.7 
-                }
-            })
+            body: JSON.stringify(body)
         });
 
         const data = await res.json();
         const text = data.candidates[0].content.parts[0].text;
 
+        if (!customSchema) return text;
+
         try {
             return JSON.parse(text);
         } catch (e) {
             console.error("Gemini Structured Output Parse Error:", e, text);
-            return null;
+            return text; // Fallback to raw text if parsing fails
         }
     } catch (e) {
         console.error("Gemini API Parse Error:", e);
@@ -159,7 +168,7 @@ export async function callGemini(userInput, systemPrompt) {
     }
 }
 
-export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewUrl = null) {
+export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewUrl = null, strata = {}) {
     if (pinnedViewUrl) return pinnedViewUrl;
 
     // --- COST CONTROL INTERCEPT ---
@@ -168,13 +177,18 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
         return "https://placehold.co/1024x512/051505/4ade80.png?text=REALITY_BUFFER_STANDBY";
     }
 
-    const envStyleMap = {
-        'technate': 'clinical brutalism, sterile white-on-cyan, severe geometric architecture, dystopian corporation, high contrast, oppressive',
-        'mundane': 'gritty 1980s cyberpunk, claustrophobic dystopian sci-fi, Neuromancer aesthetic, dark and dirty, decaying, exposed wiring, CRT glow, heavy VHS tracking noise, indoors, enclosed architecture',
-        'faen': 'dark surrealism, ethereal watercolor, fluid glitch-art, twisted nature, psychic resonance',
-        'astral': 'abstract fractal, non-euclidean geometry, cosmic horror, shimmering neon purple and gold static'
-    };
-    const style = envStyleMap[stratum?.toLowerCase()] || envStyleMap.mundane;
+    const dynamicStratum = strata[stratum?.toLowerCase()];
+    let style = dynamicStratum?.visualStyle;
+
+    if (!style) {
+        const envStyleMap = {
+            'technate': 'clinical brutalism, sterile white-on-cyan, severe geometric architecture, dystopian corporation, high contrast, oppressive',
+            'mundane': 'gritty 1980s cyberpunk, claustrophobic dystopian sci-fi, Neuromancer aesthetic, dark and dirty, decaying, exposed wiring, CRT glow, heavy VHS tracking noise, indoors, enclosed architecture',
+            'faen': 'dark surrealism, ethereal watercolor, fluid glitch-art, twisted nature, psychic resonance',
+            'astral': 'abstract fractal, non-euclidean geometry, cosmic horror, shimmering neon purple and gold static'
+        };
+        style = envStyleMap[stratum?.toLowerCase()] || envStyleMap.mundane;
+    }
     
     // Ensure vibrant, full-color rendering and lock the perspective.
     const styledPrompt = `Cinematic interior shot, highly detailed, vibrant full color. DO NOT INCLUDE PEOPLE UNLESS EXPLICITLY REQUESTED. Subject: [ ${prompt} ]. Atmosphere and rendering style MUST BE: ${style}. Claustrophobic, indoors, enclosed.`;
@@ -198,23 +212,16 @@ export async function projectVisual(prompt, stratum, addLogCallback, pinnedViewU
     return null;
 }
 
-export async function generatePortrait(prompt, stratum) {
-    /*
-    const styleMap = {
-        'technate': 'clinical brutalism, high-key lighting, geometric, vibrant cyan and electric violet accents',
-        'mundane': 'gritty 1980s cyberpunk, high-saturation neon, heavy rain, chrome reflections, vibrant pink and teal lighting, VHS glitch',
-        'faen': 'surrealist, dream-like, watercolor glitch, ethereal, prismatic colors',
-        'astral': 'abstract fractal, shimmering, non-euclidean geometry, cosmic nebula colors'
-    };
-    const style = styleMap[stratum?.toLowerCase()] || styleMap.mundane;
-    */
+export async function generatePortrait(prompt, stratum, strata = {}) {
+    const dynamicStratum = strata[stratum?.toLowerCase()];
+    const flavor = dynamicStratum?.flavor || "near-future real-world critty retro-futuristic cyberpunk influenced by either high-sci-fi or high-fantasy";
 
     // HIGH FIDELITY CHARACTER PROMPT
     // Focuses strictly on personhood to prevent the model from drifting into cityscapes.
     const combinedPrompt = `Masterpiece digital portrait, hyper-vibrant full color, high saturation, MTG card art style. 
         SUBJECT: A close-up high-end character portrait of a humanoid person. 
         Focus on face, eyes, and clothing. NO BUILDINGS. NO EXTERIORS. 
-        Aesthetic: Modern, near-future real-world critty retro-futuristic cyberpunk influenced by either high-sci-fi or high-fantasy. 
+        Aesthetic: ${flavor}. 
         Give the portrait a bit of glitchy, retro-futuristic finish (like the image itself is slightly corrupted or has a digital overlay).
         Character Details: ${prompt}`;
     

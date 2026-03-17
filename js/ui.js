@@ -585,9 +585,12 @@ function drawTopologyToCanvas(canvasId, activeMap, currentRoomKey, stratum, draw
 
     const currentGreen = "#4ade80";
     const dimGreen = "#1a3a1a";
-    const astralPurple = "#b084e8";
+    
+    const { strata } = stateManager.getState();
+    const stratumData = strata[stratum.toLowerCase()];
+    const stratumColor = stratumData ? stratumData.color : (stratum === 'astral' ? "#b084e8" : '#2a5a2a');
 
-    ctx.strokeStyle = stratum === 'astral' ? astralPurple : '#2a5a2a';
+    ctx.strokeStyle = stratumColor;
     ctx.lineWidth = 2;
 
     // Draw Connections
@@ -607,7 +610,7 @@ function drawTopologyToCanvas(canvasId, activeMap, currentRoomKey, stratum, draw
 
             // Draw adjacent nodes
             ctx.fillStyle = "#051505";
-            ctx.strokeStyle = stratum === 'astral' ? astralPurple : dimGreen;
+            ctx.strokeStyle = stratumData ? stratumData.color : dimGreen;
             ctx.lineWidth = 1;
             
             if (drawLabels) {
@@ -615,7 +618,7 @@ function drawTopologyToCanvas(canvasId, activeMap, currentRoomKey, stratum, draw
                 ctx.strokeRect(tx - 16, ty - 12, 32, 24);
                 const targetRoom = activeMap[typeof target === 'string' ? target : target.target];
                 const label = targetRoom ? (targetRoom.shortName || targetRoom.name).substring(0, 4).toUpperCase() : "???";
-                ctx.fillStyle = stratum === 'astral' ? astralPurple : dimGreen;
+                ctx.fillStyle = stratumData ? stratumData.color : dimGreen;
                 ctx.font = "10px monospace";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
@@ -631,15 +634,15 @@ function drawTopologyToCanvas(canvasId, activeMap, currentRoomKey, stratum, draw
 
     // Draw Current Node
     ctx.fillStyle = "#051505";
-    ctx.strokeStyle = stratum === 'astral' ? "#d8b4fe" : currentGreen;
+    ctx.strokeStyle = stratumData ? stratumData.color : currentGreen;
     ctx.shadowBlur = 10; 
-    ctx.shadowColor = stratum === 'astral' ? "#d8b4fe" : currentGreen;
+    ctx.shadowColor = stratumData ? stratumData.color : currentGreen;
     
     if (drawLabels) {
         ctx.fillRect(centerX - 16, centerY - 12, 32, 24);
         ctx.strokeRect(centerX - 16, centerY - 12, 32, 24);
         ctx.shadowBlur = 0;
-        ctx.fillStyle = stratum === 'astral' ? "#d8b4fe" : currentGreen;
+        ctx.fillStyle = stratumData ? stratumData.color : currentGreen;
         ctx.font = "bold 11px monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -660,9 +663,11 @@ export function materializeEffect() {
 }
 
 export function applyStratumTheme(stratum, isTransitioning) {
+    const { strata } = stateManager.getState();
+    const stratumData = strata[stratum.toLowerCase()];
     const stratumNameEl = document.getElementById('stratum-name');
     if (stratumNameEl) {
-        stratumNameEl.innerText = stratum.toUpperCase();
+        stratumNameEl.innerText = stratumData ? stratumData.name.toUpperCase() : stratum.toUpperCase();
     }
     document.body.setAttribute('data-stratum', stratum);
     if (isTransitioning) {
@@ -735,7 +740,7 @@ export function toggleDossierBuffer(show, data = null) {
                     <div class="text-gray-400 leading-relaxed text-sm">${displayData.description || 'No biometric history on file.'}</div>
                 </div>
                 <div class="space-y-2 border-t border-green-900 pt-4 mb-4 font-mono text-xs">
-                    <div class="flex justify-between text-amber-500 font-bold"><span>AMN/span>  <span>${amnBar}</span></div>
+                    <div class="flex justify-between text-amber-500 font-bold"><span>AMN</span>  <span>${amnBar}</span></div>
                     <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>WILLPOWER</span> <span>${willBar}</span></div>
                     <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>PHYSIQUE</span>  <span>${physBar}</span></div>
                     <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>AWARENESS</span> <span>[${'|'.repeat(displayData.stats?.AWR || 0)}${' '.repeat(20 - (displayData.stats?.AWR || 0))}] ${displayData.stats?.AWR || 0}/20</span></div>
@@ -926,15 +931,12 @@ export function toggleStratumModal(currentStratum) {
     const nameEl = document.getElementById('modal-stratum-name');
     const descEl = document.getElementById('stratum-description');
     
-    if (nameEl) nameEl.innerText = currentStratum;
+    const { strata } = stateManager.getState();
+    const stratumData = strata[currentStratum.toLowerCase()];
+
+    if (nameEl) nameEl.innerText = stratumData ? stratumData.name : currentStratum;
     if (descEl) {
-        const descs = {
-            mundane: "The Mundane stratum represents base consensus reality. Physics are deterministic, and the Technate's surveillance is absolute. Most vessels are anchored here by default.",
-            astral: "The Astral stratum is a realm of pure information and intent. Conventional geometry fails here, and reality is shaped by the observer's Willforce.",
-            faen: "The Faen stratum is a twilight realm of myth and memory, where the boundaries between biological and digital life are blurred.",
-            technate: "The Technate stratum is the core processing layer of the world's governing AI. It is a place of cold, geometric perfection and overwhelming data flow."
-        };
-        descEl.innerText = descs[currentStratum.toLowerCase()] || "An unidentified layer of reality.";
+        descEl.innerText = stratumData ? stratumData.description : "An unidentified layer of reality.";
     }
 
     modal.classList.toggle('hidden');
@@ -953,7 +955,10 @@ export function printRoomDescription(room, isAstral, activeMap, activeAvatar) {
         return;
     }
 
-    const color = isAstral ? "var(--gm-purple)" : "var(--term-green)";
+    const { strata, localPlayer } = stateManager.getState();
+    const stratumData = strata[localPlayer.stratum.toLowerCase()];
+    const color = stratumData ? stratumData.color : (isAstral ? "var(--gm-purple)" : "var(--term-green)");
+    
     addLog(`\n--- ${room.name.toUpperCase()} ---`, color);
     addLog(room.description, "#ccc");
 

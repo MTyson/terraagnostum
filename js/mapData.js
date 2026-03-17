@@ -17,10 +17,10 @@ export const blueprintApartment = {
 
 export const blueprintApartment = {
     "lore1": {
-        name: "Lore Room (West)",
+        name: "Lore Room",
         shortName: "LORE1",
-        description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall. The console hums with a strange energy, and the air feels thick with forgotten secrets.",
-        visualPrompt: "A cypherpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.  A closet door (closed) to the north is scrawled on with black marker 'Schrödinger's Closet'.  There is a hint of esoteric quantum light spilling out of the edges of the closet.",
+        description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall. The console hums with a strange energy, and the air is thick with forgotten secrets and intertwined histories.  A closet door to the north is scrawled on with black marker 'Schrödinger's Closet', glowing with potent energy.",
+        visualPrompt: "A gritty, glitchy cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.  A closet door (closed) to the north is scrawled on with black marker 'Schrödinger's Closet', with a mysterious purple-blue light glowing and pulsing out of the edges of the closed door.  Piles of reference books, documents and exoteric history and occult works are everywhere, evidence of an obsessive project ot catalog a vast, interdimensional Lore.",
         exits: { east: "maproom", north: "closet", south: "bedroom" },
         metadata: { stratum: "mundane", isEditable: false }
     },

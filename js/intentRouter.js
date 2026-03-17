@@ -10,6 +10,7 @@ import { triggerVisualUpdate, togglePinView } from './visualSystem.js';
 import { callGemini } from './apiService.js';
 import { openForgeModal } from './forgeSystem.js';
 import { startTerminal, handleTerminalInput } from './terminalSystem.js';
+import { blueprintApartment } from './mapData.js';
 
 // --- HELPER WRAPPERS (Local to Router) ---
 
@@ -23,8 +24,8 @@ function getUserTier() {
 
 export function shiftStratum(targetStratum) {
     const { localPlayer } = stateManager.getState();
-    const isTransitioningToAstral = targetStratum === 'astral' && localPlayer.stratum !== 'astral';
-    UI.applyStratumTheme(targetStratum, isTransitioningToAstral);
+    const isChanging = targetStratum !== localPlayer.stratum;
+    UI.applyStratumTheme(targetStratum, isChanging);
     stateManager.updatePlayer({ stratum: targetStratum });
     // Force a save to Firestore for stratum changes
     syncEngine.savePlayerState();
@@ -48,8 +49,11 @@ export async function executeMovement(targetDir) {
         return;
     }
     
+    const { strata } = stateManager.getState();
+    const stratumData = strata[localPlayer.stratum.toLowerCase()];
     const isAstral = localPlayer.stratum === 'astral' || 
-                     localPlayer.currentRoom.toLowerCase().includes('astral');
+                     localPlayer.currentRoom.toLowerCase().includes('astral') ||
+                     stratumData?.rules?.combat === 'Battle of Wills';
 
     if (isAstral) {
         const currentRoomData = activeMap[localPlayer.currentRoom];
@@ -61,15 +65,18 @@ export async function executeMovement(targetDir) {
             syncEngine.savePlayerState();
             const updatedActiveMap = getActiveMap();
             const nextRoom = updatedActiveMap[nextId];
-            UI.addLog(`[SYSTEM]: You traverse the astral currents to ${nextRoom.name}.`, "var(--term-green)");
+            const travelMsg = stratumData ? `You traverse the ${stratumData.name} currents to ${nextRoom.name}.` : `You traverse the astral currents to ${nextRoom.name}.`;
+            UI.addLog(`[SYSTEM]: ${travelMsg}`, "var(--term-green)");
             UI.printRoomDescription(nextRoom, true, updatedActiveMap, activeAvatar);
             return;
         }
 
         // No exit exists yet, start the generation sequence
         startWizard('astral_voyage', { direction: targetDir, fromId: localPlayer.currentRoom });
-        UI.setWizardPrompt("ASTRAL@VOYAGE:~$");
-        UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()} into the kaleidoscopic void.`, "var(--term-green)");
+        const promptLabel = stratumData ? stratumData.id.toUpperCase() : 'ASTRAL';
+        UI.setWizardPrompt(`${promptLabel}@VOYAGE:~$`);
+        const voidMsg = stratumData ? `into the ${stratumData.flavor || 'kaleidoscopic void'}` : `into the kaleidoscopic void`;
+        UI.addLog(`[SYSTEM]: You move ${targetDir.toUpperCase()} ${voidMsg}.`, "var(--term-green)");
         UI.addLog(`[WIZARD]: As the colors shift and reality warps, what do you see manifesting before you? (Describe the next sector)`, "var(--term-amber)");
         return;
     }
@@ -266,14 +273,15 @@ export async function handleCommand(val) {
     }
 
     if (cmd === 'recalibrate' || cmd === 'home' || cmd === 'unstuck') {
+        const targetRoom = user ? `instance_${user.uid}_bedroom` : 'bedroom';
         stateManager.updatePlayer({ 
-            currentRoom: 'bedroom', 
+            currentRoom: targetRoom, 
             stratum: 'mundane',
             combat: { active: false, opponent: null }
         });
         await syncEngine.updateGlobalMapListener();
         shiftStratum('mundane');
-        UI.addLog("[SYSTEM]: Recalibrating reality to primary anchor (Bedroom)...", "var(--term-green)");
+        UI.addLog(`[SYSTEM]: Recalibrating reality to primary anchor (${targetRoom})...`, "var(--term-green)");
         triggerVisualUpdate(null, stateManager.getState().localPlayer, stateManager.getActiveMap(), user);
         return;
     }
@@ -336,7 +344,7 @@ export async function handleCommand(val) {
     }
 
     if (cmd.match(/^(use|access|hack)\s+(terminal|tandem|console)/)) {
-        if (localPlayer.currentRoom === 'lore1') {
+        if (localPlayer.currentRoom.endsWith('_lore1') || localPlayer.currentRoom === 'lore1') {
             startTerminal();
             return;
         }
@@ -368,11 +376,12 @@ export async function handleCommand(val) {
             return;
         }
         stateManager.setActiveAvatar(localCharacters[num - 1]);
+        syncEngine.savePlayerState();
         UI.addLog(`[SYSTEM]: Consciousness transferred to ${stateManager.getState().activeAvatar.name}.`, "var(--term-green)");
         return;
     }
 
-    if (localPlayer.currentRoom === 'closet') {
+    if (localPlayer.currentRoom.endsWith('closet') || localPlayer.currentRoom === 'closet') {
         if (cmd === 'investigate') {
             UI.addLog("[NARRATOR]: An exotic Hacked Schumann Generator sits in the center of the room. Its quantum field is destabilized.", "#888");
             if (!localPlayer.closetDoorClosed) {
@@ -439,6 +448,46 @@ export async function handleCommand(val) {
         }
     }
 
+    if (cmd === '/room') {
+        const activeMap = getActiveMap();
+        const roomId = localPlayer.currentRoom;
+        const roomData = activeMap[roomId];
+        
+        if (!roomData) {
+            UI.addLog(`[SYSTEM]: Room data for [${roomId}] is missing from local cache.`, "var(--term-red)");
+            return;
+        }
+
+        UI.addLog(`[DIAGNOSTIC]: ROOM DATA`, "var(--term-green)");
+        UI.addLog(`- UUID/ID: ${roomId}`, "var(--term-amber)");
+        UI.addLog(`- NAME: ${roomData.name}`, "var(--term-amber)");
+        UI.addLog(`- STRATUM: ${roomData.metadata?.stratum || 'unknown'}`, "var(--term-amber)");
+        UI.addLog(`- OWNER: ${roomData.metadata?.owner || 'global'}`, "var(--term-amber)");
+        UI.addLog(`- INSTANCE: ${roomData.metadata?.isInstance ? 'YES' : 'NO'}`, "var(--term-amber)");
+        
+        const exits = Object.keys(roomData.exits || {}).join(', ') || 'none';
+        UI.addLog(`- EXITS: ${exits}`, "var(--term-amber)");
+        
+        return;
+    }
+
+    if (cmd === '/strata' || cmd === 'strata') {
+        const { strata } = stateManager.getState();
+        if (!strata || Object.keys(strata).length === 0) {
+            UI.addLog("[SYSTEM]: No strata definitions found in local cache.", "var(--term-red)");
+            return;
+        }
+
+        UI.addLog(`[DIAGNOSTIC]: KNOWN STRATA`, "var(--term-green)");
+        Object.values(strata).forEach(s => {
+            const isActive = localPlayer.stratum === s.id ? " (ACTIVE)" : "";
+            UI.addLog(`- ${s.name.toUpperCase()} [${s.id}]${isActive}`, "var(--term-amber)");
+            UI.addLog(`  > Theme: ${s.theme}`, "#888");
+            UI.addLog(`  > Style: ${s.visualStyle}`, "#888");
+        });
+        return;
+    }
+
     // --- AUTH & IDENTITY COMMANDS ---
     if (cmd === 'whoami') {
         const tier = getUserTier();
@@ -468,7 +517,7 @@ export async function handleCommand(val) {
 
     // CORE SYSTEM COMMANDS
     if (cmd === 'create avatar' || cmd === 'forge form' || cmd === 'make avatar') {
-        if (localPlayer.currentRoom !== 'character_room') {
+        if (!localPlayer.currentRoom.endsWith('character_room') && localPlayer.currentRoom !== 'character_room') {
             UI.addLog("[SYSTEM]: Vessel manifestation is only possible within The Forge (character_room).", "var(--term-amber)");
             return;
         }
@@ -477,7 +526,8 @@ export async function handleCommand(val) {
     }
 
     if (!activeAvatar && !cmd.startsWith('help') && !cmd.startsWith('create avatar') && !cmd.startsWith('assume')) {
-        if (localPlayer.currentRoom !== 'character_room' && localPlayer.currentRoom !== 'spare_room') {
+        if (!localPlayer.currentRoom.endsWith('character_room') && localPlayer.currentRoom !== 'character_room' && 
+            !localPlayer.currentRoom.endsWith('spare_room') && localPlayer.currentRoom !== 'spare_room') {
             UI.addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive to forge your form.`, "var(--term-amber)");
         }
     }
@@ -643,7 +693,15 @@ export async function handleCommand(val) {
         UI.addLog(`<span id="thinking-indicator" class="italic" style="color: var(--gm-purple)">COLLAPSING PROBABILITY FIELDS...</span>`);
         try {
             const sysPrompt = `You are the Architect of Terra Agnostum. Generate a thematic room definition based on the current stratum: ${localPlayer.stratum.toUpperCase()}. The current context is: ${currentRoomData.name} - ${currentRoomData.description}. Respond STRICTLY in JSON: {"name": "Evocative Name", "description": "Atmospheric narrative description", "visual_prompt": "Detailed prompt for image generation"}`;
-            const res = await callGemini("Generate a full room definition.", sysPrompt);
+            const res = await callGemini("Generate a full room definition.", sysPrompt, {
+                type: "object",
+                properties: {
+                    name: { type: "string" },
+                    description: { type: "string" },
+                    visual_prompt: { type: "string" }
+                },
+                required: ["name", "description", "visual_prompt"]
+            });
             if (res && res.name && res.description) {
                 const updates = {
                     name: res.name,
@@ -711,7 +769,7 @@ export async function handleCommand(val) {
         else localPlayer.inventory.forEach(item => UI.addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
         return;
     } else if (cmd === 'help') {
-        UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT, INVESTIGATE, RECALIBRATE.", "var(--term-amber)");
+        UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT, INVESTIGATE, RECALIBRATE, /ROOM, /STRATA.", "var(--term-amber)");
         return;
     }
 

@@ -3,12 +3,13 @@
 // --- INITIAL STATE ---
 let state = {
     localPlayer: { 
-        hp: 20, currentRoom: "bedroom", stratum: "mundane",
+        hp: 20, currentRoom: "void", stratum: "mundane",
         inventory: [], closetDoorClosed: false, isArchitect: false,
         explorerMode: false,
         combat: { active: false, opponent: null }, activeAvatarId: null
     },
     localAreaCache: {}, // THE ONLY CACHE
+    strata: {}, // Dynamic strata from Firestore
     localCharacters: [], activeAvatar: null, user: null,
     otherPlayers: {}, // Global presence map: { uid: { roomId, avatarName, ... } }
     activeTerminal: false, isProcessing: false, suggestions: [],
@@ -58,6 +59,11 @@ export function updatePlayer(updates) {
 
 export function setLocalAreaCache(nodes) {
     state.localAreaCache = nodes || {};
+    notify();
+}
+
+export function setStrata(strata) {
+    state.strata = strata || {};
     notify();
 }
 

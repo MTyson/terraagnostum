@@ -25,8 +25,13 @@ export function openForgeModal(readOnlyData = null) {
     if (readOnlyData) {
         setupReadOnlyForge(readOnlyData);
     } else {
-        const strataKeys = Object.keys(STRATA_ARCHIVE);
-        currentDraftStratum = strataKeys[Math.floor(Math.random() * strataKeys.length)];
+        const { strata } = stateManager.getState();
+        const strataKeys = Object.keys(strata);
+        if (strataKeys.length > 0) {
+            currentDraftStratum = strataKeys[Math.floor(Math.random() * strataKeys.length)];
+        } else {
+            currentDraftStratum = 'mundane';
+        }
         resetForge();
     }
 }
@@ -119,12 +124,14 @@ async function suggestName() {
     nameInput.placeholder = "SEARCHING REGISTRY...";
     
     UI.addLog("[SYSTEM]: Accessing naming protocols...", "var(--term-amber)");
-    // Let's try just a miniamalist prompt first to see if we can get a good name without overloading the model with info. We can always iterate on this.
-    //const lore = STRATA_ARCHIVE[currentDraftStratum];
-    //const prompt = `Invent a unique name for a character belonging to this world stratum: ${currentDraftStratum} (${lore}). Return JSON: {"name": "string"}`;
+    
+    const { strata } = stateManager.getState();
+    const stratumData = strata[currentDraftStratum.toLowerCase()];
+    const dynamicSetting = stratumData ? `Setting: ${stratumData.name}. Vibe: ${stratumData.description}. Naming Rule: ${stratumData.rules?.naming || 'Standard'}.` : settingString;
+
     const prompt = `
       Role: You are a world-building consultant specializing in "Uncanny Valley" linguistics.
-      ${settingString}
+      ${dynamicSetting}
       Task: Generate 20 Player Character names using a [First Name] "[Nickname]" [Last Name] format.
       Naming Rules:
         Base: Use common, relatable 21st-century Earth names as the foundation, be global (e.g., Sarah, David, Miller, Smith, Jackson, Yen, Nguyen, Chan, Mbutu, Mande, Alex, Corian, Ian, Amanda, Marriane, Davies, Mandela, Tashi, Niranjan, Herenandez, Rodriguez, Jan, Jefferson, Bryce, Ash, etc.).
@@ -140,7 +147,13 @@ async function suggestName() {
         Format: Return strictly JSON with a "names" array containing strings.
       Return JSON: {"names": ["name1", "name2", ...]}
       `;
-    const res = await callGemini(prompt, "[lore archive] You are a naming protocol.");
+    const res = await callGemini(prompt, "[lore archive] You are a naming protocol.", {
+        type: "object",
+        properties: {
+            names: { type: "array", items: { type: "string" } }
+        },
+        required: ["names"]
+    });
     
     if (res && res.names && Array.isArray(res.names) && res.names.length > 0) {
         const pickedName = res.names[Math.floor(Math.random() * res.names.length)];
@@ -168,15 +181,19 @@ async function suggestBackstory() {
     descInput.placeholder = "CONSULTING ARCHIVES...";
 
     UI.addLog("[SYSTEM]: Consulting lore archives...", "var(--term-amber)");
-    //const lore = STRATA_ARCHIVE[currentDraftStratum];
-    // 2. Inject the name into the prompt
-    //const prompt = `Invent a 2-sentence backstory for a character named ${name} from the ${currentDraftStratum} stratum (${lore}). Return JSON: {"backstory": "string"}`;
-    // 3. Use the 'lore archive' keyword to keep it fast and lore-free in the backend
+    
+    const { strata } = stateManager.getState();
+    const stratumData = strata[currentDraftStratum.toLowerCase()];
+    const dynamicSetting = stratumData ? `Setting: ${stratumData.name}. Vibe: ${stratumData.description}. Theme: ${stratumData.theme}.` : settingString;
 
     const prompt = `
       You are a Master Storyteller.  You are inventing a backstory for a character named ${name}.
-      ${settingString}
-      This character is from the Munande plane.  That means, their backstory should be somewhat relatable to a modern game playing user.  They can have any of a wide range of origin stories from the modern world (software engineer, realtor, homeless person, family backgrounds, native american, whatever, use the name as a guide, but ensure the BEGINNINGS of the story are at least recognizable).
+      ${dynamicSetting}
+      This character is from the ${stratumData ? stratumData.name : 'Mundane'} plane.  Their backstory should reflect the look and feel of this stratum.
+      If it's Mundane, it should be somewhat relatable to a modern game playing user...
+      If it's Faen, it should lean into ancient high-fantasy and nature-burdened magic...
+      If it's CityCore7/Technate, it should be optimized, clinical, and cypherpunk.
+      
       Their story can gradually collide with 'The Interregnum', which is the current gameworld narrative of how the elite have made a deal with the Technate.
       So we see a gradual 'Neruomancer'/'Deus Ex' style cyberpunk conspiracy, high-tech influence.
       At the same time, we see a benevolent influence from the Faen plane.  This is a hopeful, highfantasy, magical realism of growth and beauty.
@@ -198,7 +215,13 @@ async function suggestBackstory() {
       Return JSON: {"backstory": "string"}
     `;
 
-    const res = await callGemini(prompt, "lore archive: You are a lore archive.");
+    const res = await callGemini(prompt, "lore archive: You are a lore archive.", {
+        type: "object",
+        properties: {
+            backstory: { type: "string" }
+        },
+        required: ["backstory"]
+    });
     
     if (res && res.backstory) {
         descInput.value = res.backstory;
@@ -230,16 +253,31 @@ async function analyzeBiometrics() {
     // Determine stats for a character in the ${currentDraftStratum} stratum. 
 
     UI.addLog("[SYSTEM]: Checking vessel vitals...", "var(--term-amber)");
+    
+    const { strata } = stateManager.getState();
+    const stratumData = strata[currentDraftStratum.toLowerCase()];
+    const dynamicSetting = stratumData ? `Setting: ${stratumData.name}. Vibe: ${stratumData.description}. Theme: ${stratumData.theme}.` : settingString;
+
     const prompt = `Analyze this biometric seed: "${desc}". 
       AMN (OM|AMEN) is the ROOT stat and is always 20 for new characters.
       WILL, AWR, and PHYS are DERIVED stats. 
       CRITICAL RULE: The sum of (WILL + AWR + PHYS) MUST EQUAL the AMN value (20).
       Distribute the 20 points among WILL, AWR, and PHYS based on the biometric seed.
       Return JSON: {"WILL": int, "AWR": int, "PHYS": int, "AMN": 20, "archetype": "string"}
-      ${settingString}
+      ${dynamicSetting}
       `;
     
-    const res = await callGemini(prompt, "[lore archive] You are a biometric scanner.");
+    const res = await callGemini(prompt, "[lore archive] You are a biometric scanner.", {
+        type: "object",
+        properties: {
+            WILL: { type: "integer" },
+            AWR: { type: "integer" },
+            PHYS: { type: "integer" },
+            AMN: { type: "integer" },
+            archetype: { type: "string" }
+        },
+        required: ["WILL", "AWR", "PHYS", "AMN", "archetype"]
+    });
     if (res) {
         currentDraftStats = res;
         if (currentDraftStats.AMN === undefined) currentDraftStats.AMN = 20;
@@ -271,8 +309,9 @@ async function manifestVessel() {
     const portraitBox = document.getElementById('forge-image-display');
     portraitBox.innerHTML = `<div class="flex h-full items-center justify-center text-amber-500 text-[10px] animate-pulse">MATERIALIZING...</div>`;
 
+    const { strata } = stateManager.getState();
     const portraitPrompt = `Character portrait: ${name}. ${desc}. ${currentDraftStats.archetype} archetype.`;
-    const b64 = await generatePortrait(portraitPrompt, currentDraftStratum);
+    const b64 = await generatePortrait(portraitPrompt, currentDraftStratum, strata);
     
     if (b64) {
         const dataUri = `data:image/png;base64,${b64}`;
