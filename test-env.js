@@ -1,12 +1,12 @@
 /**
- * test-env.js — TerraAgnostum Pre-Flight Environment Health Check
+ * test-env.js \u2014 TerraAgnostum Pre-Flight Environment Health Check
  *
  * Run with:  node test-env.js
  *
  * Checks:
  *   1. .env.local presence & parsing
  *   2. All package.json dependencies are installed & resolvable
- *   3. Required environment variables are set
+ *   3. Required environment variables are set (including Stripe & Gemini)
  *   4. Firebase Admin SDK can be initialised with the supplied credentials
  *   5. Firestore can be contacted (lightweight collection list ping)
  *
@@ -18,9 +18,8 @@
 const dotenv  = require('dotenv');
 const path    = require('path');
 const fs      = require('fs');
-const { execSync } = require('child_process');
 
-// ─── Colour helpers (no deps required) ──────────────────────────────────────
+// \u2500\u2500\u2500 Colour helpers (no deps required) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const C = {
   reset:  '\x1b[0m',
   bold:   '\x1b[1m',
@@ -33,7 +32,7 @@ const C = {
   grey:   '\x1b[90m',
 };
 
-// ─── ANSI-aware padding ──────────────────────────────────────────────────────
+// \u2500\u2500\u2500 ANSI-aware padding \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-9;]*m/g, '');
 }
@@ -42,7 +41,7 @@ function rpad(str, len) {
   return str + ' '.repeat(Math.max(0, len - raw.length));
 }
 
-// ─── Report data structure ───────────────────────────────────────────────────
+// \u2500\u2500\u2500 Report data structure \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const report = {
   sections: [],
 };
@@ -57,7 +56,7 @@ function addSection(title) {
   };
 }
 
-// ─── 0. Load .env.local ──────────────────────────────────────────────────────
+// \u2500\u2500\u2500 0. Load .env.local \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const envPath = path.join(process.cwd(), '.env.local');
 const envSection = addSection('.env.local');
 
@@ -65,10 +64,10 @@ if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
   envSection.ok('.env.local', 'file found and loaded');
 } else {
-  envSection.fail('.env.local', 'file not found – create .env.local in project root');
+  envSection.fail('.env.local', 'file not found \u2013 create .env.local in project root');
 }
 
-// ─── 1. Dependency resolution ────────────────────────────────────────────────
+// \u2500\u2500\u2500 1. Dependency resolution \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const depSection = addSection('Dependencies  (package.json)');
 
 let pkgDeps = {};
@@ -82,7 +81,7 @@ try {
 for (const dep of Object.keys(pkgDeps)) {
   try {
     require.resolve(dep);
-    // Surface the installed version
+    // Surface the installed version if possible
     let ver = pkgDeps[dep];
     try {
       const pkgFile = require.resolve(`${dep}/package.json`);
@@ -90,24 +89,24 @@ for (const dep of Object.keys(pkgDeps)) {
     } catch (_) { /* some packages don't expose package.json directly */ }
     depSection.ok(dep, `v${ver}`);
   } catch (_) {
-    depSection.fail(dep, 'NOT INSTALLED – run `npm install`');
+    depSection.fail(dep, 'NOT INSTALLED \u2013 run `npm install`');
   }
 }
 
-// ─── 2. Environment variables ────────────────────────────────────────────────
+// \u2500\u2500\u2500 2. Environment variables \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const envVarSection = addSection('Environment Variables');
 
 const REQUIRED_VARS = [
   { key: 'FIREBASE_PROJECT_ID',    label: 'Firebase Project ID' },
   { key: 'FIREBASE_CLIENT_EMAIL',  label: 'Firebase Client Email' },
   { key: 'FIREBASE_PRIVATE_KEY',   label: 'Firebase Private Key' },
-  { key: 'STRIPE_SECRET_KEY_LIVE', label: 'Stripe Secret Key' },
-  { key: 'STRIPE_WEBHOOK_SECRET_LIVE', label: 'Stripe Webhook Secret (live)' },
-  { key: 'STRIPE_WEBHOOK_SECRET_LOCAL', label: 'Stripe Webhook Secret (local)' },
+  { key: 'STRIPE_SECRET_KEY_LIVE', label: 'Stripe Secret Key' }
 ];
 
 const OPTIONAL_VARS = [
-  { key: 'GEMINI_API_KEY',       label: 'Gemini API Key' },
+  { key: 'GEMINI_API_KEY',         label: 'Gemini API Key' },
+  { key: 'STRIPE_WEBHOOK_SECRET_LIVE', label: 'Stripe Webhook Secret (live)' },
+  { key: 'STRIPE_WEBHOOK_SECRET_LOCAL', label: 'Stripe Webhook Secret (local)' },
   { key: 'VITE_APP_ID',          label: 'Vite App ID' },
   { key: 'DISABLE_ROOM_GENERATION', label: 'Disable Room Generation (flag)' },
 ];
@@ -118,7 +117,7 @@ for (const { key, label } of REQUIRED_VARS) {
     envVarSection.fail(label, `${key} is not set`);
   } else {
     // Show first 6 chars as a sanity preview without exposing secrets
-    const preview = val.trim().substring(0, 6) + '…';
+    const preview = val.trim().substring(0, 6) + '\u2026';
     envVarSection.ok(label, `${key} = ${preview}`);
   }
 }
@@ -128,12 +127,12 @@ for (const { key, label } of OPTIONAL_VARS) {
   if (!val || val.trim() === '') {
     envVarSection.warn(label, `${key} not set (optional)`);
   } else {
-    const preview = val.trim().substring(0, 6) + '…';
+    const preview = val.trim().substring(0, 6) + '\u2026';
     envVarSection.ok(label, `${key} = ${preview}`);
   }
 }
 
-// ─── 3. Firebase Admin initialisation & Firestore ping ──────────────────────
+// \u2500\u2500\u2500 3. Firebase Admin initialisation & Firestore ping \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const fbSection = addSection('Firebase / Firestore');
 
 async function checkFirebase() {
@@ -148,7 +147,7 @@ async function checkFirebase() {
   // Build the credential object from env vars
   const projectId   = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  // Firestore private keys use literal \n in .env – un-escape them
+  // Firestore private keys use literal \\n in .env \u2013 un-escape them
   const privateKey  = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
 
   if (!projectId || !clientEmail || !privateKey) {
@@ -172,18 +171,18 @@ async function checkFirebase() {
     return;
   }
 
-  // Firestore lightweight ping – list root collections (quota-safe, read-only)
+  // Firestore lightweight ping \u2013 list root collections (quota-safe, read-only)
   let db;
   try {
     db = admin.firestore(app);
     await db.listCollections();
-    fbSection.ok('Firestore connection', 'listCollections() succeeded ✓');
+    fbSection.ok('Firestore connection', 'listCollections() succeeded \u2713');
   } catch (e) {
     // Distinguish auth vs. network errors
     if (e.code === 7 || (e.message || '').includes('PERMISSION_DENIED')) {
-      fbSection.fail('Firestore connection', `Permission denied – check service account roles: ${e.message}`);
+      fbSection.fail('Firestore connection', `Permission denied \u2013 check service account roles: ${e.message}`);
     } else if ((e.message || '').includes('ENOTFOUND') || (e.message || '').includes('ECONNREFUSED')) {
-      fbSection.fail('Firestore connection', `Network error – no internet access? ${e.message}`);
+      fbSection.fail('Firestore connection', `Network error \u2013 no internet access? ${e.message}`);
     } else {
       fbSection.fail('Firestore connection', e.message);
     }
@@ -192,16 +191,16 @@ async function checkFirebase() {
   }
 }
 
-// ─── PRINT REPORT ────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 PRINT REPORT \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function printReport() {
-  const LINE = '─'.repeat(72);
-  const DLINE = '═'.repeat(72);
+  const LINE = '\u2500'.repeat(72);
+  const DLINE = '\u2550'.repeat(72);
 
-  const icon = { ok: `${C.green}✔${C.reset}`, warn: `${C.yellow}⚠${C.reset}`, fail: `${C.red}✖${C.reset}` };
+  const icon = { ok: `${C.green}\u2714${C.reset}`, warn: `${C.yellow}\u26a0${C.reset}`, fail: `${C.red}\u2716${C.reset}` };
   const badge = { ok: `${C.green}PASS${C.reset}`, warn: `${C.yellow}WARN${C.reset}`, fail: `${C.red}FAIL${C.reset}` };
 
   console.log(`\n${C.bold}${C.cyan}${DLINE}${C.reset}`);
-  console.log(`${C.bold}${C.white}  TerraAgnostum — Environment Health Report${C.reset}   ${C.grey}${new Date().toISOString()}${C.reset}`);
+  console.log(`${C.bold}${C.white}  TerraAgnostum \u2014 Environment Health Report${C.reset}   ${C.grey}${new Date().toISOString()}${C.reset}`);
   console.log(`${C.bold}${C.cyan}${DLINE}${C.reset}\n`);
 
   let totalOk = 0, totalWarn = 0, totalFail = 0;
@@ -238,7 +237,7 @@ function printReport() {
   return totalFail;
 }
 
-// ─── Entry point ─────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Entry point \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 (async () => {
   await checkFirebase();
 

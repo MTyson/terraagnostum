@@ -30,8 +30,8 @@ export const DEFAULT_STRATA = {
     faen: {
         id: 'faen',
         name: 'Faen',
-        description: 'A realm of ancient high-fantasy and nature-burdened magic. Melodic sounds and shadows overlap with reality.',
-        theme: 'high-fantasy-decay',
+        description: 'A realm of ancient high-fantasy, deep lore and nature. Melodic sounds and shadows overlap with reality.',
+        theme: 'high-fantasy',
         color: '#5a2a5a', // Deep Purple/Magenta
         visualStyle: 'dark surrealism, ethereal watercolor, fluid glitch-art, twisted nature, high-fantasy aesthetic, plants, shadows, melodic elements',
         flavor: 'ancient and melodic',

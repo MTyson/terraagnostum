@@ -617,7 +617,9 @@ function drawTopologyToCanvas(canvasId, activeMap, currentRoomKey, stratum, draw
                 ctx.fillRect(tx - 16, ty - 12, 32, 24);
                 ctx.strokeRect(tx - 16, ty - 12, 32, 24);
                 const targetRoom = activeMap[typeof target === 'string' ? target : target.target];
-                const label = targetRoom ? (targetRoom.shortName || targetRoom.name).substring(0, 4).toUpperCase() : "???";
+                const label = (targetRoom && (targetRoom.shortName || targetRoom.name)) 
+                    ? (targetRoom.shortName || targetRoom.name).substring(0, 4).toUpperCase() 
+                    : "???";
                 ctx.fillStyle = stratumData ? stratumData.color : dimGreen;
                 ctx.font = "10px monospace";
                 ctx.textAlign = "center";
