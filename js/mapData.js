@@ -74,7 +74,8 @@ export const blueprintApartment = {
             south: { 
                 target: "outside", 
                 itemReq: "Resonant Key", 
-                lockMsg: "[SYSTEM]: The heavy metal door is sealed by a Technate biometric lock. A [Resonant Key] is required." 
+                reqAuth: true,
+                lockMsg: "[SYSTEM]: The heavy metal door is sealed by a Technate biometric lock. A [Resonant Key] and verified account identity are required." 
             } 
         },
         metadata: { stratum: "mundane", isEditable: false }

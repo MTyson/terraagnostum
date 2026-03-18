@@ -93,6 +93,7 @@ export async function executeMovement(targetDir) {
             }
             if (targetExit.reqAuth && (!user || user.isAnonymous)) {
                 UI.addLog(targetExit.lockMsg || "[SYSTEM]: Identity verification required to proceed.", "#b084e8");
+                UI.toggleOverlay('login-modal');
                 return;
             }
             if (targetExit.itemReq) {
