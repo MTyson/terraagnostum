@@ -43,7 +43,11 @@ const RESPONSE_SCHEMA = {
         world_edit: {
             type: "object",
             properties: {
-                type: { type: "string" },
+                type: { 
+                    type: "string", 
+                    description: "Select ONE action to alter the world state. Do not invent new types.",
+                    enum: ["add_marginalia", "unlock_exit", "spawn_item", "spawn_npc", "none"] 
+                },
                 text: { type: "string" },
                 direction: { type: "string" },
                 item: {
