@@ -216,8 +216,9 @@ export function updateContextualSuggestions(aigmSuggestions = []) {
     }
 
     if (localPlayer.combat.active) {
-        suggestions.push("ATTACK WITH WILL FORCE");
-        suggestions.push("CREATE ASTRAL WEAPON");
+        suggestions.push("ATTACK WITH WILLFORCE");
+        suggestions.push("MANIFEST ASTRAL SHIELD");
+        suggestions.push("FORGE ASTRAL WEAPON");
     }
 
     const safeAigm = Array.isArray(aigmSuggestions) ? aigmSuggestions : [];
@@ -617,9 +618,8 @@ function drawTopologyToCanvas(canvasId, activeMap, currentRoomKey, stratum, draw
                 ctx.fillRect(tx - 16, ty - 12, 32, 24);
                 ctx.strokeRect(tx - 16, ty - 12, 32, 24);
                 const targetRoom = activeMap[typeof target === 'string' ? target : target.target];
-                const label = (targetRoom && (targetRoom.shortName || targetRoom.name)) 
-                    ? (targetRoom.shortName || targetRoom.name).substring(0, 4).toUpperCase() 
-                    : "???";
+                const rawLabel = targetRoom ? (targetRoom.shortName || targetRoom.name || "???") : "???";
+                const label = String(rawLabel).substring(0, 4).toUpperCase();
                 ctx.fillStyle = stratumData ? stratumData.color : dimGreen;
                 ctx.font = "10px monospace";
                 ctx.textAlign = "center";
@@ -648,7 +648,8 @@ function drawTopologyToCanvas(canvasId, activeMap, currentRoomKey, stratum, draw
         ctx.font = "bold 11px monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText((room.shortName || room.name).substring(0, 4).toUpperCase(), centerX, centerY);
+        const rawCurrentLabel = room.shortName || room.name || "???";
+        ctx.fillText(String(rawCurrentLabel).substring(0, 4).toUpperCase(), centerX, centerY);
     } else {
         // Larger player node for mobile radar
         ctx.fillRect(centerX - 12, centerY - 12, 24, 24);
@@ -768,6 +769,9 @@ export function toggleCombatUI(active, opponentData = null) {
     if (!output || !overlay) return;
 
     if (active && opponentData) {
+        document.body.style.overflow = 'hidden';
+        document.getElementById('ability-hand')?.classList.remove('hidden');
+        
         output.classList.add('hidden');
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
@@ -849,9 +853,11 @@ export function toggleCombatUI(active, opponentData = null) {
                 const curPhys = activeAvatar.hp !== undefined ? activeAvatar.hp : activeAvatar.stats?.PHYS || 10;
                 const maxPhys = activeAvatar.stats?.PHYS || 10;
 
+                const isAstral = stateManager.getState().localPlayer.stratum === 'astral';
+
                 playerStats.innerHTML = `
-                    ${renderStatBarHTML('WILL', curWill, maxWill, 'var(--gm-purple)')}
-                    ${renderStatBarHTML('PHYS', curPhys, maxPhys, 'var(--term-green)')}
+                    ${renderStatBarHTML('WILL', curWill, maxWill, 'var(--gm-purple)', isAstral ? 'stat-will-astral' : '')}
+                    ${renderStatBarHTML('PHYS', curPhys, maxPhys, 'var(--term-green)', isAstral ? 'stat-phys-astral' : '')}
                 `;
             }
 
@@ -860,6 +866,9 @@ export function toggleCombatUI(active, opponentData = null) {
             }
         }
     } else {
+        document.body.style.overflow = '';
+        document.getElementById('ability-hand')?.classList.add('hidden');
+        
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
         if (timerBar) timerBar.classList.remove('timer-active');
@@ -877,10 +886,10 @@ export function toggleCombatUI(active, opponentData = null) {
 /**
  * Renders a blocky HTML stat bar.
  */
-function renderStatBarHTML(label, current, max, color) {
+function renderStatBarHTML(label, current, max, color, extraClass = '') {
     const percent = Math.max(0, Math.min(100, (current / max) * 100));
     return `
-        <div class="combat-stat-row">
+        <div class="combat-stat-row ${extraClass}">
             <div class="combat-stat-label">${label}</div>
             <div class="combat-stat-bar-bg">
                 <div class="combat-stat-bar-fill" style="width: ${percent}%; background-color: ${color}; color: ${color};"></div>
@@ -906,6 +915,13 @@ function renderAbilityChips(container) {
         btn.className = 'ability-chip';
         btn.innerHTML = `${ability.name} <span class="opacity-50 text-[7px]">(${ability.stat})</span>`;
         btn.onclick = () => {
+            const combatOverlay = document.getElementById('combat-overlay');
+            if (combatOverlay) {
+                combatOverlay.classList.remove('animate-combat-shake');
+                void combatOverlay.offsetWidth;
+                combatOverlay.classList.add('animate-combat-shake');
+            }
+
             const input = document.getElementById('cmd-input');
             if (input) {
                 input.value = ability.cmd;

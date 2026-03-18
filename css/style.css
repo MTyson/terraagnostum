@@ -131,6 +131,38 @@ body::before {
     box-shadow: 0 0 5px currentColor;
 }
 
+@keyframes combat-shake {
+    0% { transform: translate(1px, 1px) rotate(0deg); }
+    10% { transform: translate(-1px, -2px) rotate(-1deg); }
+    20% { transform: translate(-3px, 0px) rotate(1deg); }
+    30% { transform: translate(3px, 2px) rotate(0deg); }
+    40% { transform: translate(1px, -1px) rotate(1deg); }
+    50% { transform: translate(-1px, 2px) rotate(-1deg); }
+    60% { transform: translate(-3px, 1px) rotate(0deg); }
+    70% { transform: translate(3px, 1px) rotate(-1deg); }
+    80% { transform: translate(-1px, -1px) rotate(1deg); }
+    90% { transform: translate(1px, 2px) rotate(0deg); }
+    100% { transform: translate(1px, -2px) rotate(-1deg); }
+}
+
+.animate-combat-shake {
+    animation: combat-shake 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Phase 5.4 Astral Stat Overrides */
+.stat-will-astral > .combat-stat-bar-bg {
+    height: 8px !important;
+}
+.stat-will-astral > .combat-stat-bar-bg > .combat-stat-bar-fill {
+    box-shadow: 0 0 15px var(--gm-purple);
+}
+
+.stat-phys-astral > .combat-stat-bar-bg {
+    height: 2px !important;
+    opacity: 0.5;
+}
+
+
 /* --- FLEX DENSITY --- */
 #header-row, #visuals, #input-container, #footer-hud {
     flex-shrink: 0;
@@ -228,6 +260,32 @@ body::before {
     /* Ensure Map is visible in the mobile drawer */
     #map-canvas-container {
         display: block !important; 
+    }
+}
+
+@media (max-width: 768px) {
+    /* Phase 5.1: The Combat Modal Takeover */
+    #combat-overlay {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100dvh;
+        z-index: 500;
+        padding-bottom: 200px; /* Leave space for input container */
+    }
+
+    #input-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100vw;
+        z-index: 501; /* Must sit above combat modal */
+    }
+
+    /* Phase 5.2: Responsive Card Stacking */
+    #combat-clash {
+        flex-direction: column-reverse !important;
     }
 }
 

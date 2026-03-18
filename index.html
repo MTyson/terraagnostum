@@ -105,16 +105,8 @@
                     <div id="combat-log" class="flex-grow overflow-y-auto border-y border-green-900/20 py-2 text-xs sm:text-sm font-mono text-gray-400 leading-relaxed">
                         <div class="text-green-800 animate-pulse">[ AWAITING WEAVE RESOLUTION... ]</div>
                     </div>
-
-                    <!-- Bottom Section (Ability Hand) -->
-                    <div id="ability-hand" class="flex-shrink-0 py-2">
-                        <div id="ability-chips" class="flex flex-wrap justify-center gap-2">
-                            <!-- Ability buttons -->
-                        </div>
-                    </div>
                 </div>
             </div>
-
 
             <!-- BOTTOM: INTERACTION HUB (Fixed height container) -->
         <div id="input-container" class="p-4 border-t border-[#1a3a1a] bg-black/80 flex-shrink-0 flex flex-col gap-3">
@@ -122,6 +114,13 @@
             <!-- Context chips stay at the top of the container -->
             <div id="context-bar" class="flex flex-wrap gap-2"></div>
             
+            <!-- TACTICAL ACTION BAR (Phase 5) -->
+            <div id="ability-hand" class="hidden flex-shrink-0 py-1 w-full border border-green-900/40 bg-green-950/10">
+                <div id="ability-chips" class="flex flex-wrap justify-center gap-2">
+                    <!-- Ability buttons dynamically injected here -->
+                </div>
+            </div>
+
             <div class="flex items-center gap-3 w-full">
                 
                 <!-- DESKTOP: STATIC COMPASS -->

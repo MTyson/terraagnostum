@@ -200,9 +200,10 @@ export async function handleCommand(val) {
     const { localPlayer, activeAvatar, user, activeTerminal, localCharacters } = state;
     const cmd = val.toLowerCase();
 
-    // INTERCEPT AI SUGGESTION REQUEST
-    if (cmd === '💡 suggest' || cmd === 'suggest') {
-        UI.renderContextualCommands(['Thinking...']);
+    try {
+        // INTERCEPT AI SUGGESTION REQUEST
+        if (cmd === '💡 suggest' || cmd === 'suggest') {
+            UI.renderContextualCommands(['Thinking...']);
         try {
             const activeMap = getActiveMap();
             const suggestions = await handleGMIntent(
@@ -444,6 +445,9 @@ export async function handleCommand(val) {
                 { activeMap: newAstralMap, localPlayer: stateManager.getState().localPlayer, user, activeAvatar, isSyncEnabled: true },
                 { shiftStratum, savePlayerState: syncEngine.savePlayerState, refreshStatusUI: () => {}, renderMapHUD: UI.renderMapHUD, setActiveAvatar: stateManager.setActiveAvatar, syncAvatarStats: () => syncEngine.syncAvatarStats(stateManager.getState().activeAvatar?.id, stateManager.getState().activeAvatar?.stats) }
             );
+
+            // Trigger the 45-second ambush timer
+            startAstralAmbushTimer(entryId, 45000);
             return;
         }
     }
@@ -775,26 +779,77 @@ export async function handleCommand(val) {
 
     // --- THE UNIVERSAL GM INTENT ENGINE ---
     stateManager.setProcessing(true);
-    try {
-        const suggestions = await handleGMIntent(
-            val,
-            { 
-                get activeMap() { return getActiveMap(); }, 
-                localPlayer, user, activeAvatar, isSyncEnabled: true 
-            },
-            { 
-                shiftStratum, 
-                savePlayerState: syncEngine.savePlayerState, 
-                refreshStatusUI: () => {}, 
-                renderMapHUD: UI.renderMapHUD,
-                setActiveAvatar: stateManager.setActiveAvatar,
-                syncAvatarStats: () => syncEngine.syncAvatarStats(stateManager.getState().activeAvatar?.id, stateManager.getState().activeAvatar?.stats),
-                updateMapListener: () => syncEngine.updateGlobalMapListener(),
-                triggerVisualUpdate: (prompt) => triggerVisualUpdate(prompt, stateManager.getState().localPlayer, stateManager.getActiveMap(), stateManager.getState().user)
-            }
-        );
-        stateManager.setSuggestions(suggestions);
-    } finally { 
-        stateManager.setProcessing(false); 
+        try {
+            const suggestions = await handleGMIntent(
+                val,
+                { 
+                    get activeMap() { return getActiveMap(); }, 
+                    localPlayer, user, activeAvatar, isSyncEnabled: true 
+                },
+                { 
+                    shiftStratum, 
+                    savePlayerState: syncEngine.savePlayerState, 
+                    refreshStatusUI: () => {}, 
+                    renderMapHUD: UI.renderMapHUD,
+                    setActiveAvatar: stateManager.setActiveAvatar,
+                    syncAvatarStats: () => syncEngine.syncAvatarStats(stateManager.getState().activeAvatar?.id, stateManager.getState().activeAvatar?.stats),
+                    updateMapListener: () => syncEngine.updateGlobalMapListener(),
+                    triggerVisualUpdate: (prompt) => triggerVisualUpdate(prompt, stateManager.getState().localPlayer, stateManager.getActiveMap(), stateManager.getState().user)
+                }
+            );
+            stateManager.setSuggestions(suggestions);
+        } finally { 
+            stateManager.setProcessing(false); 
+        }
+    } catch (err) {
+        console.error("Command processing error:", err);
+        UI.addLog(`[SYSTEM ERROR]: Internal command failure - ${err.message}`, "var(--term-red)");
+    } finally {
+        stateManager.setProcessing(false);
     }
+}
+
+// --- ASTRAL NEXUS AMBUSH TIMER ---
+export function startAstralAmbushTimer(entryId = 'astral_entry', delayMs = 45000) {
+    setTimeout(async () => {
+        const state = stateManager.getState();
+        const { localPlayer, user, activeAvatar } = state;
+        
+        // If player is still in the entry room and NOT already in combat
+        if (localPlayer.currentRoom === entryId && !localPlayer.combat?.active) {
+            UI.addLog(`[SYSTEM WARN]: The astral static thickens. An ambient hostility takes form...`, "var(--term-amber)");
+            
+            if (stateManager.getState().isProcessing) return; // Wait, don't interrupt active generation
+            
+            stateManager.setProcessing(true);
+            try {
+                const suggestions = await handleGMIntent(
+                    "The player lingered too long in the Astral Nexus. Spawn an aggressively hostile astral anomaly (e.g. Static Stalker or Memory Shadow) to ambush them immediately and initiate a Battle of Wills combat.",
+                    { 
+                        get activeMap() { return getActiveMap(); }, 
+                        localPlayer: stateManager.getState().localPlayer, 
+                        user, 
+                        activeAvatar: stateManager.getState().activeAvatar, 
+                        isSyncEnabled: true 
+                    },
+                    { 
+                        shiftStratum, 
+                        savePlayerState: syncEngine.savePlayerState, 
+                        refreshStatusUI: () => {}, 
+                        renderMapHUD: UI.renderMapHUD,
+                        setActiveAvatar: stateManager.setActiveAvatar,
+                        syncAvatarStats: () => syncEngine.syncAvatarStats(stateManager.getState().activeAvatar?.id, stateManager.getState().activeAvatar?.stats),
+                        updateMapListener: () => syncEngine.updateGlobalMapListener(),
+                        triggerVisualUpdate: (prompt) => triggerVisualUpdate(prompt, stateManager.getState().localPlayer, stateManager.getActiveMap(), stateManager.getState().user)
+                    },
+                    false
+                );
+                stateManager.setSuggestions(suggestions);
+            } catch (err) {
+                console.error("Ambush Timer Error:", err);
+            } finally {
+                stateManager.setProcessing(false);
+            }
+        }
+    }, delayMs);
 }

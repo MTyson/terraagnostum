@@ -4,6 +4,7 @@ import { triggerVisualUpdate } from './visualSystem.js';
 import * as UI from './ui.js';
 import * as stateManager from './stateManager.js';
 import * as syncEngine from './syncEngine.js';
+import { startAstralAmbushTimer } from './intentRouter.js';
 
 export async function handleGMIntent(
     val,
@@ -46,6 +47,10 @@ export async function handleGMIntent(
             userPrompt += `\n\n[SYSTEM REMINDER]: The player is in ASTRAL COMBAT (Battle of Wills). Attacks like "WILL FORCE" or "ASTRAL WEAPON" MUST deal 5-10 "damage_to_npc". Ensure "combat_active" stays true until the NPC's WILL is 0. Do NOT resolve combat just because the player looks around or examines things.`;
         }
 
+        if (localPlayer.stratum === 'astral' && activeAvatar) {
+            userPrompt += `\n\n[ASTRAL MIRROR DIRECTIVE]: If spawning a Shadow or hostile anomaly, instruct the AI to manifest a "corrupted, glass-serrated, non-Euclidean shadow" version of the player's own character. Player Avatar: Name=${activeAvatar.name}, Desc=${activeAvatar.visual_prompt || activeAvatar.archetype}.`;
+        }
+
         // 3. API CALL
         const res = await callGemini(userPrompt, systemPrompt);
         let stateChanged = false;
@@ -74,11 +79,20 @@ export async function handleGMIntent(
                 if (!isSilent) UI.addLog(`[SYSTEM]: COMBAT INITIALIZED. BATTLE OF WILLS ENGAGED.`, "var(--term-red)");
                 stateChanged = true;
             } else if (!res.combat_active && localPlayer.combat.active) {
-                stateManager.updatePlayer({ 
-                    combat: { active: false, opponent: null } 
-                });
-                if (!isSilent) UI.addLog(`[SYSTEM]: Combat resolved.`, "var(--term-green)");
-                stateChanged = true;
+                const opponentName = (localPlayer.combat.opponent || "Shadow").toLowerCase();
+                
+                if (opponentName.includes('shadow')) {
+                    // Absolute Combat Locking
+                    // Ignore AI attempts to end combat prematurely against Astral Shadows.
+                    // HP/WILL conditions further down will override cleanly upon death.
+                    res.combat_active = true;
+                } else {
+                    stateManager.updatePlayer({ 
+                        combat: { active: false, opponent: null } 
+                    });
+                    if (!isSilent) UI.addLog(`[SYSTEM]: Combat resolved.`, "var(--term-green)");
+                    stateChanged = true;
+                }
             }
         }
 
@@ -166,12 +180,11 @@ export async function handleGMIntent(
                     stateChanged = true;
 
                     // Auto-grant Resonant Key and Shift Stratum if Shadow is defeated
-                    if (npc.name.startsWith("Shadow")) {
+                    if (npc.name.toLowerCase().includes("shadow")) {
                         const key = { name: "Resonant Key", type: "Key Item", description: "A vibrating, semi-translucent key that resonates with the apartment's front door." };
                         const currentLocalPlayer = stateManager.getState().localPlayer;
                         if (!currentLocalPlayer.inventory.some(i => i.name === key.name)) {
                             stateManager.updatePlayer({ inventory: [...currentLocalPlayer.inventory, key] });
-                            if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${key.name}].`, "var(--term-green)");
                         }
                         
                         if (currentLocalPlayer.stratum !== 'mundane') {
@@ -182,7 +195,8 @@ export async function handleGMIntent(
                             if (updateMapListener) await updateMapListener();
                             if (triggerVisual) triggerVisual();
                             shiftStratum('mundane');
-                            if (!isSilent) UI.addLog(`[SYSTEM]: Harmonic resonance achieved. Shifting back to mundane stratum...`, "var(--term-green)");
+                            
+                            if (!isSilent) UI.addLog(`[NARRATOR]: The frequency stabilizes. The Nexus collapses into static, and you are thrown back into your physical shell. You clench the Resonant Key in your hand.`, "#888");
                             
                             stateChanged = true;
                         }
@@ -207,6 +221,7 @@ export async function handleGMIntent(
                 stateChanged = true;
                 const welcomeMsg = stratumData?.description || "Conventional geometry discarded.";
                 if (!isSilent) UI.addLog(`[SYSTEM]: ${welcomeMsg}`, "var(--astral-pink)");
+                startAstralAmbushTimer(entryId, 45000);
             } else {
                 if (!isSilent) UI.addLog("[SYSTEM]: Dimensional shift failed. Anchors too strong in this node.", "var(--term-red)");
             }
@@ -349,11 +364,18 @@ export async function handleGMIntent(
                 const currentNpcs = room.npcs || [];
                 
                 const edit = res.world_edit.npc || {};
+                let v_prompt = edit.visual_prompt || edit.description || edit.personality;
+                
+                // ASTRAL MIRROR VISUAL OVERRIDE
+                if (currentState.localPlayer.stratum === 'astral' && edit.name?.toLowerCase().includes('shadow') && currentState.activeAvatar) {
+                    v_prompt = `${currentState.activeAvatar.visual_prompt || currentState.activeAvatar.archetype}. Dark mirror, cosmic horror, void static.`;
+                }
+
                 const newNpc = { 
                     id: `npc_${Date.now()}`, 
                     name: edit.name || "Unknown Entity", 
                     description: edit.description || edit.personality || "A strange entity.",
-                    visual_prompt: edit.visual_prompt || edit.description || edit.personality,
+                    visual_prompt: v_prompt,
                     archetype: edit.archetype || "Unknown",
                     stats: edit.stats || { AMN: 20, WILL: 7, AWR: 7, PHYS: 6 },
                     image: null 
