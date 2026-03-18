@@ -157,7 +157,8 @@ export async function callGemini(userInput, systemPrompt, customSchema = RESPONS
         if (!customSchema) return text;
 
         try {
-            return JSON.parse(text);
+            let cleanedText = text.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+            return JSON.parse(cleanedText);
         } catch (e) {
             console.error("Gemini Structured Output Parse Error:", e, text);
             return text; // Fallback to raw text if parsing fails

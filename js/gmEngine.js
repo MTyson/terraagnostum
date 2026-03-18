@@ -52,16 +52,27 @@ export async function handleGMIntent(
         }
 
         // 3. API CALL
-        const res = await callGemini(userPrompt, systemPrompt);
+        let res = await callGemini(userPrompt, systemPrompt);
+        
+        if (typeof res === 'string') {
+            console.warn("[SYSTEM ERROR] Gemini returned unparseable string. Constructing fallback object.");
+            res = {
+                narrative: "The system shudders. A cognitive error disrupts your intent.",
+                speaker: "SYSTEM",
+                combat_active: localPlayer.combat.active,
+                suggested_actions: ["Try again", "Observe surroundings"]
+            };
+        }
+        
         let stateChanged = false;
 
         // Manual Damage Override: Ensure keywords do damage if AI is being stingy
         // Check both current state and the AI's intended state
         const isActuallyCombat = localPlayer.combat.active || res.combat_active;
-        if (stratumData?.rules?.combat === 'Battle of Wills' && isActuallyCombat && !res.damage_to_npc) {
+        if (stratumData?.rules?.combat === 'Battle of Wills' && isActuallyCombat) {
             const v = val.toLowerCase();
             if (v.includes('will force') || v.includes('astral weapon') || v.includes('attack')) {
-                res.damage_to_npc = 10; // Increased damage to 10 for better pace
+                res.damage_to_npc = Math.max(5, res.damage_to_npc || 0);
             }
         }
 
@@ -107,7 +118,7 @@ export async function handleGMIntent(
             };
             
             stateManager.updatePlayer({ activeAvatar: updatedAvatar });
-            if (!isSilent) UI.addLog(`[COMBAT]: You took ${res.damage_to_player} PHYSICAL damage!`, "var(--term-red)");
+            if (!isSilent) UI.addLog(`>>> [ ASTRAL FEEDBACK ]: YOU TOOK ${res.damage_to_player} PHYSICAL DMG <<<`, "#ff0055");
             if (actions.syncAvatarStats) actions.syncAvatarStats(activeAvatar.id, { hp: newHP });
 
             if (newHP <= 0) {
@@ -163,7 +174,7 @@ export async function handleGMIntent(
                 stateManager.updateMapNode(currentState.localPlayer.currentRoom, { npcs: room.npcs });
                 syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { npcs: room.npcs });
 
-                if (!isSilent) UI.addLog(`[COMBAT]: ${npc.name} took ${res.damage_to_npc} WILL damage! (Remaining WILL: ${newNpcWill})`, "var(--term-amber)");
+                if (!isSilent) UI.addLog(`>>> [ ASTRAL FEEDBACK ]: ${npc.name.toUpperCase()} TOOK ${res.damage_to_npc} WILL DMG <<< (Remaining: ${newNpcWill})`, "#00ffff");
                 
                 if (newNpcWill <= 0) {
                     if (!isSilent) UI.addLog(`[SYSTEM]: ${npc.name} has been dissipated. Victory!`, "var(--term-green)");

@@ -69,6 +69,13 @@
                     <div id="combat-timer-bar" class="h-full bg-amber-500 w-full origin-left"></div>
                 </div>
 
+                <!-- TACTICAL INTEL (Phase 6) -->
+                <div id="tactical-intel-panel" class="hidden w-full bg-purple-950/20 border-b border-purple-900/50 p-2 text-xs flex-col gap-1 items-center justify-center shadow-[inset_0_0_15px_rgba(168,85,247,0.1)]">
+                    <div class="text-[10px] text-purple-400 font-bold uppercase tracking-widest">[ TACTICAL INTEL: <span id="intel-name" class="text-white"></span> ]</div>
+                    <div id="intel-desc" class="text-[11px] text-purple-200/80 italic text-center max-w-[80%]"></div>
+                    <div class="text-[10px] text-purple-500 font-mono mt-1">PHYS: <span id="intel-phys" class="text-white"></span> | WILL: <span id="intel-will" class="text-white"></span> | AWR: <span id="intel-awr" class="text-white"></span></div>
+                </div>
+
                 <div class="flex-grow flex flex-col p-4 gap-2 overflow-hidden">
                     <!-- Top Section (The Clash) -->
                     <div id="combat-clash" class="flex flex-row justify-between gap-2 flex-shrink-0">

@@ -789,6 +789,25 @@ export function toggleCombatUI(active, opponentData = null) {
             timerBar.classList.add('timer-active');
         }
 
+        // --- TACTICAL INTEL (Phase 6) ---
+        const intelPanel = document.getElementById('tactical-intel-panel');
+        if (intelPanel) {
+            intelPanel.classList.remove('hidden');
+            intelPanel.classList.add('flex');
+            
+            const intelName = document.getElementById('intel-name');
+            const intelDesc = document.getElementById('intel-desc');
+            const intelPhys = document.getElementById('intel-phys');
+            const intelWill = document.getElementById('intel-will');
+            const intelAwr = document.getElementById('intel-awr');
+            
+            if (intelName) intelName.innerText = opponentData.name || 'UNKNOWN ENTITY';
+            if (intelDesc) intelDesc.innerText = opponentData.description || 'No biometric data retrieved for this entity.';
+            if (intelPhys) intelPhys.innerText = opponentData.stats?.PHYS ?? '???';
+            if (intelWill) intelWill.innerText = opponentData.stats?.WILL ?? '???';
+            if (intelAwr) intelAwr.innerText = opponentData.stats?.AWR ?? '???';
+        }
+
         const { activeAvatar } = stateManager.getState();
 
         // 1. POPULATE OPPONENT CARD
@@ -868,6 +887,8 @@ export function toggleCombatUI(active, opponentData = null) {
     } else {
         document.body.style.overflow = '';
         document.getElementById('ability-hand')?.classList.add('hidden');
+        document.getElementById('tactical-intel-panel')?.classList.add('hidden');
+        document.getElementById('tactical-intel-panel')?.classList.remove('flex');
         
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
@@ -977,7 +998,8 @@ export function printRoomDescription(room, isAstral, activeMap, activeAvatar) {
     const stratumData = strata[localPlayer.stratum.toLowerCase()];
     const color = stratumData ? stratumData.color : (isAstral ? "var(--gm-purple)" : "var(--term-green)");
     
-    addLog(`\n--- ${room.name.toUpperCase()} ---`, color);
+    const roomTitle = room.name ? room.name.toUpperCase() : (room.shortName ? room.shortName.toUpperCase() : "UNKNOWN LOCATION");
+    addLog(`\n--- ${roomTitle} ---`, color);
     addLog(room.description, "#ccc");
 
     if (room.items && room.items.length > 0) {
