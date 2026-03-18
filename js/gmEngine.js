@@ -44,10 +44,13 @@ export async function handleGMIntent(
         const stratumData = strata[localPlayer.stratum.toLowerCase()];
         
         if (stratumData?.rules?.combat === 'Battle of Wills' && (localPlayer.combat.active || val.toLowerCase().includes('attack') || val.toLowerCase().includes('will force'))) {
-            userPrompt += `\n\n[SYSTEM REMINDER]: The player is in ASTRAL COMBAT (Battle of Wills). Attacks like "WILL FORCE" or "ASTRAL WEAPON" MUST deal 5-10 "damage_to_npc". Ensure "combat_active" stays true until the NPC's WILL is 0. Do NOT resolve combat just because the player looks around or examines things.`;
+            userPrompt += `\n\n[SYSTEM REMINDER]: The player is in ASTRAL COMBAT (Battle of Wills). Attacks like "WILL FORCE" or "ASTRAL WEAPON" MUST deal 5-10 "damage_to_npc". Ensure "combat_active" stays true until the NPC's WILL is 0. Do NOT resolve combat just because the player looks around.`;
+            if (localPlayer.combat.active) {
+                userPrompt += ` The enemy is already spawned. DO NOT use world_edit: { type: "spawn_npc" } again.`;
+            }
         }
 
-        if (localPlayer.stratum === 'astral' && activeAvatar) {
+        if (localPlayer.stratum === 'astral' && activeAvatar && !localPlayer.combat.active) {
             userPrompt += `\n\n[ASTRAL MIRROR DIRECTIVE]: If spawning a Shadow or hostile anomaly, instruct the AI to manifest a "corrupted, glass-serrated, non-Euclidean shadow" version of the player's own character. Player Avatar: Name=${activeAvatar.name}, Desc=${activeAvatar.visual_prompt || activeAvatar.archetype}.`;
         }
 
@@ -186,10 +189,11 @@ export async function handleGMIntent(
                 
                 if (newNpcWill <= 0) {
                     if (!isSilent) UI.addLog(`[SYSTEM]: ${npc.name} has been dissipated. Victory!`, "var(--term-green)");
-                    
-                    // FIX: Remove only the exact NPC fought, leaving clones alone
-                    const npcIndex = room.npcs.findIndex(n => n === npc);
-                    if (npcIndex > -1) room.npcs.splice(npcIndex, 1);
+                    // FIX: Remove all shadow clones from the room to clean up corrupted game states
+                    room.npcs = room.npcs.filter(n => {
+                        const lname = n.name.toLowerCase();
+                        return !lname.includes('shadow') && !lname.includes(npc.name.toLowerCase()) && !lname.includes('unknown entity');
+                    });
                     
                     stateManager.updateMapNode(currentState.localPlayer.currentRoom, { npcs: room.npcs });
                     syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { npcs: room.npcs });
