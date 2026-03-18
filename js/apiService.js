@@ -243,7 +243,15 @@ export async function generatePortrait(prompt, stratum, strata = {}) {
             body: JSON.stringify({ instances: [{ prompt: combinedPrompt }] })
         });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+            let errorMsg = `HTTP ${res.status}`;
+            try {
+                const errorData = await res.json();
+                if (errorData.error) errorMsg += ` - ${errorData.error}`;
+                if (errorData.details) errorMsg += ` - ${JSON.stringify(errorData.details)}`;
+            } catch (e) {}
+            throw new Error(errorMsg);
+        }
 
         const data = await res.json();
         if (data.predictions && data.predictions[0]) {
