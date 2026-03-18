@@ -63,9 +63,22 @@ stateManager.subscribe((state) => {
         const opponent = room?.npcs?.find(n => {
             const search = (localPlayer.combat.opponent || "").toLowerCase();
             const name = (n.name || "").toLowerCase();
-            return name === search || name.includes(search) || search.includes(name) || (search.includes('narrator') && name.includes('shadow'));
+            const isFallbackMatch = search.includes('narrator') || search.includes('system') || search.includes('tandy');
+            return name === search || name.includes(search) || search.includes(name) || isFallbackMatch || (search.includes('narrator') && name.includes('shadow'));
         });
-        toggleCombatUI(true, opponent || { name: localPlayer.combat.opponent });
+        let fallbackTarget = opponent;
+        if (!fallbackTarget) {
+            let n = localPlayer.combat.opponent || "Shadow Entity";
+            if (n.toLowerCase().includes('narrator') || n.toLowerCase().includes('system')) n = "Shadow Entity";
+            
+            fallbackTarget = {
+                name: n,
+                stats: { PHYS: 10, WILL: 10, AWR: 10 },
+                description: "[DATA FRAGMENTED] An unregistered localized anomaly."
+            };
+        }
+        
+        toggleCombatUI(true, fallbackTarget);
     } else {
         toggleCombatUI(false);
     }
