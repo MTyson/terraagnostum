@@ -84,6 +84,12 @@ export async function handleGMIntent(
                     opponentName = res.world_edit.npc.name;
                 }
                 
+                // Absolute Prevent: Don't set the system or narrator as the combat target
+                const lowerO = opponentName.toLowerCase();
+                if (lowerO === 'narrator' || lowerO === 'system' || lowerO === 'tandy') {
+                    opponentName = "Shadow Entity"; 
+                }
+                
                 stateManager.updatePlayer({ 
                     combat: { active: true, opponent: opponentName } 
                 });
@@ -109,8 +115,9 @@ export async function handleGMIntent(
 
         // Handle Damage to Player
         if (res.damage_to_player && activeAvatar) {
+            const dmg = res.damage_to_player || 0;
             const currentHP = activeAvatar.hp !== undefined ? activeAvatar.hp : (activeAvatar.stats.PHYS || 20);
-            const newHP = Math.max(0, currentHP - res.damage_to_player);
+            const newHP = Math.max(0, currentHP - dmg);
             
             const updatedAvatar = { 
                 ...activeAvatar, 
@@ -166,8 +173,9 @@ export async function handleGMIntent(
             
             if (npc) {
                 if (!npc.stats) npc.stats = { AMN: 20, WILL: 7, AWR: 7, PHYS: 6 };
+                const dmg = res.damage_to_npc || 0;
                 const currentWill = npc.stats.WILL !== undefined ? npc.stats.WILL : 7;
-                const newNpcWill = Math.max(0, currentWill - res.damage_to_npc);
+                const newNpcWill = Math.max(0, currentWill - dmg);
                 npc.stats.WILL = newNpcWill;
                 
                 // CRITICAL FIX: Update the state so the damage persists even if NPC hasn't reached 0 WILL
@@ -386,7 +394,7 @@ export async function handleGMIntent(
                     id: `npc_${Date.now()}`, 
                     name: edit.name || "Unknown Entity", 
                     description: edit.description || edit.personality || "A strange entity.",
-                    visual_prompt: v_prompt,
+                    visual_prompt: v_prompt || "A strange entity.",
                     archetype: edit.archetype || "Unknown",
                     stats: edit.stats || { AMN: 20, WILL: 7, AWR: 7, PHYS: 6 },
                     image: null 
@@ -441,16 +449,18 @@ export async function handleGMIntent(
                 }
             }
 
-            for (let npc of currentRoomData.npcs) {
+            for (let [idx, npc] of currentRoomData.npcs.entries()) {
                 // Ensure visual_prompt exists (fallback to description)
-                if (!npc.visual_prompt) npc.visual_prompt = npc.description || npc.personality;
+                if (!npc.visual_prompt) {
+                    npc.visual_prompt = npc.description || npc.personality || "A mysterious figure.";
+                }
 
                 if (npc.visual_prompt && !npc.image) {
                     if (!isSilent) UI.addLog(`[REPAIR]: Re-weaving visual imprint for ${npc.name}...`, "var(--term-amber)");
                     const { strata } = stateManager.getState();
                     const b64 = await generatePortrait(npc.visual_prompt, stateManager.getState().localPlayer.stratum, strata);
                     if (b64) {
-                        npc.image = await compressImage(`data:image/png;base64,${b64}`, 400, 0.7);
+                        currentRoomData.npcs[idx].image = await compressImage(`data:image/png;base64,${b64}`, 400, 0.7) || null;
                         stateManager.updateMapNode(stateManager.getState().localPlayer.currentRoom, { npcs: currentRoomData.npcs });
                         syncEngine.updateMapNode(stateManager.getState().localPlayer.currentRoom, { npcs: currentRoomData.npcs });
                     }
