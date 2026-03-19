@@ -378,8 +378,8 @@ export async function handleGMIntent(
             if (matchingExit) {
                 if (matchingExit.reqAuth && (!user || user.isAnonymous)) {
                     if (!isSilent) {
-                        UI.addLog(matchingExit.lockMsg || "[SYSTEM]: Identity verification required to proceed.", "#b084e8");
-                        UI.toggleOverlay('login-modal');
+                        UI.addLog(matchingExit.lockMsg || "[SYSTEM]: Identity anchor required. Type 'LOGIN' to register your frequency.", "#b084e8");
+                        window.dispatchEvent(new CustomEvent('trigger-login-wizard'));
                     }
                     return; // Abort the teleport
                 }

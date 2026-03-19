@@ -64,7 +64,12 @@ if (isSyncEnabled) {
     });
 }
 
-// --- HUD LINK LISTENERS ---
+// Listen for auth gate events dispatched by gmEngine (which can't import wizardSystem directly)
+window.addEventListener('trigger-login-wizard', () => {
+    handleCommand('login');
+});
+
+
 const becomeArchitectLink = document.getElementById('become-architect-link');
 if (becomeArchitectLink) {
     becomeArchitectLink.addEventListener('click', (e) => {

@@ -92,8 +92,9 @@ export async function executeMovement(targetDir) {
                 return;
             }
             if (targetExit.reqAuth && (!user || user.isAnonymous)) {
-                UI.addLog(targetExit.lockMsg || "[SYSTEM]: Identity verification required to proceed.", "#b084e8");
-                UI.toggleOverlay('login-modal');
+                UI.addLog(matchingExit?.lockMsg || "[SYSTEM]: Identity anchor required. Type 'LOGIN' to register your frequency.", "#b084e8");
+                startWizard('login');
+                UI.setWizardPrompt("AUTH@LOGIN:~$");
                 return;
             }
             if (targetExit.itemReq) {
