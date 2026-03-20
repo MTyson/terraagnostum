@@ -62,7 +62,8 @@ export const blueprintApartment = {
         description: "A room full of character sheets. There are an endless variety of them. The creators of this world have obsessively logged an enormous range of living beings. They cover the table and walls in piles and layers. It is an RPG bonanza of color and stats and drawings. You can create characters here. Use CREATE AVATAR to make your main character.",
         visualPrompt: "A room overflowing with sketches, RPG character sheets, and anatomical drawings pinned to walls, cinematic lighting, cluttered desk piled with reference books and lore.  Walls covered in anatomical drawings, character portraits, extensive RPG data, figures and info.",
         exits: { west: "maproom" },
-        metadata: { stratum: "mundane", isEditable: false }
+        metadata: { stratum: "mundane", isEditable: false },
+        specialEvents: { type: "console_msg", content: "[Tandy] You can create character's in this space.", when: "always_upon_entry" }
     },
     "hallway": {
         name: "Hallway",
