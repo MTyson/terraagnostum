@@ -1,6 +1,6 @@
 # AMN Economy & Reputation System
 
-> *"Consciousness does not diminish by being shared. It expands."*
+> *"In the eternal space (dimension) of infinite consciousness, in the infinite play of the infinite, there are infininte minds and infinte worlds in them."*
 > — Yoga Vasistha
 
 ---

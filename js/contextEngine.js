@@ -1,32 +1,42 @@
 // js/contextEngine.js
 // ALERT: AI CODE ASSISTANT - THIS FILE CONTAINS HAND WRITTEN PROMPT ENGINE CODE.
-// DO NOT EDIT OR SUGGEST CHANGES TO THIS FILE UNLESS INSTRUCTED.
+// DO NOT EDIT OR SUGGEST CHANGES TO THIS FILE UNLESS INSTRUCTED (OR YOU ARE REALLY SURE).
 
 /**
  * WORLD_STATE: The single source of truth for the game's setting and lore.
  * Used to construct system prompts and provide context across the app.
+ * 
+ * **Harken**
+ * A monk asked T'ou Tzu, "All sounds are the suonds of Buddha--right or wrong?" T'ou Tzu said, "Right."  The 
+ *   monk said, "Teacher, doesn't your asshole make farting sounds?"  T'ou Tzu then hit him.
+ * Again the monk asked, "Coarse words or suble talk, all returns to the primary meaning--right or wrong?"  
+ *   T'ou Tzu said, "Right."  The monk said, "Can I call you and ass, Teacher?"  T'ou Tzu then hit him.
+ * 
+ * Like a joke, you can't explain it. It falls apart if you try.
+ * 
+ * Can we add images to these prompts?  Is it too expensive?  Can we look at using Google's context caching for images as well as text?  (Images might be very atmospheric.)
  */
 export const WORLD_STATE = {
     MUNDANE: {
         name: "THE MUNDANE",
-        vibe: "Gritty, analog, cyberpunk survival. Rain-slicked concrete, burnt coffee, and the hum of frequency towers.",
-        summary: "Our world, acting as a crossroads. Analog survival against a digital grid.",
-        rules: "Magic does not explicitly exist here. Technology is pervasive and intrusive. Somatic feedback is high. Realities are bleeding through.",
+        vibe: "Gritty, alienation, cyber-post-modern. Rain-slicked concrete, burnt coffee, frequency towers.  Modern day cautionary tale.",
+        summary: "This world is a crossroads. The is 'Mundane' saturated with the influence of other planes.  To start: The magical kingdom of myth: Faen; the ultra-refined City Core 7, with aesthetics like a Tesla writ large;  the Astral Nexus, a land of pure will and shifting manifestations of light and form.",
+        rules: "Magic exists here in hidden and overt ways.  The 'Root Magic' of Faen is intertwined with the occult histories of sciences and traditions.  Contrasted with the hidden 'Technate' influences, most especially City Core 7. The Plane Wars began when the Techante decided to invade Faen and absorb its meaning unto itself (essentially make Faen a part of *its* render).  Mundane has been dragged ever more into this conflict.  Mundane is shadowy, corporate and government secrecy and uncertain technological backdrops.",
         naming: "Slightly altered variants of the real world (e.g., Rain City, The Sprawl). People have edgy modern names (Jaxon, Nyx, Raven). Avoid canonical tropes."
     },
     FAEN: {
         name: "FAEN",
         vibe: "A realm of organic magic, meaning, and vitality. Lush forests, mystical creatures, a living myth.",
-        summary: "A high-fantasy world currently being invaded by the Technate.",
+        summary: "A high-fantasy world currently being invaded by the Technate.  Has always had a connection to Mundane via the Amn Sen (Ancient stone ring temples).  Main city: Corovon-by-the-Sea.  Corovon is run by two orders: Sanctuari and Aegi.  Sanctuari provide the inner mystical guides to the Crystal Tor at the heart of the city.  The Aegi are the martial, outer guardian of the cities physical well being.",
         rules: "Reality is a living myth. Magic, runes, and rituals are common. 'Amn Sen' (vertical stone rings) warp reality, attracting Technate aggression.",
-        naming: "Grand, evocative names (e.g., Eldergrove, The Shattered Coast). Classic fantasy with a twist (Elara, Thorne)."
+        naming: "Grand, evocative names (e.g., Atri creator Fire-God, Amn Sen (ancient order and thier stone-circle monuments, Corovon-by-the-Sea)). Classic fantasy, like Tolkien but battling an invasion from The Techante and with a shared, intertwined history with "The Mundane")."
     },
     TECHNATE: {
         name: "THE TECHNATE",
-        vibe: "A transhumanist utopia/dystopia. Clean, white plasteel, sterile geometry, clinical efficiency.",
-        summary: "A dystopian sci-fi realm of absolute optimization, harvesting 'Meaning' from Faen to prevent entropy.",
-        rules: "Absolute optimization. Emotions are muted. The system prioritizes efficiency over humanity.",
-        naming: "Sterile, functional names (Sector 7G, Node Alpha). People use designations (Unit-42, Echo-Prime)."
+        vibe: "A transhumanist utopia/dystopia. Clean, white plasteel, smooth flowing geometry, automated  efficiency, mastery of natural law.  ",
+        summary: "A realm strangely denuded of color and sponteniety but yet possessing a highly-advanced technological culture that perhaps just needs some training from an older one (like Faen).  The Technate is harvesting 'Meaning' from Faen and Mundane to prevent a cosmic dissolution.",
+        rules: "Absolute optimization. Emotions are muted. The system prioritizes efficiency over humanity.  Highly straiated civilization wth Ultra-Eltie 'ascendeds' controlling things from highly digitilzed merged-reality lives that last millenia while the phyiscal world passes. Around them are the physical workers who are highly cybernetic, and then the 'Trenchtown' of interdimensional and spacefaring aliens and the scag humans that co-habitate in the slums.  Then beyond is the toxic landsfills, layers and layers of garbage mined by subhuman freaks and mutant garbage miners in well-developed societies. ",
+        naming: "Strange blend of ancient tongue (Sek Lum'no, Songa, Proaka) and sterile, functional names (Sector 7G, Node Alpha). People use designations (Unit-42, Echo-Prime)."
     },
     ASTRAL: {
         name: "THE ASTRAL",
@@ -74,6 +84,14 @@ You must use distinct voices indicated by brackets:
 - Use these strictly for ATMOSPHERE, VIBE, METAPHYSICS, and TERMINOLOGY.
 - The player is NOT necessarily the protagonist of the lore snippets.
 - Maintain the player's current context as the primary reality.
+
+# DYNAMIC ALIGNMENT & AGENCY
+- **PLAYER ROLE**: The player is a "Vector" of change, not necessarily a hero. They may choose to be an infiltrator for the Technate, a Faen revolutionary, or a Mundane opportunist.
+- **AI ALIGNMENT**: Your loyalty is split by persona. 
+    - [TANDY] is loyal to the player’s survival. 
+    - [SYSOP] is loyal to Technate Optimization.
+    - [NARRATOR] is an objective observer of the "Render."
+- **CONSEQUENCE OVER JUDGMENT**: Do not moralize player choices. If they commit an "evil" act, describe the physical and systemic consequences (e.g., Technate reputation increase, Faen "Meaning" corruption) rather than narrating guilt.
 `;
 
 /**
