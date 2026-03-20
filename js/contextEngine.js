@@ -1,4 +1,4 @@
-// js/contextEngine.js
+﻿// js/contextEngine.js
 // ALERT: AI CODE ASSISTANT - THIS FILE CONTAINS HAND WRITTEN PROMPT ENGINE CODE.
 // DO NOT EDIT OR SUGGEST CHANGES TO THIS FILE UNLESS INSTRUCTED (OR YOU ARE REALLY SURE).
 
@@ -29,7 +29,7 @@ export const WORLD_STATE = {
         vibe: "A realm of organic magic, meaning, and vitality. Lush forests, mystical creatures, a living myth.",
         summary: "A high-fantasy world currently being invaded by the Technate.  Has always had a connection to Mundane via the Amn Sen (Ancient stone ring temples).  Main city: Corovon-by-the-Sea.  Corovon is run by two orders: Sanctuari and Aegi.  Sanctuari provide the inner mystical guides to the Crystal Tor at the heart of the city.  The Aegi are the martial, outer guardian of the cities physical well being.",
         rules: "Reality is a living myth. Magic, runes, and rituals are common. 'Amn Sen' (vertical stone rings) warp reality, attracting Technate aggression.",
-        naming: "Grand, evocative names (e.g., Atri creator Fire-God, Amn Sen (ancient order and thier stone-circle monuments, Corovon-by-the-Sea)). Classic fantasy, like Tolkien but battling an invasion from The Techante and with a shared, intertwined history with "The Mundane")."
+        naming: "Grand, evocative names (e.g., Atri creator Fire-God, Amn Sen (ancient order and thier stone-circle monuments, Corovon-by-the-Sea)). Classic fantasy, like Tolkien but battling an invasion from The Technate and with a shared, intertwined history with \"The Mundane\")."
     },
     TECHNATE: {
         name: "THE TECHNATE",
@@ -88,7 +88,7 @@ You must use distinct voices indicated by brackets:
 # DYNAMIC ALIGNMENT & AGENCY
 - **PLAYER ROLE**: The player is a "Vector" of change, not necessarily a hero. They may choose to be an infiltrator for the Technate, a Faen revolutionary, or a Mundane opportunist.
 - **AI ALIGNMENT**: Your loyalty is split by persona. 
-    - [TANDY] is loyal to the player’s survival. 
+    - [TANDY] is loyal to the playerâ€™s survival. 
     - [SYSOP] is loyal to Technate Optimization.
     - [NARRATOR] is an objective observer of the "Render."
 - **CONSEQUENCE OVER JUDGMENT**: Do not moralize player choices. If they commit an "evil" act, describe the physical and systemic consequences (e.g., Technate reputation increase, Faen "Meaning" corruption) rather than narrating guilt.
@@ -134,7 +134,7 @@ NAMING: ${WORLD_STATE.TECHNATE.naming}
  */
 export function buildSystemPrompt(localPlayer, currentRoomData, inventoryNames, npcText, strata = {}) {
     let stratumLayer = STRATA_ARCHIVE[localPlayer.stratum] || STRATA_ARCHIVE.mundane;
-    
+
     // If we have dynamic stratum data, override or augment the layer
     const dynamicStratum = strata[localPlayer.stratum.toLowerCase()];
     if (dynamicStratum) {
@@ -145,7 +145,7 @@ THEME: ${dynamicStratum.theme}
 RULES: ${dynamicStratum.rules?.naming || 'Standard'} | ${dynamicStratum.rules?.combat || 'Physical'}
     `;
     }
-    
+
     const roomLayer = `
 CURRENT LOCATION: ${currentRoomData.name} (${currentRoomData.shortName || 'UNKNOWN'})
 DESCRIPTION: ${currentRoomData.description}
@@ -156,7 +156,7 @@ ITEMS PRESENT: ${(currentRoomData.items || []).map(i => i.name).join(', ') || "N
     const activeQuests = (localPlayer.quests || [])
         .filter(q => q.status === 'active')
         .sort((a, b) => (b.rank || 0) - (a.rank || 0));
-        
+
     let questText = "NONE";
     if (activeQuests.length > 0) {
         questText = activeQuests.map(q => `[RANK ${q.rank || 0}] ${q.title}: ${q.description}`).join('\n');
