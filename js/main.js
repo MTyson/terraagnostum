@@ -19,9 +19,9 @@ await fetchSystemConfig();
 
 // Sync app version from dedicated version file
 import { APP_VERSION } from './version.js';
-const versionEl = document.getElementById('app-version');
+const versionEl = document.querySelector('#utc-version-display a');
 if (versionEl) {
-    versionEl.textContent = `[ VER: ${APP_VERSION} ]`;
+    versionEl.textContent = `v${APP_VERSION}`;
 }
 
 // --- AUTHENTICATION & SYNC ---
@@ -154,9 +154,9 @@ if (input) {
 }
 
 // STRATUM CLICK LISTENER
-const stratumDisplay = document.getElementById('stratum-display');
-if (stratumDisplay) {
-    stratumDisplay.addEventListener('click', (e) => {
+const statusDisplay = document.getElementById('combined-status-display');
+if (statusDisplay) {
+    statusDisplay.addEventListener('click', (e) => {
         e.stopPropagation();
         const { localPlayer } = stateManager.getState();
         const cmd = `tell me a bout strata ${localPlayer.stratum}`;
@@ -191,6 +191,10 @@ document.addEventListener('click', (e) => {
 });
 
 setInterval(() => { 
-    const timeEl = document.getElementById('time-display');
-    if(timeEl) timeEl.innerText = `T+${new Date().toLocaleTimeString([], {hour12:false})}`; 
+    const timeEl = document.getElementById('utc-time');
+    if(timeEl) {
+        const now = new Date();
+        const utcStr = now.toISOString().split('T')[1].split('.')[0];
+        timeEl.innerText = utcStr; 
+    }
 }, 1000);

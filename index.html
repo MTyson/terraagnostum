@@ -16,14 +16,16 @@
             <!-- TOP HUD -->
             <div id="header-row" class="flex justify-between items-center px-4 py-2 border-b border-[#1a3a1a] bg-black text-[9px] text-green-800 uppercase tracking-widest flex-shrink-0">
                 <div class="flex gap-4">
-                    <div id="stratum-display" class="cursor-pointer hover:text-green-400">[ STRATA: <span id="stratum-name">MUNDANE</span> ]</div>
-                    <div id="node-display">NODE: <span id="room-display">BEDROOM</span></div>
-                    <div id="app-version" class="hidden md:block opacity-30 tracking-[1px]">[ VER: -- ]</div>
+                    <div id="combined-status-display" class="cursor-pointer hover:text-green-400">
+                        [ <span id="stratum-name">MUNDANE</span> : <span id="room-display">BEDROOM</span> ]
+                    </div>
                 </div>
                 
                 <div class="flex gap-4 items-center">
-                    <div id="sync-status" class="hidden sm:block">SYNC: READY</div>
-                    <div id="time-display" class="hidden sm:block">T+00:00:00</div>
+                    <div id="sync-status" class="hidden lg:block">SYNC: READY</div>
+                    <div id="utc-version-display" class="hidden sm:block text-green-900">
+                        [ <span id="utc-time">00:00:00</span> : <a href="https://github.com/mindframegames/terraagnostum" target="_blank" class="hover:text-green-400">v0.3.0</a> ]
+                    </div>
                     <!-- NEW MOBILE TOGGLE -->
                     <button id="mobile-menu-toggle" class="sm:hidden text-amber-500 border border-amber-900 px-2 py-1 hover:bg-amber-900/30">
                         [ ≡ INTEL ]
