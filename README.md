@@ -113,6 +113,8 @@ Or, to put it another way:
 
 <img width="576" height="455" alt="image" src="https://github.com/user-attachments/assets/d32ca04b-2e21-4a85-878a-ee3fe579cdd4" />
 
+"The Jiva is born again in the physical universe with a new frame and bent of mind according to the nature of the essence extracted in the mental plane." - Swami Sivananda (_Mind: It's Mysteries and Control_)
+
 But lest we wander too far, let us just say that the absolute reality and the relative experience are simply the two poles of one thing. Terra Agnostum is the land of uncertainty in between.
 
 <img width="621" height="333" alt="image" src="https://github.com/user-attachments/assets/40c11d11-d804-46b6-962e-10fcaff29de0" />
