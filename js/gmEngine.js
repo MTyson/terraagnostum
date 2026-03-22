@@ -424,6 +424,14 @@ export async function handleGMIntent(
             if (processRoomEvents) processRoomEvents(activeMap[t.new_room_id]);
         }
         
+        // Handle Bespoke Detail Projection
+        if (res.project_detail) {
+            const { prompt, is_permanent } = res.project_detail;
+            if (triggerVisual) {
+                triggerVisual(prompt, is_permanent);
+            }
+        }
+        
         if (stateChanged) { 
             if (typeof actions.savePlayerState === 'function') actions.savePlayerState(); 
         }

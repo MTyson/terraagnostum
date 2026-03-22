@@ -170,19 +170,6 @@ export function initMobileRadar() {
             cmdDir = dy > 0 ? 's' : 'n';
         }
 
-        // Fire command
-        const enterEvent = new KeyboardEvent('keydown', {
-            key: 'Enter',
-            code: 'Enter',
-            keyCode: 13,
-            which: 13,
-            bubbles: true,
-            cancelable: true
-        });
-        
-        input.value = cmdDir;
-        input.dispatchEvent(enterEvent);
-        
         // Visual feedback
         radar.style.borderColor = "var(--term-amber)";
         setTimeout(() => radar.style.borderColor = "var(--term-green)", 150);
@@ -317,11 +304,16 @@ function syncHeaderVitals(activeAvatar) {
     updateVitalsUI(activeAvatar);
 }
 
-function generateAsciiBar(current, max, length = 10) {
-    const filledLength = Math.round((current / max) * length);
-    const emptyLength = length - filledLength;
-    const bar = '|'.repeat(Math.max(0, filledLength)) + ' '.repeat(Math.max(0, emptyLength));
-    return `[${bar}] ${current}/${max}`;
+function generateVisualBar(current, max, colorClass = 'bg-green-500') {
+    const percentage = Math.round(Math.min(100, Math.max(0, (current / (max || 1)) * 100)));
+    return `
+        <div class="flex items-center gap-2 flex-grow min-w-[120px]">
+            <div class="h-1.5 w-full bg-black/60 border border-green-900/30 relative overflow-hidden">
+                <div class="h-full ${colorClass} transition-all duration-700" style="width: ${percentage}%"></div>
+            </div>
+            <span class="min-w-[35px] text-right font-mono text-[10px] opacity-80">${current}/${max}</span>
+        </div>
+    `;
 }
 
 export function updateAvatarUI(activeAvatar) {
@@ -770,9 +762,10 @@ export function toggleDossierBuffer(show, data = null) {
         const statsArea = document.getElementById('dossier-stats');
 
         if (statsArea) {
-            const amnBar = generateAsciiBar(displayData.stats?.AMN ?? 20, 20, 20);
-            const willBar = generateAsciiBar(displayData.will || displayData.stats?.WILL || 0, displayData.stats?.WILL || 10, 20);
-            const physBar = generateAsciiBar(displayData.hp || displayData.stats?.PHYS || 0, displayData.stats?.PHYS || 10, 20);
+            const amnBar = generateVisualBar(displayData.stats?.AMN ?? 20, 20, 'bg-amber-600');
+            const willBar = generateVisualBar(displayData.will || displayData.stats?.WILL || 0, displayData.stats?.WILL || 10, 'bg-emerald-600');
+            const physBar = generateVisualBar(displayData.hp || displayData.stats?.PHYS || 0, displayData.stats?.PHYS || 10, 'bg-emerald-600');
+            const awrBar = generateVisualBar(displayData.stats?.AWR || 0, 20, 'bg-emerald-600');
             
             const inventoryHtml = displayData.inventory && displayData.inventory.length > 0 
                 ? displayData.inventory.map(item => `
@@ -788,10 +781,10 @@ export function toggleDossierBuffer(show, data = null) {
                     <div class="text-gray-400 leading-relaxed text-sm">${displayData.description || 'No biometric history on file.'}</div>
                 </div>
                 <div class="space-y-2 border-t border-green-900 pt-4 mb-4 font-mono text-xs">
-                    <div class="flex justify-between text-amber-500 font-bold"><span>AMN</span>  <span>${amnBar}</span></div>
-                    <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>WILLPOWER</span> <span>${willBar}</span></div>
-                    <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>PHYSIQUE</span>  <span>${physBar}</span></div>
-                    <div class="flex justify-between pl-2 border-l border-amber-900/50"><span>AWARENESS</span> <span>[${'|'.repeat(displayData.stats?.AWR || 0)}${' '.repeat(20 - (displayData.stats?.AWR || 0))}] ${displayData.stats?.AWR || 0}/20</span></div>
+                    <div class="flex justify-between items-center text-amber-500 font-bold"><span>AMN</span>  ${amnBar}</div>
+                    <div class="flex justify-between items-center pl-2 border-l border-amber-900/50"><span>WILLPOWER</span> ${willBar}</div>
+                    <div class="flex justify-between items-center pl-2 border-l border-amber-900/50"><span>PHYSIQUE</span>  ${physBar}</div>
+                    <div class="flex justify-between items-center pl-2 border-l border-amber-900/50"><span>AWARENESS</span> ${awrBar}</div>
                 </div>
                 <div class="border-t border-green-900 pt-4">
                     <div class="text-[10px] text-green-500 font-bold mb-2 tracking-widest uppercase">Possessions</div>

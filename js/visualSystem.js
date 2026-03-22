@@ -75,7 +75,7 @@ function renderToCanvas(imageUrl, roomId, myTicket) {
     img.src = cleanUrl; // NO CACHE BUSTER
 }
 
-export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap, user, forceRebuild = false) {
+export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap, user, forceRebuild = false, isPermanent = true) {
     const roomId = localPlayer.currentRoom;
     const room = activeMap?.[roomId];
     if (!room) return;
@@ -89,6 +89,7 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
 
     // --- 0. PRE-FLIGHT CACHE CHECK (SOVEREIGN) ---
     // If we have it in session memory, or it's already in the DB, show it immediately and BAIL.
+    // If overridePrompt is present (bespoke detail), we skip the cache.
     if (!overridePrompt && !forceRebuild) {
         // PRIORITY 1: Local JS Memory (0ms, no network)
         let localSessionUri = sessionVisualCache.get(roomId);
@@ -186,7 +187,7 @@ export async function triggerVisualUpdate(overridePrompt, localPlayer, activeMap
             }
         }
 
-        if (overridePrompt || !user || user.isAnonymous) {
+        if (overridePrompt || !user || user.isAnonymous || !isPermanent) {
             if (shouldRender) {
                 renderToCanvas(sessionVisualCache.get(roomId), roomId, myTicket);
             }
