@@ -367,8 +367,8 @@ export async function handleGMIntent(
             
             // Fuzzy Match Protection: Check if the AI invented a new ID for an existing room name
             const existingEntry = Object.entries(activeMap).find(([id, r]) => 
-                id.toLowerCase() === t.new_room_id.toLowerCase() || 
-                r.name.toLowerCase() === t.name.toLowerCase()
+                (t.new_room_id && id.toLowerCase() === t.new_room_id.toLowerCase()) || 
+                (t.name && r.name && r.name.toLowerCase() === t.name.toLowerCase())
             );
 
             if (existingEntry) {

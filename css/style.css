@@ -400,6 +400,43 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
 #compass-s { grid-column: 2; grid-row: 3; }
 
 /* CONTEXT CHIPS */
+#context-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+@media (max-width: 768px) {
+    #context-bar {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: scroll !important; /* Force scroll visibility/behavior */
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 12px; /* More space for the scrollbar */
+        width: 100%;
+        scrollbar-width: auto; /* Standard scrollbar for better interaction */
+        scrollbar-color: var(--term-green) #050505;
+        touch-action: pan-x;
+        pointer-events: auto !important; /* Ensure it receives touches */
+    }
+    .context-chip {
+        flex: 0 0 auto !important; /* Fixed width, no shrinking */
+        white-space: nowrap;
+    }
+    #context-bar::-webkit-scrollbar {
+        display: block;
+        height: 6px; /* Thicker scrollbar for easier interaction */
+    }
+    #context-bar::-webkit-scrollbar-track {
+        background: #050505;
+    }
+    #context-bar::-webkit-scrollbar-thumb {
+        background: var(--term-green);
+        border-radius: 3px;
+    }
+}
+
 .context-chip {
     border: 1px solid var(--term-green);
     color: var(--term-green);

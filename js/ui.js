@@ -212,7 +212,12 @@ export function updateContextualSuggestions(aigmSuggestions = []) {
     const room = activeMap[localPlayer.currentRoom];
     if (!room) return;
 
+    const tier = stateManager.getUserTier();
     let suggestions = [];
+
+    if (tier === 'GUEST') {
+        suggestions.push("Login");
+    }
 
     if (room.npcs && room.npcs.length > 0) {
         room.npcs.forEach(npc => {
