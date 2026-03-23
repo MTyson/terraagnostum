@@ -422,7 +422,10 @@ export function updateRoomItemsUI(items) {
         container.innerHTML = "[EMPTY]";
         return;
     }
-    container.innerHTML = items.map(item => `<div class="text-amber-600 truncate">> ${item.name}</div>`).join('');
+    container.innerHTML = items.map(item => {
+        const name = (typeof item === 'string') ? item : (item?.name || "Unknown Object");
+        return `<div class="text-amber-600 truncate">> ${name}</div>`;
+    }).join('');
 }
 
 export function updateRoomEntitiesUI(npcs = [], players = []) {
@@ -805,10 +808,29 @@ export function toggleDossierBuffer(show, data = null) {
                 const p = stats[pool];
                 if (!p) return 0;
                 if (typeof p === 'object') {
-                    if (sub) return p[sub] || 0;
+                    if (sub) {
+                        // If sub-stat exists, return it
+                        if (p[sub] !== undefined) return p[sub];
+                        // Fallback: simple distribution of the total
+                        const total = p.total || 0;
+                        if (sub === 'stability' || sub === 'strength' || sub === 'focus') {
+                            return Math.floor(total / 2);
+                        } else {
+                            return total - Math.floor(total / 2);
+                        }
+                    }
                     return p.total || 0;
                 }
-                return sub ? 0 : p;
+                
+                // If it's a flat number, calculate sub-stat distribution
+                if (sub) {
+                    if (sub === 'stability' || sub === 'strength' || sub === 'focus') {
+                        return Math.floor(p / 2);
+                    } else {
+                        return p - Math.floor(p / 2);
+                    }
+                }
+                return p;
             };
 
             const amnBar = generateVisualBar(getStatValue('AMN'), 20, 'bg-amber-600');

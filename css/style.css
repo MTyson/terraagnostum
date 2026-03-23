@@ -312,7 +312,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
 #log {
     max-width: 100%;
     break-words: break-all;
-    padding-bottom: 220px; /* SPACE FOR FLOATING MOBILE CONTROLS */
+    padding-bottom: 20px; /* Reduced for a cleaner look since the UI isn't floating anymore */
 }
 
 @media (min-width: 640px) {

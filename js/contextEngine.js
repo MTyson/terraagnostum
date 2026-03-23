@@ -162,7 +162,10 @@ ITEMS PRESENT: ${(currentRoomData.items || []).map(i => i.name).join(', ') || "N
         questText = activeQuests.map(q => `[RANK ${q.rank || 0}] ${q.title}: ${q.description}`).join('\n');
     }
 
+    const cohesion = !stateManager.getState().activeAvatar ? "VOID (Intangible/Ghostly)" : "VESSEL (Materialized/Physical)";
+
     const entityLayer = `
+COHESION STATE: ${cohesion}
 PLAYER STATS: HP ${localPlayer.hp}/20, AMN ${localPlayer.stats?.AMN ?? 20}, WILL ${localPlayer.will || 10}, AWR ${localPlayer.awr || 10}
 PLAYER INVENTORY: ${inventoryNames || "Empty"}
 ACTIVE QUESTS:
@@ -175,7 +178,8 @@ ${npcText}
     const mechanicLayer = `
 EVALUATION DIRECTIVES:
 1. If the player attempts to move, evaluate if the exit exists. Do not let them move through solid walls.
-2. If the player attempts an invalid action, gently correct them narratively.
+2. If COHESION STATE is VOID: The player is a phantom. They CANNOT touch physical objects, open doors, pick up items, or be given items by NPCs. They cannot engage in physical combat. If they attempt these, narrate their hands passing through reality.
+3. If the player attempts an invalid action, gently correct them narratively.
 3. If the player successfully changes the world (picks up an item, destroys something, changes the lighting), set 'trigger_visual' to true if the visual scene should be re-rendered.
 4. Maintain the persona and vibe of the current Stratum.
 5. QUEST GUIDANCE: The player is trying to solve ACTIVE QUESTS. If they explore, search, or talk to NPCs, subliminally weave clues, physical items, or pathways into your responses that allow them to complete their highest-ranked quests.

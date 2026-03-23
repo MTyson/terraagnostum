@@ -311,8 +311,10 @@ export async function handleGMIntent(
         if (res.give_item) {
             const updatedLocalPlayer = stateManager.getState().localPlayer;
             const target = res.give_item.target;
+            const hasAvatar = !!stateManager.getState().activeAvatar;
             
             if (target && target !== 'player') {
+                // ... logic for NPC receiving item ...
                 const activeMap = stateManager.getActiveMap();
                 const currentRoomData = activeMap[updatedLocalPlayer.currentRoom];
                 
@@ -334,13 +336,22 @@ export async function handleGMIntent(
                     
                     if (!isSilent) UI.addLog(`[SYSTEM]: ${npc.name} has received [${res.give_item.name}].`, "var(--term-amber)");
                 } else {
-                    // Fallback to player if target not found
-                    stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
-                    if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
+                    // Fallback to player if target not found (Check for avatar first!)
+                    if (hasAvatar) {
+                        stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
+                        if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
+                    } else {
+                        if (!isSilent) UI.addLog(`[SYSTEM]: Your phantom hands pass through the [${res.give_item.name}]. You cannot hold it.`, "var(--term-amber)");
+                    }
                 }
             } else {
-                stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
-                if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
+                // Target is player (Check for avatar first!)
+                if (hasAvatar) {
+                    stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
+                    if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
+                } else {
+                    if (!isSilent) UI.addLog(`[SYSTEM]: Your phantom hands pass through the [${res.give_item.name}]. You cannot hold it.`, "var(--term-amber)");
+                }
             }
             stateChanged = true;
         }
@@ -446,11 +457,11 @@ export async function handleGMIntent(
             const activeMap = stateManager.getActiveMap();
             const room = activeMap[currentState.localPlayer.currentRoom] || { npcs: [], items: [], marginalia: [], exits: {} };
             
-            if (res.world_edit.type === 'add_marginalia') {
+            if (res.world_edit.type === 'add_marginalia' && res.world_edit.text) {
                 const marginalia = [...(room.marginalia || []), res.world_edit.text];
                 stateManager.updateMapNode(currentState.localPlayer.currentRoom, { marginalia });
                 syncEngine.addArrayElementToNode(currentState.localPlayer.currentRoom, 'marginalia', res.world_edit.text);
-            } else if (res.world_edit.type === 'unlock_exit') {
+            } else if (res.world_edit.type === 'unlock_exit' && res.world_edit.direction) {
                 const unlockDir = res.world_edit.direction.toLowerCase();
                 if (room.exits[unlockDir] && typeof room.exits[unlockDir] === 'object') {
                     const exits = { ...room.exits };
@@ -459,13 +470,14 @@ export async function handleGMIntent(
                     syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { [`exits.${unlockDir}.locked`]: false });
                     if (!isSilent) UI.addLog(`[SYSTEM]: The path ${unlockDir.toUpperCase()} has been opened.`, "var(--term-green)");
                 }
-            } else if (res.world_edit.type === 'spawn_item') {
+            } else if (res.world_edit.type === 'spawn_item' && res.world_edit.item) {
                 const items = [...(room.items || []), res.world_edit.item];
                 stateManager.updateMapNode(currentState.localPlayer.currentRoom, { items });
                 syncEngine.addArrayElementToNode(currentState.localPlayer.currentRoom, 'items', res.world_edit.item);
                 
-                if (!isSilent) UI.addLog(`[SYSTEM]: ${res.world_edit.item.name} has manifested in the room.`, "var(--term-green)");
-            } else if (res.world_edit.type === 'spawn_npc') {
+                const itemName = (typeof res.world_edit.item === 'string') ? res.world_edit.item : res.world_edit.item.name;
+                if (!isSilent) UI.addLog(`[SYSTEM]: ${itemName} has manifested in the room.`, "var(--term-green)");
+            } else if (res.world_edit.type === 'spawn_npc' && res.world_edit.npc) {
                 const currentState = stateManager.getState();
                 const activeMap = stateManager.getActiveMap();
                 const roomId = currentState.localPlayer.currentRoom;

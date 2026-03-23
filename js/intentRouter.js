@@ -556,15 +556,20 @@ export async function handleCommand(val) {
     }
 
     if (!activeAvatar && !cmd.startsWith('help') && !cmd.startsWith('create avatar') && !cmd.startsWith('assume')) {
+        const physicalVerbs = ['take', 'get', 'pick up', 'use', 'search', 'examine', 'touch', 'push', 'pull', 'open', 'close', 'move', 'grab', 'collect', 'investigate'];
+        const isPhysicalAction = physicalVerbs.some(verb => cmd.startsWith(verb));
+
         if (!localPlayer.currentRoom.endsWith('character_room') && localPlayer.currentRoom !== 'character_room' && 
             !localPlayer.currentRoom.endsWith('spare_room') && localPlayer.currentRoom !== 'spare_room') {
-            UI.addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive to forge your form.`, "var(--term-amber)");
+            
+            if (isPhysicalAction) {
+                UI.addLog(`[SYSTEM]: You are an itinerant void. Your phantom fingers pass through reality. You lack the Meaning to influence the Mundane.`, "var(--term-amber)");
+                UI.addLog(`[SYSTEM]: Go to the Archive to forge your form.`, "var(--term-amber)");
+                return;
+            } else {
+                UI.addLog(`[SYSTEM]: You are an itinerant void. Go to the Archive to forge your form.`, "var(--term-amber)");
+            }
         }
-    }
-
-    if (!activeAvatar && ['take', 'get', 'pick up', 'use'].some(verb => cmd.startsWith(verb))) {
-        UI.addLog("[SYSTEM]: Your phantom fingers pass through reality. You lack the Meaning to influence the Mundane.", "var(--term-amber)");
-        return;
     }
 
     const dirMatch = cmd.match(/^(?:go\s+(?:to\s+(?:the\s+)?)?|move\s+|walk\s+|head\s+)?(north|south|east|west|n|s|e|w)$/);

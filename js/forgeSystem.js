@@ -285,8 +285,26 @@ async function analyzeBiometrics() {
         required: ["WILL", "AWR", "PHYS", "AMN", "archetype", "stratum"]
     });
     if (res) {
-        currentDraftStats = res;
-        if (currentDraftStats.AMN === undefined) currentDraftStats.AMN = 20;
+        // Restructure stats with sub-stats for the dossier
+        const stats = {
+            AMN: res.AMN || 20,
+            WILL: {
+                total: res.WILL,
+                stability: Math.floor(res.WILL / 2),
+                projection: res.WILL - Math.floor(res.WILL / 2)
+            },
+            PHYS: {
+                total: res.PHYS,
+                strength: Math.floor(res.PHYS / 2),
+                agility: res.PHYS - Math.floor(res.PHYS / 2)
+            },
+            AWR: {
+                total: res.AWR,
+                focus: Math.floor(res.AWR / 2),
+                perception: res.AWR - Math.floor(res.AWR / 2)
+            }
+        };
+        currentDraftStats = { ...res, ...stats };
         
         // Update currentDraftStratum if the AI suggests a better fit
         if (res.stratum && strata[res.stratum.toLowerCase()]) {
