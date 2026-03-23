@@ -295,7 +295,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
 
 /* Force main area to handle vertical segments without overflow leakage */
 #main-terminal-area {
-    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
 }
@@ -305,6 +305,20 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
     flex: 1 1 auto;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+}
+
+#log {
+    max-width: 100%;
+    break-words: break-all;
+    padding-bottom: 220px; /* SPACE FOR FLOATING MOBILE CONTROLS */
+}
+
+@media (min-width: 640px) {
+    #log {
+        padding-bottom: 20px; /* Reset for desktop */
+    }
 }
 
 /* --- MAP CANVAS --- */

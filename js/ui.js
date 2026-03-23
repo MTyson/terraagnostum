@@ -543,7 +543,15 @@ export function addLog(text, color = 'var(--term-green)') {
     log.appendChild(p);
     
     const output = document.getElementById('output');
-    if (output) output.scrollTop = output.scrollHeight;
+    if (output) {
+        // Use requestAnimationFrame to ensure DOM is updated before scrolling
+        requestAnimationFrame(() => {
+            output.scrollTo({
+                top: output.scrollHeight,
+                behavior: 'smooth'
+            });
+        });
+    }
 
     // Route to combat log if active
     const combatOverlay = document.getElementById('combat-overlay');
