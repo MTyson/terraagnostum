@@ -22,7 +22,12 @@ const RESPONSE_SCHEMA = {
                 description: { type: "string" }
             }
         },
+        take_item: { 
+            type: "string", 
+            description: "Name of item to remove from player inventory (e.g. if dropped, consumed, or given to NPC)" 
+        },
         trigger_respawn: { type: "boolean" },
+        trigger_visual: { type: "boolean" },
         trigger_teleport: {
             type: "object",
             properties: {
@@ -46,7 +51,7 @@ const RESPONSE_SCHEMA = {
                 type: { 
                     type: "string", 
                     description: "Select ONE action to alter the world state. Do not invent new types.",
-                    enum: ["add_marginalia", "unlock_exit", "spawn_item", "spawn_npc", "none"] 
+                    enum: ["add_marginalia", "unlock_exit", "spawn_item", "spawn_npc", "edit_room", "none"] 
                 },
                 text: { type: "string" },
                 direction: { type: "string" },
@@ -74,6 +79,14 @@ const RESPONSE_SCHEMA = {
                                 AMN: { type: "number" }
                             }
                         }
+                    }
+                },
+                room_update: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string" },
+                        description: { type: "string" },
+                        visualPrompt: { type: "string" }
                     }
                 }
             }
@@ -227,13 +240,13 @@ export async function generatePortrait(prompt, stratum, strata = {}) {
     const dynamicStratum = strata[stratum?.toLowerCase()];
     const flavor = dynamicStratum?.flavor || "near-future real-world critty retro-futuristic cyberpunk influenced by either high-sci-fi or high-fantasy";
 
-    // HIGH FIDELITY CHARACTER PROMPT
-    // Focuses strictly on personhood to prevent the model from drifting into cityscapes.
+    // HIGH FIDELITY CHARACTER PORTRAIT PROMPT
+    // Strictly focused on personhood to prevent model drift into cityscapes or unsafe content.
     const combinedPrompt = `Masterpiece digital portrait, hyper-vibrant full color, high saturation, MTG card art style. 
         SUBJECT: A close-up high-end character portrait of a humanoid person. 
         Focus on face, eyes, and clothing. NO BUILDINGS. NO EXTERIORS. 
         Aesthetic: ${flavor}. 
-        Give the portrait a bit of glitchy, retro-futuristic finish (like the image itself is slightly corrupted or has a digital overlay).
+        Give the portrait a glitchy, retro-futuristic digital overlay effect.
         Character Details: ${prompt}`;
     
     try {

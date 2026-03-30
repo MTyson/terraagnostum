@@ -1,6 +1,7 @@
 // js/ui.js
 // Purpose: Handles all DOM manipulation, canvas rendering, and CSS theme transitions.
 import * as stateManager from './stateManager.js';
+import * as CombatTimer from './combatTimer.js';
 
 // Subscribe to state changes
 stateManager.subscribe((state) => {
@@ -8,6 +9,27 @@ stateManager.subscribe((state) => {
     const activeMap = stateManager.getActiveMap();
     const tier = stateManager.getUserTier();
     
+    // Toggle BBS Overlay (fullscreen terminal takeover)
+    const bbsOverlay = document.getElementById('bbs-overlay');
+    if (bbsOverlay) {
+        if (activeTerminal) {
+            bbsOverlay.classList.remove('hidden');
+            bbsOverlay.classList.add('bbs-active');
+            document.body.classList.add('terminal-active'); // keep blur on underlying UI
+        } else {
+            bbsOverlay.classList.add('hidden');
+            bbsOverlay.classList.remove('bbs-active');
+            document.body.classList.remove('terminal-active');
+        }
+    } else {
+        // Fallback if overlay not in DOM
+        if (activeTerminal) {
+            document.body.classList.add('terminal-active');
+        } else {
+            document.body.classList.remove('terminal-active');
+        }
+    }
+
     // Update Command Prompt
     updateCommandPrompt(tier);
 
@@ -32,11 +54,12 @@ stateManager.subscribe((state) => {
     renderMapHUD(activeMap, localPlayer.currentRoom, localPlayer.stratum);
     updateContextualSuggestions(state.suggestions);
 
-    // Pin Button Visibility (Architects Only)
+    // Architect Controls Visibility
+    const architectControls = document.getElementById('architect-visual-controls');
     const pinBtn = document.getElementById('pin-view-btn');
-    if (pinBtn) {
+    if (architectControls && pinBtn) {
         if (tier === 'ARCHITECT' && !localPlayer.combat.active) {
-            pinBtn.classList.remove('hidden');
+            architectControls.classList.remove('hidden');
             // Only update if not currently in a transient state (uploading)
             if (!pinBtn.classList.contains('animate-pulse')) {
                 // Update label based on room state
@@ -51,7 +74,7 @@ stateManager.subscribe((state) => {
                 }
             }
         } else {
-            pinBtn.classList.add('hidden');
+            architectControls.classList.add('hidden');
         }
     }
 
@@ -61,9 +84,16 @@ stateManager.subscribe((state) => {
         let opponent = room?.npcs?.find(n => {
             const search = (localPlayer.combat.opponent || "").toLowerCase();
             const name = (n.name || "").toLowerCase();
+            // Broader matches for Shadow Entities and Narrator-initiated combat
             const isFallbackMatch = search.includes('narrator') || search.includes('system') || search.includes('tandy');
-            return name === search || name.includes(search) || search.includes(name) || isFallbackMatch || (search.includes('narrator') && name.includes('shadow'));
+            const isShadowMatch = (search.includes('shadow') || name.includes('shadow')) && (search !== "" && name !== "");
+            
+            return name === search || name.includes(search) || search.includes(name) || isFallbackMatch || isShadowMatch;
         });
+
+        if (localPlayer.combat.active && !opponent) {
+            console.warn(`[UI DEBUG] Combat active vs [${localPlayer.combat.opponent}] but NPC not found in room [${localPlayer.currentRoom}]. NPCs present:`, room?.npcs?.map(n => n.name));
+        }
 
         // If there's only one NPC in the room anyway, it's virtually guaranteed to be the combat target
         if (!opponent && room?.npcs?.length === 1) {
@@ -80,6 +110,10 @@ stateManager.subscribe((state) => {
                 stats: { PHYS: 10, WILL: 10, AWR: 10 },
                 description: "[DATA FRAGMENTED] An unregistered localized anomaly."
             };
+        }
+        
+        if (opponent && opponent.image) {
+            console.log(`[UI DEBUG] Opponent [${opponent.name}] found WITH image. Passing to toggleCombatUI.`);
         }
         
         toggleCombatUI(true, fallbackTarget);
@@ -141,7 +175,20 @@ document.addEventListener('DOMContentLoaded', () => {
     initMobileDrawer();
     initMobileRadar();
     setupMapResizeObservers();
+    initCollapsibleSections();
 });
+
+export function initCollapsibleSections() {
+    const sections = document.querySelectorAll('.sidebar-section');
+    sections.forEach(section => {
+        const header = section.querySelector('.section-header');
+        if (header) {
+            header.addEventListener('click', () => {
+                section.classList.toggle('collapsed');
+            });
+        }
+    });
+}
 
 export function initMobileRadar() {
     const radar = document.getElementById('mobile-radar-widget');
@@ -216,7 +263,7 @@ export function updateContextualSuggestions(aigmSuggestions = []) {
     let suggestions = [];
 
     if (tier === 'GUEST') {
-        suggestions.push("Login");
+        suggestions.push("/login");
     }
 
     if (room.npcs && room.npcs.length > 0) {
@@ -431,6 +478,11 @@ export function updateRoomItemsUI(items) {
 export function updateRoomEntitiesUI(npcs = [], players = []) {
     const container = document.getElementById('room-entities-container');
     if (!container) return;
+    
+    if (npcs?.length > 0) {
+        console.log(`[UI DEBUG] updateRoomEntitiesUI: Rendering ${npcs.length} NPCs.`);
+    }
+
     if ((!npcs || npcs.length === 0) && (!players || players.length === 0)) {
         container.innerHTML = "[NONE]";
         return;
@@ -481,7 +533,7 @@ export function updateRoomEntitiesUI(npcs = [], players = []) {
             // Map NPC data to Forge schema
             const detailData = {
                 ...npc,
-                description: npc.behavior || npc.visualPrompt || npc.visual_prompt || "No additional data available."
+                description: npc.description || npc.behavior || npc.visualPrompt || npc.visual_prompt || "No additional data available."
             };
             toggleDossierBuffer(true, detailData);
         };
@@ -532,7 +584,7 @@ export function updateRoomNPCPreviews(npcs = [], players = []) {
             // Map NPC data to Forge schema for dossier
             const detailData = {
                 ...npc,
-                description: npc.behavior || npc.visualPrompt || npc.visual_prompt || "No additional data available."
+                description: npc.description || npc.behavior || npc.visualPrompt || npc.visual_prompt || "No additional data available."
             };
             toggleDossierBuffer(true, detailData);
         };
@@ -542,6 +594,43 @@ export function updateRoomNPCPreviews(npcs = [], players = []) {
 }
 
 export function addLog(text, color = 'var(--term-green)') {
+    if (stateManager.getState().activeTerminal) {
+        terminalSystem.bbsWrite(text, color);
+        return;
+    }
+
+    // EXCLUSIVE ROUTING: If combat is active, write ONLY to the combat log feed
+    const state = stateManager.getState();
+    if (state.localPlayer?.combat?.active) {
+        const combatLog = document.getElementById('combat-log');
+        if (combatLog) {
+            const pCombat = document.createElement('div');
+            pCombat.style.color = color;
+            pCombat.className = 'mb-1 drop-shadow-[0_0_2px_currentColor]';
+            pCombat.innerHTML = `> ${text.replace(/\n/g, '<br>')}`;
+            combatLog.appendChild(pCombat);
+            requestAnimationFrame(() => {
+                combatLog.scrollTo({ top: combatLog.scrollHeight, behavior: 'smooth' });
+            });
+            
+            // VISUAL DAMAGE FLASH
+            if (text.includes("DMG <<<")) {
+                let targetEl = null;
+                if (text.includes("YOU TOOK")) targetEl = document.getElementById('combat-player');
+                else targetEl = document.getElementById('combat-opponent');
+                
+                if (targetEl) {
+                    const flashClass = text.includes("YOU TOOK") ? 'bg-red-900/40' : 'bg-cyan-900/40';
+                    targetEl.classList.add(flashClass, 'scale-105', '!border-white');
+                    setTimeout(() => {
+                        targetEl.classList.remove(flashClass, 'scale-105', '!border-white');
+                    }, 150);
+                }
+            }
+            return; // Prevent duplicate writing to main log
+        }
+    }
+
     const log = document.getElementById('log');
     if (!log) return;
     const p = document.createElement('div');
@@ -559,18 +648,6 @@ export function addLog(text, color = 'var(--term-green)') {
                 behavior: 'smooth'
             });
         });
-    }
-
-    // Route to combat log if active
-    const combatOverlay = document.getElementById('combat-overlay');
-    const combatLog = document.getElementById('combat-log');
-    if (combatOverlay && !combatOverlay.classList.contains('hidden') && combatLog) {
-        const pCombat = document.createElement('div');
-        pCombat.style.color = color;
-        pCombat.className = 'mb-1';
-        pCombat.innerHTML = `> ${text.replace(/\n/g, '<br>')}`;
-        combatLog.appendChild(pCombat);
-        combatLog.scrollTop = combatLog.scrollHeight;
     }
 }
 
@@ -783,10 +860,9 @@ export function toggleDossierBuffer(show, data = null) {
                 imgElement.classList.add('hidden');
                 imgFallback.classList.remove('hidden');
                 imgFallback.classList.add('flex');
-                
                 // Special stylized fallback for Shadow/Unknown
                 if (displayData.name.toLowerCase().includes('shadow') || displayData.name.toLowerCase().includes('unknown')) {
-                    imgFallback.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-purple-900 to-black border border-purple-500 flex items-center justify-center text-[8px] text-purple-300 text-center p-1 uppercase">SHADOW<br>ENTITY</div>`;
+                    imgFallback.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-purple-900 to-black border border-purple-500 flex flex-col items-center justify-center text-[8px] text-purple-300 text-center p-1 uppercase">SHADOW<br>ENTITY<br><span class="text-[6px] text-amber-500 animate-pulse mt-1">MANIFESTING...</span></div>`;
                 } else {
                     imgFallback.innerHTML = `[ NO VISUAL DATA ]`;
                 }
@@ -913,7 +989,8 @@ export function toggleCombatUI(active, opponentData = null) {
         document.body.style.overflow = 'hidden';
         document.getElementById('ability-hand')?.classList.remove('hidden');
         
-        output.classList.add('hidden');
+        // Use display style to absolutely guarantee Tailwind doesn't override hidden with flex
+        output.style.display = 'none';
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
 
@@ -923,31 +1000,12 @@ export function toggleCombatUI(active, opponentData = null) {
             visualsEl.classList.remove('h-[25vh]', 'sm:h-[45%]', 'max-h-[250px]');
         }
 
-        // Reset and start timer animation
-        if (timerBar) {
-            timerBar.classList.remove('timer-active');
-            void timerBar.offsetWidth; // Trigger reflow
-            timerBar.classList.add('timer-active');
+        // Reset and start timer animation only if it's not already running
+        if (timerBar && !CombatTimer.isRunning()) {
+            CombatTimer.start();
         }
 
-        // --- TACTICAL INTEL (Phase 6) ---
-        const intelPanel = document.getElementById('tactical-intel-panel');
-        if (intelPanel) {
-            intelPanel.classList.remove('hidden');
-            intelPanel.classList.add('flex');
-            
-            const intelName = document.getElementById('intel-name');
-            const intelDesc = document.getElementById('intel-desc');
-            const intelPhys = document.getElementById('intel-phys');
-            const intelWill = document.getElementById('intel-will');
-            const intelAwr = document.getElementById('intel-awr');
-            
-            if (intelName) intelName.innerText = opponentData.name || 'UNKNOWN ENTITY';
-            if (intelDesc) intelDesc.innerText = opponentData.description || 'No biometric data retrieved for this entity.';
-            if (intelPhys) intelPhys.innerText = opponentData.stats?.PHYS ?? '???';
-            if (intelWill) intelWill.innerText = opponentData.stats?.WILL ?? '???';
-            if (intelAwr) intelAwr.innerText = opponentData.stats?.AWR ?? '???';
-        }
+        // Cleaned up old Tactical Intel Panel logic since intel is now in the Opponent Card
 
         const { activeAvatar } = stateManager.getState();
 
@@ -966,22 +1024,26 @@ export function toggleCombatUI(active, opponentData = null) {
                 oppPortrait.classList.add('hidden');
                 oppFallback.classList.remove('hidden');
                 oppFallback.classList.add('flex');
-                // Stylized placeholder for missing image
-                oppFallback.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-purple-900 to-black border border-purple-500 flex items-center justify-center text-[8px] text-purple-300 text-center p-1 uppercase">SHADOW<br>ENTITY</div>`;
+                // Stylized placeholder for missing image while it generates
+                oppFallback.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-purple-900 to-black border border-purple-500 flex flex-col items-center justify-center text-[8px] text-purple-300 text-center p-1 uppercase">SHADOW<br>ENTITY<br><span class="text-[6px] text-amber-500 animate-pulse mt-1">MANIFESTING...</span></div>`;
             }
         }
 
         if (oppName) oppName.innerText = opponentData.name.toUpperCase();
         
+        const intelDesc = document.getElementById('intel-desc');
+        if (intelDesc) intelDesc.innerText = opponentData.description || 'No additional intelligence gathered.';
+        
         if (oppStats) {
-            const currentConsc = opponentData.consc !== undefined ? opponentData.consc : 10;
-            const maxConsc = opponentData.stats?.CONSC || 10;
-            const currentPhys = opponentData.hp !== undefined ? opponentData.hp : 10;
-            const maxPhys = opponentData.stats?.PHYS || 10;
+            const currentWill = opponentData.stats?.WILL !== undefined ? (opponentData.stats?.WILL?.total || opponentData.stats?.WILL) : 10;
+            const currentPhys = opponentData.stats?.PHYS !== undefined ? (opponentData.stats?.PHYS?.total || opponentData.stats?.PHYS) : 10;
+            const currentAwr = opponentData.stats?.AWR !== undefined ? (opponentData.stats?.AWR?.total || opponentData.stats?.AWR) : 10;
 
+            // Notice we use Tailwind colors for the visual bars to match Dossier
             oppStats.innerHTML = `
-                ${renderStatBarHTML('WILL', currentConsc, maxConsc, 'var(--term-amber)')}
-                ${renderStatBarHTML('PHYS', currentPhys, maxPhys, 'var(--term-red)')}
+                <div class="flex justify-between items-center text-[9px] text-amber-500/80 mb-0.5"><span class="w-8">WILL</span> ${generateVisualBar(currentWill, 20, 'bg-amber-600')}</div>
+                <div class="flex justify-between items-center text-[9px] text-amber-500/80 mb-0.5"><span class="w-8">PHYS</span> ${generateVisualBar(currentPhys, 20, 'bg-red-600')}</div>
+                <div class="flex justify-between items-center text-[9px] text-amber-500/80"><span class="w-8">AWR</span> ${generateVisualBar(currentAwr, 20, 'bg-cyan-600')}</div>
             `;
         }
 
@@ -1019,16 +1081,20 @@ export function toggleCombatUI(active, opponentData = null) {
                     return sub ? 0 : p;
                 };
 
-                const curWill = activeAvatar.will !== undefined ? activeAvatar.will : getStatValue('WILL');
+                const curWill = (activeAvatar.will !== undefined && !isNaN(activeAvatar.will)) ? activeAvatar.will : getStatValue('WILL');
                 const maxWill = getStatValue('WILL');
-                const curPhys = activeAvatar.hp !== undefined ? activeAvatar.hp : getStatValue('PHYS');
+                const curPhys = (activeAvatar.hp !== undefined && !isNaN(activeAvatar.hp)) ? activeAvatar.hp : getStatValue('PHYS');
                 const maxPhys = getStatValue('PHYS');
 
                 const isAstral = stateManager.getState().localPlayer.stratum === 'astral';
+                const willColor = isAstral ? 'bg-purple-600' : 'bg-emerald-600';
+                const physColor = isAstral ? 'bg-purple-900/50' : 'bg-green-600';
+                const awrColor = isAstral ? 'bg-purple-400' : 'bg-cyan-600';
 
                 playerStats.innerHTML = `
-                    ${renderStatBarHTML('WILL', curWill, maxWill, 'var(--gm-purple)', isAstral ? 'stat-will-astral' : '')}
-                    ${renderStatBarHTML('PHYS', curPhys, maxPhys, 'var(--term-green)', isAstral ? 'stat-phys-astral' : '')}
+                    <div class="flex justify-between items-center text-[9px] text-blue-400/80 mb-0.5"><span class="w-8">WILL</span> ${generateVisualBar(curWill, maxWill || 20, willColor)}</div>
+                    <div class="flex justify-between items-center text-[9px] text-blue-400/80 mb-0.5"><span class="w-8">PHYS</span> ${generateVisualBar(curPhys, maxPhys || 20, physColor)}</div>
+                    <div class="flex justify-between items-center text-[9px] text-blue-400/80"><span class="w-8">AWR</span> ${generateVisualBar(getStatValue('AWR'), 20, awrColor)}</div>
                 `;
             }
 
@@ -1039,20 +1105,25 @@ export function toggleCombatUI(active, opponentData = null) {
     } else {
         document.body.style.overflow = '';
         document.getElementById('ability-hand')?.classList.add('hidden');
-        document.getElementById('tactical-intel-panel')?.classList.add('hidden');
-        document.getElementById('tactical-intel-panel')?.classList.remove('flex');
         
-        overlay.classList.add('hidden');
-        overlay.classList.remove('flex');
-        if (timerBar) timerBar.classList.remove('timer-active');
+        if (output) output.style.display = '';
+        overlay?.classList.add('hidden');
+        overlay?.classList.remove('flex');
+        CombatTimer.stop();
         
-        // Restore original visuals height
         if (visualsEl) {
             visualsEl.classList.remove('h-[10vh]', 'sm:h-[20%]');
             visualsEl.classList.add('h-[25vh]', 'sm:h-[45%]', 'max-h-[250px]');
         }
+    }
+}
 
-        output.classList.remove('hidden');
+export function resetCombatTimerUI() {
+    const timerBar = document.getElementById('combat-timer-bar');
+    if (timerBar) {
+        timerBar.classList.remove('timer-active');
+        void timerBar.offsetWidth;
+        timerBar.classList.add('timer-active');
     }
 }
 
@@ -1179,10 +1250,11 @@ export function printRoomDescription(room, isAstral, activeMap, activeAvatar) {
  */
 export function togglePinButton(show, label, style = 'normal') {
     const btn = document.getElementById('pin-view-btn');
-    if (!btn) return;
+    const wrapper = document.getElementById('architect-visual-controls');
+    if (!btn || !wrapper) return;
 
     if (show) {
-        btn.classList.remove('hidden');
+        wrapper.classList.remove('hidden');
         btn.innerText = label;
 
         // Reset styles
@@ -1199,6 +1271,6 @@ export function togglePinButton(show, label, style = 'normal') {
             btn.classList.add('bg-blue-600', 'border-blue-400');
         }
     } else {
-        btn.classList.add('hidden');
+        wrapper.classList.add('hidden');
     }
 }

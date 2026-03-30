@@ -66,7 +66,7 @@ if (isSyncEnabled) {
 
 // Listen for auth gate events dispatched by gmEngine (which can't import wizardSystem directly)
 window.addEventListener('trigger-login-wizard', () => {
-    handleCommand('login');
+    handleCommand('/login');
 });
 
 
@@ -78,7 +78,7 @@ if (becomeArchitectLink) {
 
         if (!user || user.isAnonymous) {
             UI.addLog("[SYSTEM]: Identity verification required before acquiring an Architect license.", "var(--term-red)");
-            handleCommand('login'); 
+            handleCommand('/login'); 
         } else {
             handleCommand('become architect');
         }
@@ -91,6 +91,23 @@ if (pinBtnEl) {
         const { localPlayer, user } = stateManager.getState();
         import('./visualSystem.js').then(({ togglePinView }) => {
             togglePinView(localPlayer, stateManager.getActiveMap(), user);
+        });
+    });
+}
+
+const newImageBtnEl = document.getElementById('new-image-btn');
+if (newImageBtnEl) {
+    newImageBtnEl.addEventListener('click', () => {
+        const { localPlayer, user } = stateManager.getState();
+        const icon = newImageBtnEl.querySelector('span');
+        if (icon && icon.classList.contains('animate-spin')) return;
+        
+        if (icon) icon.classList.add('animate-spin');
+        
+        import('./visualSystem.js').then(({ triggerVisualUpdate }) => {
+            triggerVisualUpdate(null, localPlayer, stateManager.getActiveMap(), user, true).finally(() => {
+                if (icon) icon.classList.remove('animate-spin');
+            });
         });
     });
 }

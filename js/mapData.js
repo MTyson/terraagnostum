@@ -46,6 +46,14 @@ export const blueprintApartment = {
         description: "A typical apartment closet. The door is covered in cryptic occult and scientific diagrams. Inside is a Hacked Schumann Resonance Generator, arcing with potential energy.",
         visualPrompt: "Glitchy cyberpunk vibe.  Inside a typical apartment closet, walls covered in marker-scrawled diagrams, a strange device in the center called the Hacked Schumann Resonance Generator is arcing with potential energy.",
         exits: { south: "lore1" },
+        items: [
+            { 
+                id: "Schumann_Generator", 
+                name: "Hacked Schumann Resonance Generator", 
+                description: "A jury-rigged device of brass, vacuum tubes, and exposed circuitry. It emits a low-frequency hum that seems to vibrate your very soul.",
+                scenery: true 
+            }
+        ],
         metadata: { stratum: "mundane", isEditable: false }
     },
     "kitchen": {
@@ -80,7 +88,10 @@ export const blueprintApartment = {
             } 
         },
         metadata: { stratum: "mundane", isEditable: false }
-    },
+    }
+};
+
+export const blueprintGlobal = {
     "outside": {
         name: "The Unrendered Edge",
         shortName: "VOID",

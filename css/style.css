@@ -12,6 +12,60 @@ body::before {
     background-size: 100% 3px, 3px 100%;
     pointer-events: none;
     opacity: 0.5;
+    transition: opacity 0.5s ease;
+}
+
+/* --- TERMINAL TAKEOVER --- */
+body.terminal-active::before {
+    opacity: 0.85; /* Intensified scanlines */
+    background-size: 100% 2px, 2px 100%;
+}
+
+body.terminal-active {
+    background-color: #050505;
+}
+
+body.terminal-active #visuals, 
+body.terminal-active #right-sidebar,
+body.terminal-active #mobile-radar-widget,
+body.terminal-active #compass-widget,
+body.terminal-active #header-row {
+    filter: blur(10px) brightness(0.2);
+    pointer-events: none;
+    transition: filter 0.5s ease;
+}
+
+body.terminal-active #main-terminal-area {
+    border: none;
+}
+
+body.terminal-active #output {
+    background: rgba(0, 20, 0, 0.9);
+    box-shadow: inset 0 0 100px rgba(0, 255, 65, 0.1);
+}
+
+body.terminal-active #prompt-line {
+    border-color: var(--term-green);
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
+}
+
+/* CRT Curvature Effect (Subtle) */
+body.terminal-active #main-terminal-area {
+    position: relative;
+    overflow: hidden;
+}
+
+body.terminal-active #main-terminal-area::after {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: radial-gradient(circle, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
+    pointer-events: none;
+    z-index: 1000;
 }
 
 /* --- RADAR SWEEP --- */
@@ -85,50 +139,30 @@ body::before {
 }
 
 .ability-chip {
-    border: 1px solid var(--crayola-blue);
+    border: 1px solid rgba(59, 130, 246, 0.4);
     color: var(--crayola-blue);
-    background: rgba(59, 130, 246, 0.05);
-    font-size: 9px;
-    padding: 3px 8px;
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.02) 100%);
+    font-size: 10px;
+    padding: 6px 12px;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     cursor: pointer;
-    transition: 0.1s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: inset 0 0 10px rgba(59, 130, 246, 0.1);
+    border-radius: 2px;
 }
 
 .ability-chip:hover {
     background: var(--crayola-blue);
     color: black;
-    box-shadow: 0 0 10px var(--crayola-blue);
+    box-shadow: 0 0 15px var(--crayola-blue), inset 0 0 10px rgba(255,255,255,0.5);
+    border-color: var(--term-green);
+    transform: translateY(-1px);
 }
 
-.combat-stat-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 9px;
-}
-
-.combat-stat-label {
-    width: 45px;
-    flex-shrink: 0;
-    color: rgba(255, 255, 255, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.combat-stat-bar-bg {
-    flex-grow: 1;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.05);
-    position: relative;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.combat-stat-bar-fill {
-    height: 100%;
-    transition: width 0.5s ease-out;
-    box-shadow: 0 0 5px currentColor;
+.ability-chip:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 5px var(--crayola-blue);
 }
 
 @keyframes combat-shake {
@@ -142,26 +176,12 @@ body::before {
     70% { transform: translate(3px, 1px) rotate(-1deg); }
     80% { transform: translate(-1px, -1px) rotate(1deg); }
     90% { transform: translate(1px, 2px) rotate(0deg); }
-    100% { transform: translate(1px, -2px) rotate(-1deg); }
+    100% { transform: none; }
 }
 
 .animate-combat-shake {
-    animation: combat-shake 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    animation: combat-shake 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97);
 }
-
-/* Phase 5.4 Astral Stat Overrides */
-.stat-will-astral > .combat-stat-bar-bg {
-    height: 8px !important;
-}
-.stat-will-astral > .combat-stat-bar-bg > .combat-stat-bar-fill {
-    box-shadow: 0 0 15px var(--gm-purple);
-}
-
-.stat-phys-astral > .combat-stat-bar-bg {
-    height: 2px !important;
-    opacity: 0.5;
-}
-
 
 /* --- FLEX DENSITY --- */
 #header-row, #visuals, #input-container, #footer-hud {
@@ -266,21 +286,13 @@ body::before {
 @media (max-width: 768px) {
     /* Phase 5.1: The Combat Modal Takeover */
     #combat-overlay {
-        position: fixed !important;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100dvh;
+        flex: 1 1 auto;
+        min-height: 0;
         z-index: 500;
-        padding-bottom: 200px; /* Leave space for input container */
     }
 
     #input-container {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100vw;
-        z-index: 501; /* Must sit above combat modal */
+        z-index: 501; /* Must sit above combat modal content if overlapping occurs */
     }
 
     /* Phase 5.2: Responsive Card Stacking */
@@ -488,6 +500,46 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
     }
 }
 
+/* --- COLLAPSIBLE SECTIONS --- */
+.sidebar-section.collapsed .section-content {
+    display: none;
+}
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 2px 4px;
+    margin-bottom: 8px;
+}
+.section-header:hover {
+    color: var(--term-green);
+    background: rgba(0, 255, 65, 0.05);
+}
+.toggle-icon {
+    font-size: 10px;
+    transition: transform 0.3s ease, color 0.2s;
+    opacity: 0.6;
+    font-weight: bold;
+}
+.sidebar-section.collapsed {
+    margin-bottom: 12px !important;
+}
+.sidebar-section.collapsed .section-header {
+    border-bottom: 1px dotted rgba(0, 255, 65, 0.2);
+    margin-bottom: 0;
+}
+.section-header:hover .toggle-icon {
+    opacity: 1;
+    color: var(--term-green);
+}
+.sidebar-section.collapsed .toggle-icon {
+    transform: rotate(180deg);
+    opacity: 1;
+    color: var(--term-amber);
+}
+
 .hidden { display: none; }
 
 @keyframes dots {
@@ -546,4 +598,390 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
     width: 100%;
     height: 100%;
     display: block;
+}
+
+/* ================================================================
+   BBS TERMINAL OVERLAY
+   Fullscreen CRT-style BBS interface — activated when terminal mode
+   is engaged via "use console".
+   ================================================================ */
+
+#bbs-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    background: #000a00;
+    display: none; /* hidden until startTerminal() fires */
+    flex-direction: column;
+    font-family: 'Courier New', Courier, 'Glass TTY', monospace;
+    font-size: 14px;
+    color: var(--term-green);
+    overflow: hidden;
+    animation: bbs-boot 0.3s ease-out;
+}
+
+/* BBS visible state — toggled by ui.js */
+#bbs-overlay.bbs-active {
+    display: flex;
+}
+
+@keyframes bbs-boot {
+    from { opacity: 0; transform: scaleY(0.02); }
+    to   { opacity: 1; transform: scaleY(1); }
+}
+
+/* --- CRT SCANLINES --- */
+.bbs-scanlines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.18) 0px,
+        rgba(0, 0, 0, 0.18) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+    animation: bbs-flicker 8s step-end infinite;
+}
+
+@keyframes bbs-flicker {
+    0%   { opacity: 0.9; }
+    92%  { opacity: 0.9; }
+    93%  { opacity: 0.6; }
+    94%  { opacity: 0.9; }
+    96%  { opacity: 0.7; }
+    97%  { opacity: 0.9; }
+    100% { opacity: 0.9; }
+}
+
+/* --- CRT VIGNETTE --- */
+.bbs-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 55%,
+        rgba(0, 0, 0, 0.55) 100%
+    );
+}
+
+/* --- HEADER --- */
+.bbs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 16px;
+    background: rgba(0, 40, 0, 0.7);
+    border-bottom: 1px solid var(--term-green);
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--term-green);
+    flex-shrink: 0;
+    text-shadow: 0 0 8px var(--term-green);
+    z-index: 11;
+    position: relative;
+}
+
+.bbs-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.bbs-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.bbs-sep {
+    opacity: 0.4;
+}
+
+/* Trace level color coding */
+.bbs-trace-ok   { color: var(--term-green); }
+.bbs-trace-warn { color: var(--term-amber); }
+.bbs-trace-crit { color: var(--term-red); animation: bbs-trace-pulse 0.7s ease infinite; }
+
+@keyframes bbs-trace-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* --- DIVIDERS --- */
+.bbs-divider {
+    padding: 2px 16px;
+    color: rgba(0, 255, 65, 0.4);
+    font-size: 12px;
+    flex-shrink: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    z-index: 11;
+    position: relative;
+    text-shadow: 0 0 4px rgba(0, 255, 65, 0.3);
+}
+
+.bbs-divider-bottom {
+    margin-top: auto;
+}
+
+/* --- OUTPUT LOG --- */
+.bbs-output {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px 20px 8px;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--term-green) #000a00;
+    z-index: 11;
+    position: relative;
+}
+
+.bbs-output::-webkit-scrollbar {
+    width: 4px;
+}
+.bbs-output::-webkit-scrollbar-track {
+    background: #000a00;
+}
+.bbs-output::-webkit-scrollbar-thumb {
+    background: var(--term-green);
+}
+
+#bbs-log .bbs-line {
+    line-height: 1.6;
+    color: var(--term-green);
+    text-shadow: 0 0 6px rgba(0, 255, 65, 0.5);
+}
+
+#bbs-log .bbs-line.bbs-amber {
+    color: var(--term-amber);
+    text-shadow: 0 0 6px rgba(255, 176, 0, 0.5);
+}
+
+#bbs-log .bbs-line.bbs-red {
+    color: var(--term-red);
+    text-shadow: 0 0 6px rgba(255, 62, 62, 0.4);
+}
+
+#bbs-log .bbs-line.bbs-purple {
+    color: #b084e8;
+    text-shadow: 0 0 6px rgba(176, 132, 232, 0.5);
+}
+
+#bbs-log .bbs-line.bbs-dim {
+    color: rgba(0, 255, 65, 0.45);
+    text-shadow: none;
+}
+
+/* --- MENU AREA --- */
+.bbs-menu-area {
+    padding: 8px 20px 6px;
+    flex-shrink: 0;
+    z-index: 11;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Individual BBS menu item */
+.bbs-item {
+    display: flex;
+    align-items: center;
+    padding: 9px 12px;
+    min-height: 44px; /* Mobile touch target */
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid transparent;
+    color: var(--term-green);
+    text-shadow: 0 0 6px rgba(0, 255, 65, 0.5);
+    transition: background 0.08s, border-color 0.08s, color 0.08s, text-shadow 0.08s;
+    position: relative;
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+}
+
+.bbs-item-key {
+    color: var(--term-amber);
+    font-weight: bold;
+    margin-right: 16px;
+    min-width: 28px;
+    text-shadow: 0 0 6px rgba(255, 176, 0, 0.6);
+    flex-shrink: 0;
+}
+
+.bbs-item-label {
+    flex: 1;
+}
+
+.bbs-item-tag {
+    font-size: 11px;
+    opacity: 0.5;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+/* Highlight / hover state — inverted CRT selection bar */
+.bbs-item:hover,
+.bbs-item.bbs-item-active,
+.bbs-item:focus {
+    background: var(--term-green);
+    color: #000a00;
+    text-shadow: none;
+    border-color: var(--term-green);
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.4), inset 0 0 8px rgba(255, 255, 255, 0.1);
+    outline: none;
+}
+
+.bbs-item:hover .bbs-item-key,
+.bbs-item.bbs-item-active .bbs-item-key,
+.bbs-item:focus .bbs-item-key {
+    color: #003300;
+    text-shadow: none;
+}
+
+.bbs-item:hover .bbs-item-tag,
+.bbs-item.bbs-item-active .bbs-item-tag,
+.bbs-item:focus .bbs-item-tag {
+    opacity: 0.7;
+}
+
+/* Danger item (disconnect / exit) */
+.bbs-item.bbs-item-danger {
+    color: var(--term-red);
+    text-shadow: 0 0 6px rgba(255, 62, 62, 0.5);
+}
+.bbs-item.bbs-item-danger .bbs-item-key {
+    color: var(--term-red);
+}
+.bbs-item.bbs-item-danger:hover,
+.bbs-item.bbs-item-danger.bbs-item-active {
+    background: var(--term-red);
+    color: #000;
+    border-color: var(--term-red);
+    box-shadow: 0 0 20px rgba(255, 62, 62, 0.5);
+}
+
+/* Locked/disabled item */
+.bbs-item.bbs-item-locked {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.bbs-item.bbs-item-locked .bbs-item-key {
+    color: rgba(255, 176, 0, 0.4);
+}
+
+/* --- FOOTER --- */
+.bbs-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 16px;
+    background: rgba(0, 40, 0, 0.6);
+    border-top: 1px solid var(--term-green);
+    font-size: 12px;
+    flex-shrink: 0;
+    z-index: 11;
+    position: relative;
+    gap: 8px;
+}
+
+.bbs-footer-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-shadow: 0 0 8px var(--term-amber);
+}
+
+.bbs-footer-right {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-align: right;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.bbs-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--term-amber);
+    font-family: inherit;
+    font-size: inherit;
+    caret-color: var(--term-amber);
+    flex: 1;
+    min-width: 0;
+    text-shadow: 0 0 8px var(--term-amber);
+}
+
+.bbs-input::placeholder {
+    color: rgba(255, 176, 0, 0.35);
+    font-style: italic;
+}
+
+/* Helpers */
+.bbs-amber { color: var(--term-amber); }
+.bbs-red   { color: var(--term-red); }
+.bbs-dim   { opacity: 0.4; color: var(--term-green); }
+
+@keyframes bbs-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+.bbs-blink {
+    animation: bbs-blink 1.1s step-end infinite;
+}
+
+/* --- MOBILE ADJUSTMENTS --- */
+@media (max-width: 640px) {
+    #bbs-overlay {
+        font-size: 13px;
+    }
+
+    .bbs-header {
+        padding: 5px 10px;
+        font-size: 10px;
+    }
+
+    #bbs-signal {
+        display: none; /* Save space on very small screens */
+    }
+
+    .bbs-output {
+        padding: 8px 10px;
+    }
+
+    .bbs-divider {
+        padding: 1px 10px;
+        font-size: 10px;
+    }
+
+    .bbs-menu-area {
+        padding: 4px 10px;
+    }
+
+    .bbs-item {
+        padding: 11px 10px;
+        font-size: 13px;
+    }
+
+    .bbs-footer {
+        padding: 5px 10px;
+        font-size: 10px;
+    }
+
+    .bbs-footer-right {
+        font-size: 9px;
+    }
 }

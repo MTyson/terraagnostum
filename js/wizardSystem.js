@@ -183,9 +183,10 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 image: finalImage,
                 stats: { 
                     AMN: 20, 
-                    WILL: { total: 7, stability: 4, projection: 3 }, 
-                    AWR: { total: 7, focus: 4, perception: 3 }, 
-                    PHYS: { total: 6, strength: 3, agility: 3 } 
+                    PHYS: { total: 6, Strength: 3, Agility: 3 },
+                    WILL: { total: 7, Conviction: 4, Anchor: 3 },
+                    AWR: { total: 7, Perception: 4, Insight: 3 },
+                    bias: { PHYS: 'A', WILL: 'A', AWR: 'A' }
                 },
                 inventory: [],
                 deceased: false, deployed: false, timestamp: Date.now()
@@ -205,7 +206,7 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                 }
 
                 UI.addLog(`[SYSTEM]: VESSEL COLLAPSE COMPLETE. YOU ARE REAL.`, "var(--term-green)");
-                UI.addLog(`[TANDY]: You have a shape now. Good. But your signature is fragile... a stiff breeze could scatter you. Go to the Lore Archive and use the Tandem Terminal to 'login'. Anchor yourself.`, "#b084e8");
+                UI.addLog(`[TANDY]: You have a shape now. Good. But your signature is fragile... a stiff breeze could scatter you. Go to the Lore Archive and use the Tandem Terminal to '/login'. Anchor yourself.`, "#b084e8");
                 
                 if (!user || user.isAnonymous) {
                     localStorage.setItem('awaitingNewUserHint', 'true');
@@ -339,27 +340,50 @@ export async function handleWizardInput(val, context = {}, callbacks = {}) {
                  required: ["name", "description", "visual_prompt"]
              });
              if (res && res.name) {
-                 const newRoomId = 'room_' + crypto.randomUUID().split('-')[0];
-                 const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
-                 
-                 const newRoom = {
-                     name: res.name,
-                     shortName: res.name.substring(0, 7).toUpperCase(),
-                     description: res.description,
-                     visualPrompt: res.visual_prompt,
-                     exits: { [getOpposite(dir)]: localPlayer.currentRoom },
-                     items: [], npcs: []
-                 };
-                 
-                 stateManager.updateMapNode(newRoomId, newRoom);
-                 syncEngine.updateMapNode(newRoomId, newRoom);
-
-                 if (dir !== 'here') {
-                    const currentExits = { ...activeMap[localPlayer.currentRoom].exits, [dir]: newRoomId };
-                    stateManager.updateMapNode(localPlayer.currentRoom, { exits: currentExits });
-                    syncEngine.updateMapNode(localPlayer.currentRoom, { [`exits.${dir}`]: newRoomId });
+                 if (dir === 'here') {
+                     // 1. RE-WEAVE CURRENT ROOM
+                     const roomId = localPlayer.currentRoom;
+                     const updates = {
+                         name: res.name,
+                         shortName: res.name.substring(0, 7).toUpperCase(),
+                         description: res.description,
+                         visualPrompt: res.visual_prompt,
+                         storedImageUrl: null // Force visual re-render
+                     };
+                     stateManager.updateMapNode(roomId, updates);
+                     syncEngine.updateMapNode(roomId, updates);
+                     
+                     UI.addLog(`[SYSTEM]: Sector successfully re-woven.`, "var(--term-green)");
+                     
+                     // Force UI refresh
+                     const updatedActiveMap = stateManager.getActiveMap();
+                     UI.printRoomDescription(updatedActiveMap[roomId], localPlayer.stratum === 'astral', updatedActiveMap, activeAvatar);
+                     import('./visualSystem.js').then(({ triggerVisualUpdate }) => {
+                         triggerVisualUpdate(null, localPlayer, updatedActiveMap, user);
+                     });
+                 } else {
+                     // 2. EXPAND NEW ROOM
+                     const newRoomId = 'room_' + crypto.randomUUID().split('-')[0];
+                     const getOpposite = (d) => ({'north':'south','south':'north','east':'west','west':'east'})[d] || 'out';
+                     
+                     const newRoom = {
+                         name: res.name,
+                         shortName: res.name.substring(0, 7).toUpperCase(),
+                         description: res.description,
+                         visualPrompt: res.visual_prompt,
+                         exits: { [getOpposite(dir)]: localPlayer.currentRoom },
+                         items: [], npcs: []
+                     };
+                     
+                     stateManager.updateMapNode(newRoomId, newRoom);
+                     syncEngine.updateMapNode(newRoomId, newRoom);
+    
+                     const currentExits = { ...activeMap[localPlayer.currentRoom].exits, [dir]: newRoomId };
+                     stateManager.updateMapNode(localPlayer.currentRoom, { exits: currentExits });
+                     syncEngine.updateMapNode(localPlayer.currentRoom, { [`exits.${dir}`]: newRoomId });
+                     
+                     UI.addLog(`[SYSTEM]: Sector generated ${dir.toUpperCase()}.`, "var(--term-green)");
                  }
-                 UI.addLog(`[SYSTEM]: Sector generated.`, "var(--term-green)");
              }
          } catch(e) { UI.addLog("[SYSTEM ERROR]: Weave failed.", "var(--term-red)"); }
          endWizard();

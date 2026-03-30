@@ -46,10 +46,15 @@
                      </div>
                  </div>
 
-                 <!-- THE PIN BUTTON (Architects Only) -->
-                 <button id="pin-view-btn" class="hidden absolute bottom-2 right-2 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded hover:bg-blue-500 z-50 transition-colors border border-blue-400 cursor-pointer">
-                     PIN VIEW
-                 </button>
+                 <!-- ARCHITECT CONTROLS -->
+                 <div id="architect-visual-controls" class="hidden absolute bottom-2 right-2 z-50 flex gap-2">
+                     <button id="new-image-btn" class="bg-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded hover:bg-indigo-500 transition-colors border border-indigo-400 cursor-pointer flex items-center gap-1" title="Force generate a new image for this sector">
+                         <span>⟳</span> NEW IMAGE
+                     </button>
+                     <button id="pin-view-btn" class="bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded hover:bg-blue-500 transition-colors border border-blue-400 cursor-pointer">
+                         PIN VIEW
+                     </button>
+                 </div>
 
                  <div id="visual-loading" class="absolute inset-0 flex items-center justify-center text-amber-500 text-xs italic hidden z-20 bg-black/80">
                      RENDERING REALITY<span class="loading-dots"></span>
@@ -71,48 +76,47 @@
                     <div id="combat-timer-bar" class="h-full bg-amber-500 w-full origin-left"></div>
                 </div>
 
-                <!-- TACTICAL INTEL (Phase 6) -->
-                <div id="tactical-intel-panel" class="hidden w-full bg-purple-950/20 border-b border-purple-900/50 p-2 text-xs flex-col gap-1 items-center justify-center shadow-[inset_0_0_15px_rgba(168,85,247,0.1)]">
-                    <div class="text-[10px] text-purple-400 font-bold uppercase tracking-widest">[ TACTICAL INTEL: <span id="intel-name" class="text-white"></span> ]</div>
-                    <div id="intel-desc" class="text-[11px] text-purple-200/80 italic text-center max-w-[80%]"></div>
-                    <div class="text-[10px] text-purple-500 font-mono mt-1">PHYS: <span id="intel-phys" class="text-white"></span> | WILL: <span id="intel-will" class="text-white"></span> | AWR: <span id="intel-awr" class="text-white"></span></div>
-                </div>
+                <div class="flex-grow flex flex-col p-2 sm:p-4 gap-2 overflow-hidden">
+                    <!-- Resolution Log (Moved ABOVE cards for natural reading flow) -->
+                    <div id="combat-log" class="flex-grow overflow-y-auto border border-green-900/10 bg-black/40 p-3 text-xs sm:text-sm font-mono text-gray-400 shadow-[inset_0_0_15px_rgba(0,0,0,0.8)] flex flex-col gap-2 rounded-sm scroll-smooth relative">
+                        <!-- Dynamic logs go here -->
+                    </div>
 
-                <div class="flex-grow flex flex-col p-4 gap-2 overflow-hidden">
-                    <!-- Top Section (The Clash) -->
-                    <div id="combat-clash" class="flex flex-row justify-between gap-2 flex-shrink-0">
+                    <!-- The Clash (Cards) -->
+                    <div id="combat-clash" class="flex flex-col sm:flex-row justify-between gap-3 flex-shrink-0 mt-auto pt-2 border-t border-[#1a3a1a]">
                          <!-- Player Card (Compact) -->
-                         <div id="combat-player" class="combat-card player-card flex flex-row gap-2 p-2 border border-blue-900/50 bg-blue-950/5 flex-1 min-w-0">
-                            <div class="portrait-container w-16 h-16 sm:w-20 sm:h-20 border border-blue-900/30 overflow-hidden flex-shrink-0 bg-black">
-                                <img id="player-portrait" src="" class="w-full h-full object-cover opacity-80">
-                                <div id="player-portrait-fallback" class="hidden w-full h-full items-center justify-center text-[8px] text-blue-900 text-center p-1">[ NO VISUAL DATA ]</div>
+                         <div id="combat-player" class="combat-card player-card flex flex-row gap-2 p-2 border border-[#1a3a1a] bg-black flex-1 min-w-0 shadow-[0_0_15px_rgba(59,130,246,0.1)] transition-all">
+                            <div class="portrait-container w-16 h-16 sm:w-20 sm:h-20 border border-[#1a3a1a] overflow-hidden flex-shrink-0 bg-black">
+                                <img id="player-portrait" src="" class="w-full h-full object-cover">
+                                <div id="player-portrait-fallback" class="hidden w-full h-full items-center justify-center text-[8px] text-blue-900 border-2 border-dashed border-blue-900/50 text-center p-1 uppercase">[ NO VISUAL DATA ]</div>
                             </div>
                             <div class="flex-grow min-w-0 flex flex-col justify-center">
                                 <div id="player-name" class="text-blue-400 font-bold uppercase tracking-widest text-[10px] sm:text-xs truncate">Vessel</div>
-                                <div id="player-stats" class="mt-1 space-y-1">
-                                    <!-- Bars -->
+                                <div id="player-stats" class="mt-1 space-y-1.5 w-full">
+                                    <!-- Bars dynamically injected -->
                                 </div>
                             </div>
+                         </div>
+
+                         <!-- VS Divider -->
+                         <div class="hidden sm:flex items-center justify-center -mx-2 z-10 shrink-0">
+                            <div class="bg-black border border-green-900/50 text-green-900 text-[9px] px-2 py-1 font-bold z-10 shadow-[0_0_10px_rgba(0,0,0,1)]">VS</div>
                          </div>
 
                          <!-- Opponent Card (Compact) -->
-                         <div id="combat-opponent" class="combat-card opponent-card flex flex-row-reverse gap-2 p-2 border border-amber-900/50 bg-amber-950/5 flex-1 min-w-0">
-                            <div class="portrait-container w-16 h-16 sm:w-20 sm:h-20 border border-amber-900/30 overflow-hidden flex-shrink-0 bg-black">
-                                <img id="opponent-portrait" src="" class="w-full h-full object-cover opacity-80">
-                                <div id="opponent-portrait-fallback" class="hidden w-full h-full items-center justify-center text-[8px] text-amber-900 text-center p-1">[ NO VISUAL DATA ]</div>
+                         <div id="combat-opponent" class="combat-card opponent-card flex flex-row gap-2 p-2 border border-[#1a3a1a] bg-black flex-1 min-w-0 shadow-[0_0_15px_rgba(255,176,0,0.1)] transition-all">
+                            <div class="portrait-container w-16 h-16 sm:w-20 sm:h-20 border border-[#1a3a1a] overflow-hidden flex-shrink-0 bg-black">
+                                <img id="opponent-portrait" src="" class="w-full h-full object-cover">
+                                <div id="opponent-portrait-fallback" class="hidden w-full h-full items-center justify-center text-[8px] text-amber-900 border-2 border-dashed border-amber-900/50 text-center p-1 uppercase">[ UNREGISTERED<br>ANOMALY ]</div>
                             </div>
-                            <div class="flex-grow min-w-0 flex flex-col justify-center text-right">
-                                <div id="opponent-name" class="text-amber-500 font-bold uppercase tracking-widest text-[10px] sm:text-xs truncate">Opponent</div>
-                                <div id="opponent-stats" class="mt-1 space-y-1">
-                                    <!-- Bars -->
+                            <div class="flex-grow min-w-0 flex flex-col justify-center">
+                                <div id="opponent-name" class="text-amber-500 font-bold uppercase tracking-widest text-[10px] sm:text-xs truncate leading-tight">Opponent</div>
+                                <div id="intel-desc" class="text-[9px] text-amber-500/60 italic mb-1 line-clamp-2 leading-tight">Scanning...</div>
+                                <div id="opponent-stats" class="space-y-1.5 w-full">
+                                    <!-- Bars dynamically injected -->
                                 </div>
                             </div>
                          </div>
-                    </div>
-
-                    <!-- Middle Section (Resolution Log) -->
-                    <div id="combat-log" class="flex-grow overflow-y-auto border-y border-green-900/20 py-2 text-xs sm:text-sm font-mono text-gray-400 leading-relaxed">
-                        <div class="text-green-800 animate-pulse">[ AWAITING WEAVE RESOLUTION... ]</div>
                     </div>
                 </div>
             </div>
@@ -170,53 +174,68 @@
             </button>
         </div>
             <!-- BIOMETRICS (Dossier style) -->
-            <div class="sidebar-section mb-6">
-                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1 uppercase">System.Dossier</div>
-                <div id="avatar-container" class="relative w-full aspect-square border border-[#1a3a1a] bg-black/40 overflow-hidden cursor-pointer">
-                    <div class="text-amber-500 text-[10px] absolute inset-0 flex items-center justify-center text-center border border-dashed border-amber-900 p-4 m-2">
-                        NO VESSEL DETECTED
+            <div class="sidebar-section mb-6" id="dossier-sidebar-section">
+                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1 uppercase">
+                    <span>System.Dossier</span>
+                    <span class="toggle-icon">[^]</span>
+                </div>
+                <div class="section-content">
+                    <div id="avatar-container" class="relative w-full aspect-square border border-[#1a3a1a] bg-black/40 overflow-hidden cursor-pointer">
+                        <div class="text-amber-500 text-[10px] absolute inset-0 flex items-center justify-center text-center border border-dashed border-amber-900 p-4 m-2">
+                            NO VESSEL DETECTED
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- RADAR (Map) -->
-            <div class="sidebar-section mb-6">
-                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1 uppercase">System.Radar</div>
-                <div class="flex justify-center">
-                    <div id="map-canvas-container" class="relative w-48 h-48 border border-[#1a3a1a] bg-black/40 rounded-full overflow-hidden radar-container">
-                        <canvas id="map-canvas"></canvas>
-                        <div class="radar-sweep"></div>
+            <div class="sidebar-section mb-6" id="topology-sidebar-section">
+                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1 uppercase">
+                    <span>System.Topology</span>
+                    <span class="toggle-icon">[^]</span>
+                </div>
+                <div class="section-content">
+                    <div class="flex justify-center">
+                        <div id="map-canvas-container" class="relative w-48 h-48 border border-[#1a3a1a] bg-black/40 rounded-full overflow-hidden radar-container">
+                            <canvas id="map-canvas"></canvas>
+                            <div class="radar-sweep"></div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- TACTICAL INTEL (NPCs + Items + Inventory) -->
             <div id="intel-section" class="sidebar-section">
-                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1 uppercase">System.Tactical_Intel</div>
+                <div class="section-header text-[10px] text-green-700 mb-2 tracking-widest border-b border-[#1a3a1a] pb-1 uppercase">
+                    <span>System.Tactical_Intel</span>
+                    <span class="toggle-icon">[^]</span>
+                </div>
                 
-                <div class="grid grid-cols-1 gap-4">
-                    <!-- Entities -->
-                    <div>
-                        <div class="text-[8px] text-green-900 mb-1 uppercase tracking-tighter">Nearby_Entities</div>
-                        <div id="room-entities-container" class="text-[10px] text-blue-400 flex flex-col gap-1">[NONE]</div>
-                    </div>
+                <div class="section-content">
+                    <div class="grid grid-cols-1 gap-4">
+                        <!-- Entities -->
+                        <div>
+                            <div class="text-[8px] text-green-900 mb-1 uppercase tracking-tighter">Nearby_Entities</div>
+                            <div id="room-entities-container" class="text-[10px] text-blue-400 flex flex-col gap-1">[NONE]</div>
+                        </div>
 
-                    <!-- Room Items -->
-                    <div>
-                        <div class="text-[8px] text-green-900 mb-1 uppercase tracking-tighter">Detected_Objects</div>
-                        <div id="room-items-container" class="text-[10px] text-amber-600 flex flex-col gap-1">[EMPTY]</div>
-                    </div>
+                        <!-- Room Items -->
+                        <div>
+                            <div class="text-[8px] text-green-900 mb-1 uppercase tracking-tighter">Detected_Objects</div>
+                            <div id="room-items-container" class="text-[10px] text-amber-600 flex flex-col gap-1">[EMPTY]</div>
+                        </div>
 
-                    <!-- Inventory -->
-                    <div>
-                        <div class="text-[8px] text-green-900 mb-1 uppercase tracking-tighter">Vessel_Storage</div>
-                        <div id="inventory-container" class="text-[10px] text-gray-500 flex flex-col gap-1">[EMPTY]</div>
-                    </div>
-                    
-                    <!-- Quests -->
-                    <div>
-                        <div class="text-[8px] text-green-900 mb-1 uppercase tracking-tighter">Active_Tickets</div>
-                        <div id="quests-container" class="text-[10px] text-purple-400 flex flex-col gap-1">[EMPTY]</div>
+                        <!-- Inventory -->
+                        <div>
+                            <div class="text-[8px] text-green-900 mb-1 uppercase tracking-tighter">Vessel_Storage</div>
+                            <div id="inventory-container" class="text-[10px] text-gray-500 flex flex-col gap-1">[EMPTY]</div>
+                        </div>
+                        
+                        <!-- Quests -->
+                        <div>
+                            <div class="text-[8px] text-green-900 mb-1 uppercase tracking-tighter">Active_Tickets</div>
+                            <div id="quests-container" class="text-[10px] text-purple-400 flex flex-col gap-1">[EMPTY]</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -355,6 +374,54 @@
                      <button id="btn-close-dossier" class="w-full py-2 border border-green-900 text-green-500 hover:bg-green-950/20 uppercase text-xs">[ CLOSE DOSSIER ]</button>
                  </div>
              </div>
+        </div>
+    </div>
+
+    <!-- BBS TERMINAL OVERLAY -->
+    <div id="bbs-overlay" class="hidden">
+        <!-- CRT Scanlines -->
+        <div class="bbs-scanlines" aria-hidden="true"></div>
+        <!-- Vignette -->
+        <div class="bbs-vignette" aria-hidden="true"></div>
+
+        <!-- HEADER CHROME -->
+        <div class="bbs-header">
+            <div class="bbs-header-left">
+                <span class="bbs-blink">█</span>
+                <span id="bbs-node-id">TECHNATE NODE 0x4F2A</span>
+            </div>
+            <div class="bbs-header-right">
+                <span id="bbs-trace-label">TRACE:</span>
+                <span id="bbs-trace-level" class="bbs-trace-ok">000%</span>
+                <span class="bbs-sep">│</span>
+                <span id="bbs-signal">SIG: ████░</span>
+            </div>
+        </div>
+
+        <!-- DIVIDER -->
+        <div class="bbs-divider">══════════════════════════════════════════════════════════════════</div>
+
+        <!-- MAIN OUTPUT AREA -->
+        <div id="bbs-output" class="bbs-output">
+            <div id="bbs-log"></div>
+        </div>
+
+        <!-- MENU AREA (interactive, populated by JS) -->
+        <div id="bbs-menu-area" class="bbs-menu-area"></div>
+
+        <!-- DIVIDER -->
+        <div class="bbs-divider bbs-divider-bottom">══════════════════════════════════════════════════════════════════</div>
+
+        <!-- FOOTER -->
+        <div class="bbs-footer">
+            <div class="bbs-footer-left">
+                <span id="bbs-prompt-prefix" class="bbs-amber">guest@terra-node:~$</span>
+                <input id="bbs-input" type="text" autocomplete="off" spellcheck="false"
+                    class="bbs-input" placeholder="enter selection...">
+            </div>
+            <div class="bbs-footer-right bbs-dim">
+                <span>[ ESC / TYPE 5 / TAP TO DISCONNECT ]</span>
+            </div>
         </div>
     </div>
 

@@ -1,6 +1,7 @@
 // js/contextEngine.js
 // ALERT: AI CODE ASSISTANT - THIS FILE CONTAINS HAND WRITTEN PROMPT ENGINE CODE.
 // DO NOT EDIT OR SUGGEST CHANGES TO THIS FILE UNLESS INSTRUCTED (OR YOU ARE REALLY SURE).
+import * as stateManager from './stateManager.js';
 
 /**
  * WORLD_STATE: The single source of truth for the game's setting and lore.
@@ -168,6 +169,7 @@ ITEMS PRESENT: ${(currentRoomData.items || []).map(i => i.name).join(', ') || "N
 COHESION STATE: ${cohesion}
 PLAYER STATS: HP ${localPlayer.hp}/20, AMN ${localPlayer.stats?.AMN ?? 20}, WILL ${localPlayer.will || 10}, AWR ${localPlayer.awr || 10}
 PLAYER INVENTORY: ${inventoryNames || "Empty"}
+CLOSET DOOR STATE: ${localPlayer.closetDoorClosed ? "CLOSED" : "OPEN"} (If the player is in the closet, the door must be CLOSED for the Schumann Generator to work).
 ACTIVE QUESTS:
 ${questText}
 
@@ -180,9 +182,16 @@ EVALUATION DIRECTIVES:
 1. If the player attempts to move, evaluate if the exit exists. Do not let them move through solid walls.
 2. If COHESION STATE is VOID: The player is a phantom. They CANNOT touch physical objects, open doors, pick up items, or be given items by NPCs. They cannot engage in physical combat. If they attempt these, narrate their hands passing through reality.
 3. If the player attempts an invalid action, gently correct them narratively.
-3. If the player successfully changes the world (picks up an item, destroys something, changes the lighting), set 'trigger_visual' to true if the visual scene should be re-rendered.
-4. Maintain the persona and vibe of the current Stratum.
+4. WORLD BUILDING: If the player acts to fundamentally change or define the current room's aesthetic, identity, or layout, use world_edit with type "edit_room" and provide "room_update" with name, description, and visualPrompt.
+5. If the player successfully changes the world in a way that alters its appearance (including using world_edit: edit_room, or destroying a major object), set 'trigger_visual' to true to request a re-render.
+6. Maintain the persona and vibe of the current Stratum.
 5. QUEST GUIDANCE: The player is trying to solve ACTIVE QUESTS. If they explore, search, or talk to NPCs, subliminally weave clues, physical items, or pathways into your responses that allow them to complete their highest-ranked quests.
+6. CLOSET DOOR: If the player says 'close door' or 'open door' while in or near the closet, use 'state_update: { closetDoorClosed: true/false }' in your JSON.
+7. RESONATOR USAGE: The Hacked Schumann Resonance Generator (located in the closet) ONLY works if the closet door is CLOSED. If used while open, describe the machine failing to stabilize. If used while closed, return 'astral_jump: true'.
+8. INVENTORY MANAGEMENT: 
+   - If the player picks up an item from the room, use "give_item". The system will automatically remove it from the room.
+   - If the player drops an item, use "take_item" with the exact item name, AND simultaneously use world_edit with type "spawn_item" to put it into the room physically.
+   - If the player consumes/destroys an item, or gives it to an NPC, use "take_item".
 
 LAYER 4: COMBAT & LORE:
 - AMN (OM|AMEN) is the ROOT stat (usually 20).

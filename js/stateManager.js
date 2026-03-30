@@ -6,13 +6,15 @@ let state = {
         hp: 20, currentRoom: "void", stratum: "mundane",
         inventory: [], quests: [], closetDoorClosed: false, isArchitect: false,
         explorerMode: false,
-        combat: { active: false, opponent: null }, activeAvatarId: null,
+        combat: { active: false, opponent: null, timerStartedAt: null }, activeAvatarId: null,
         stats: {
             AMN: 20,
-            WILL: { total: 7, stability: 4, projection: 3 },
-            PHYS: { total: 6, strength: 3, agility: 3 },
-            AWR: { total: 7, focus: 4, perception: 3 }
-        }
+            PHYS: { total: 6, Strength: 3, Agility: 3 },
+            WILL: { total: 7, Conviction: 4, Anchor: 3 },
+            AWR: { total: 7, Perception: 4, Insight: 3 },
+            bias: { PHYS: 'A', WILL: 'A', AWR: 'A' }
+        },
+        accountAmn: 0
     },
     localAreaCache: {}, // THE ONLY CACHE
     strata: {}, // Dynamic strata from Firestore
@@ -64,7 +66,8 @@ export function updatePlayer(updates) {
 }
 
 export function setLocalAreaCache(nodes) {
-    state.localAreaCache = nodes || {};
+    // Merge instead of replace to protect local-only rooms (like the Astral Nexus during initialization)
+    state.localAreaCache = { ...state.localAreaCache, ...(nodes || {}) };
     notify();
 }
 
@@ -145,4 +148,40 @@ export function setState(path, value) {
     }
     current[parts[parts.length - 1]] = value;
     notify();
+}
+
+/**
+ * Automatically distributes root stat points into sub-stats based on 50/50 split and bias.
+ * @param {'PHYS' | 'WILL' | 'AWR'} pool 
+ * @param {number} newValue 
+ */
+export function updateSubStats(pool, newValue) {
+    const bias = state.localPlayer.stats.bias[pool];
+    const base = Math.floor(newValue / 2);
+    const extra = newValue % 2;
+    
+    state.localPlayer.stats[pool].total = newValue;
+
+    if (pool === 'PHYS') {
+        state.localPlayer.stats.PHYS.Strength = base + (bias === 'A' ? extra : 0);
+        state.localPlayer.stats.PHYS.Agility = base + (bias === 'B' ? extra : 0);
+    } else if (pool === 'WILL') {
+        state.localPlayer.stats.WILL.Conviction = base + (bias === 'A' ? extra : 0);
+        state.localPlayer.stats.WILL.Anchor = base + (bias === 'B' ? extra : 0);
+    } else if (pool === 'AWR') {
+        state.localPlayer.stats.AWR.Perception = base + (bias === 'A' ? extra : 0);
+        state.localPlayer.stats.AWR.Insight = base + (bias === 'B' ? extra : 0);
+    }
+    notify();
+}
+
+/**
+ * Returns the "Render Weight" category based on AMN.
+ * @param {number} amn 
+ * @returns {'STABLE' | 'HEAVY' | 'UNSTABLE'}
+ */
+export function getRenderWeight(amn) {
+    if (amn > 25) return "UNSTABLE";
+    if (amn > 20) return "HEAVY";
+    return "STABLE";
 }

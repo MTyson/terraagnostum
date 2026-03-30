@@ -12,6 +12,8 @@ import { openForgeModal } from './forgeSystem.js';
 import { startTerminal, handleTerminalInput } from './terminalSystem.js';
 import { blueprintApartment } from './mapData.js';
 
+import * as CombatTimer from './combatTimer.js';
+
 // --- HELPER WRAPPERS (Local to Router) ---
 
 function getActiveMap() {
@@ -102,7 +104,13 @@ export async function executeMovement(targetDir) {
     
     if (currentRoom.exits && currentRoom.exits[targetDir]) {
         const targetExit = currentRoom.exits[targetDir];
-        const targetRoomId = typeof targetExit === 'string' ? targetExit : targetExit.target;
+        let targetRoomId = typeof targetExit === 'string' ? targetExit : targetExit.target;
+
+        // --- INSTANCED HOME ROUTING ---
+        // Funnel players traversing back from global public zones into their private dimension
+        if (blueprintApartment[targetRoomId] && user) {
+            targetRoomId = `instance_${user.uid}_${targetRoomId}`;
+        }
 
         // --- GENERIC EXIT LOCKS ---
         if (typeof targetExit === 'object') {
@@ -111,7 +119,7 @@ export async function executeMovement(targetDir) {
                 return;
             }
             if (targetExit.reqAuth && (!user || user.isAnonymous)) {
-                UI.addLog(targetExit.lockMsg || "[SYSTEM]: Identity anchor required. Type 'LOGIN' to register your frequency.", "#b084e8");
+                UI.addLog(targetExit.lockMsg || "[SYSTEM]: Identity anchor required. Type '/LOGIN' to register your frequency.", "#b084e8");
                 startWizard('login');
                 UI.setWizardPrompt("AUTH@LOGIN:~$");
                 return;
@@ -223,6 +231,11 @@ export async function handleCommand(val) {
     const { localPlayer, activeAvatar, user, activeTerminal, localCharacters } = state;
     const cmd = val.toLowerCase();
 
+    // --- TERMINAL MODE INTERCEPT ---
+    if (activeTerminal) {
+        if (handleTerminalInput(val)) return;
+    }
+
     try {
         // INTERCEPT AI SUGGESTION REQUEST
         if (cmd === '💡 suggest' || cmd === 'suggest') {
@@ -254,7 +267,7 @@ export async function handleCommand(val) {
 
     if (cmd === 'logout') {
         if (user && user.isAnonymous) {
-            UI.addLog("[SYSTEM]: You are currently a GUEST. Logging out will PERMANENTLY DESTROY your vessel and progress. Type 'login' to anchor your signature first, or type 'force logout' to proceed anyway.", "var(--term-amber)");
+            UI.addLog("[SYSTEM]: You are currently a GUEST. Logging out will PERMANENTLY DESTROY your vessel and progress. Type '/login' to anchor your signature first, or type 'force logout' to proceed anyway.", "var(--term-amber)");
             return;
         }
         UI.addLog("[SYSTEM]: Severing connection to the Technate...", "var(--term-amber)");
@@ -315,7 +328,7 @@ export async function handleCommand(val) {
 
     if (cmd === 'become architect' || cmd === 'upgrade') {
         if (!user || user.isAnonymous) {
-            UI.addLog("[SYSTEM]: You must 'login' with a verified frequency (email) before acquiring an Architect license.", "var(--term-red)");
+            UI.addLog("[SYSTEM]: You must '/login' with a verified frequency (email) before acquiring an Architect license.", "var(--term-red)");
             return;
         }
         if (localPlayer.isArchitect) {
@@ -376,12 +389,6 @@ export async function handleCommand(val) {
             return;
         }
     }
-
-    if (activeTerminal) {
-        if (handleTerminalInput(val)) return;
-    }
-
-
 
     if (cmd === 'list avatars' || cmd === 'avatars') {
         if (localCharacters.length === 0) {
@@ -447,18 +454,25 @@ export async function handleCommand(val) {
             shiftStratum('astral');
             
             // Initialize Astral Map (Local cache only, will be synced if edited)
-            const entryId = 'astral_entry';
+            const entryId = activeAvatar ? `astral_entry_${activeAvatar.id}` : (user ? `astral_entry_${user.uid}` : 'astral_entry');
             const newAstralMap = {
                 [entryId]: {
                     name: "Astral Nexus", shortName: "NEXUS",
                     description: "A mind-bending cosmic nexus where reality dissolves into abstract patterns. The space is a swirl of neon static and half-formed memories.",
                     visualPrompt: "Strange non-euclidean geometries, swirling lightforms of neon purple and gold, a mind-bending cosmic nexus.",
-                    exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
+                    exits: {}, pinnedView: null, items: [], marginalia: [], npcs: [],
+                    metadata: { stratum: 'astral', isInstance: true, owner: user?.uid || 'guest' }
                 }
             };
+            
+            // 1. First, persist the room to Firestore
+            await syncEngine.updateMapNode(entryId, newAstralMap[entryId]);
+            
+            // 2. Then update local cache and move player
             stateManager.setLocalAreaCache(newAstralMap);
             stateManager.updatePlayer({ currentRoom: entryId });
-            syncEngine.savePlayerState(); 
+            
+            await syncEngine.savePlayerState(); 
             const activeMap = getActiveMap();
 
             UI.addLog("[NARRATOR]: The walls of the closet dissolve into raw, static data. You are pulled into the Astral Plane.", "#888");
@@ -491,12 +505,20 @@ export async function handleCommand(val) {
         UI.addLog(`[DIAGNOSTIC]: ROOM DATA`, "var(--term-green)");
         UI.addLog(`- UUID/ID: ${roomId}`, "var(--term-amber)");
         UI.addLog(`- NAME: ${roomData.name}`, "var(--term-amber)");
+        UI.addLog(`- DESCRIPTION: ${roomData.description || 'none'}`, "var(--term-amber)");
+        UI.addLog(`- PROMPT: ${roomData.visualPrompt || 'none'}`, "var(--term-amber)");
         UI.addLog(`- STRATUM: ${roomData.metadata?.stratum || 'unknown'}`, "var(--term-amber)");
         UI.addLog(`- OWNER: ${roomData.metadata?.owner || 'global'}`, "var(--term-amber)");
         UI.addLog(`- INSTANCE: ${roomData.metadata?.isInstance ? 'YES' : 'NO'}`, "var(--term-amber)");
         
         const exits = Object.keys(roomData.exits || {}).join(', ') || 'none';
         UI.addLog(`- EXITS: ${exits}`, "var(--term-amber)");
+        
+        const npcs = (roomData.npcs || []).map(n => n.name).join(', ') || 'none';
+        UI.addLog(`- NPCS: ${npcs}`, "var(--term-amber)");
+        
+        const items = (roomData.items || []).map(i => i.name).join(', ') || 'none';
+        UI.addLog(`- ITEMS: ${items}`, "var(--term-amber)");
         
         return;
     }
@@ -529,7 +551,7 @@ export async function handleCommand(val) {
         return;
     }
 
-    if (cmd === 'login') {
+    if (cmd === '/login') {
         startWizard('login');
         UI.setWizardPrompt("AUTH@LOGIN:~$");
         UI.addLog("[WIZARD]: Terminal Authentication sequence initiated.", "var(--term-amber)");
@@ -537,7 +559,7 @@ export async function handleCommand(val) {
         return;
     }
 
-    if (cmd === 'register') {
+    if (cmd === '/register') {
         startWizard('register');
         UI.setWizardPrompt("AUTH@REGISTER:~$");
         UI.addLog("[WIZARD]: New Vessel Registration sequence initiated.", "var(--term-amber)");
@@ -804,13 +826,18 @@ export async function handleCommand(val) {
         else localPlayer.inventory.forEach(item => UI.addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
         return;
     } else if (cmd === 'help') {
-        UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, LOGIN [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT, INVESTIGATE, RECALIBRATE, /ROOM, /STRATA.", "var(--term-amber)");
+        UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, /LOGIN [EMAIL], /REGISTER [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT, INVESTIGATE, RECALIBRATE, /ROOM, /STRATA.", "var(--term-amber)");
         return;
+    }
+
+    // COMBAT TIMER RESET: If the player acts during combat, reset the 45s timer
+    if (localPlayer.combat.active) {
+        CombatTimer.reset();
     }
 
     // --- THE UNIVERSAL GM INTENT ENGINE ---
     stateManager.setProcessing(true);
-        try {
+    try {
             const suggestions = await handleGMIntent(
                 val,
                 { 

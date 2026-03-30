@@ -6,6 +6,8 @@ import * as stateManager from './stateManager.js';
 import * as syncEngine from './syncEngine.js';
 import { startAstralAmbushTimer } from './intentRouter.js';
 
+import * as CombatTimer from './combatTimer.js';
+
 export async function handleGMIntent(
     val,
     state,
@@ -68,9 +70,9 @@ export async function handleGMIntent(
         }
         
         let stateChanged = false;
+        let targetRoomId = localPlayer.currentRoom;
 
         // Manual Damage Override: Ensure keywords do damage if AI is being stingy
-        // Check both current state and the AI's intended state
         const isActuallyCombat = localPlayer.combat.active || res.combat_active;
         if (stratumData?.rules?.combat === 'Battle of Wills' && isActuallyCombat) {
             const v = val.toLowerCase();
@@ -79,419 +81,53 @@ export async function handleGMIntent(
             }
         }
 
-        // Handle Combat State from AI
-        if (res.combat_active !== undefined) {
-            if (res.combat_active && !localPlayer.combat.active) {
-                let opponentName = res.speaker || "Shadow";
-                if (res.world_edit?.type === 'spawn_npc' && res.world_edit.npc?.name) {
-                    opponentName = res.world_edit.npc.name;
-                }
-                
-                // Absolute Prevent: Don't set the system or narrator as the combat target
-                const lowerO = opponentName.toLowerCase();
-                if (lowerO === 'narrator' || lowerO === 'system' || lowerO === 'tandy') {
-                    opponentName = "Shadow Entity"; 
-                }
-                
-                stateManager.updatePlayer({ 
-                    combat: { active: true, opponent: opponentName } 
-                });
-                if (!isSilent) UI.addLog(`[SYSTEM]: COMBAT INITIALIZED. BATTLE OF WILLS ENGAGED.`, "var(--term-red)");
-                stateChanged = true;
-            } else if (!res.combat_active && localPlayer.combat.active) {
-                const opponentName = (localPlayer.combat.opponent || "Shadow").toLowerCase();
-                
-                if (opponentName.includes('shadow')) {
-                    // Absolute Combat Locking
-                    // Ignore AI attempts to end combat prematurely against Astral Shadows.
-                    // HP/WILL conditions further down will override cleanly upon death.
-                    res.combat_active = true;
-                } else {
-                    stateManager.updatePlayer({ 
-                        combat: { active: false, opponent: null } 
-                    });
-                    if (!isSilent) UI.addLog(`[SYSTEM]: Combat resolved.`, "var(--term-green)");
-                    stateChanged = true;
-                }
-            }
-        }
-
-        // Handle Damage to Player
-        if (res.damage_to_player && activeAvatar) {
-            const dmg = res.damage_to_player || 0;
-            const currentHP = activeAvatar.hp !== undefined ? activeAvatar.hp : (activeAvatar.stats.PHYS || 20);
-            const newHP = Math.max(0, currentHP - dmg);
-            
-            const updatedAvatar = { 
-                ...activeAvatar, 
-                hp: newHP
-            };
-            
-            stateManager.updatePlayer({ activeAvatar: updatedAvatar });
-            if (!isSilent) UI.addLog(`>>> [ ASTRAL FEEDBACK ]: YOU TOOK ${res.damage_to_player} PHYSICAL DMG <<<`, "#ff0055");
-            if (actions.syncAvatarStats) actions.syncAvatarStats(activeAvatar.id, { hp: newHP });
-
-            if (newHP <= 0) {
-                if (!isSilent) UI.addLog(`[SYSTEM]: Your physical form has failed. Connection severed.`, "var(--term-red)");
-                // Defeat Sequence: Teleport to bedroom, restore HP
-                const restoredAvatar = { ...updatedAvatar, hp: activeAvatar.stats.PHYS || 20 };
-                stateManager.updatePlayer({ activeAvatar: restoredAvatar });
-                if (actions.syncAvatarStats) actions.syncAvatarStats(activeAvatar.id, { hp: restoredAvatar.hp });
-                stateManager.updatePlayer({ 
-                    currentRoom: "bedroom", 
-                    stratum: "mundane",
-                    combat: { active: false, opponent: null }
-                });
-                if (updateMapListener) await updateMapListener();
-                if (triggerVisual) triggerVisual();
-                shiftStratum('mundane');
-                stateChanged = true;
-                if (!isSilent) UI.addLog(`[NARRATOR]: You gasp as you wake up in your bedroom, the nightmare fading into a cold sweat.`, "#888");
-            }
-        }
-
-        // Handle Lore Creation
-        if (res.create_lore) {
-            syncEngine.saveLoreFragment(localPlayer.currentRoom, res.create_lore);
-            if (!isSilent) UI.addLog(`[SYSTEM]: Lore fragment crystallized: ${res.create_lore.title}`, "var(--term-amber)");
-        }
-
-        // Handle Damage to NPC (Battle of Wills)
-        const isCombatTurn = stateManager.getState().localPlayer.combat.active || res.combat_active;
-        if (res.damage_to_npc && isCombatTurn) {
-            const currentState = stateManager.getState();
-            const activeMap = stateManager.getActiveMap();
-            const room = activeMap[currentState.localPlayer.currentRoom] || { npcs: [] };
-            
-            // Try to find the opponent name from state, then from AI response speaker, then fallback to "Shadow"
-            let opponentName = (currentState.localPlayer.combat.opponent || res.speaker || "Shadow").toLowerCase();
-            if (opponentName === 'narrator' || opponentName === 'system') opponentName = "shadow";
-            
-            // Fuzzy match for NPC name, or grab the only available target if unambiguous
-            let npc = room.npcs?.find(n => {
-                const lname = (n.name || "").toLowerCase();
-                const isFallbackMatch = opponentName.includes('narrator') || opponentName.includes('system') || opponentName.includes('shadow');
-                return lname === opponentName || lname.includes(opponentName) || opponentName.includes(lname) || isFallbackMatch;
-            });
-
-            if (!npc && room.npcs?.length === 1) npc = room.npcs[0];
-            
-            if (npc) {
-                if (!npc.stats) npc.stats = { AMN: 20, WILL: 7, AWR: 7, PHYS: 6 };
-                const dmg = res.damage_to_npc || 0;
-                const currentWill = npc.stats.WILL !== undefined ? npc.stats.WILL : 7;
-                const newNpcWill = Math.max(0, currentWill - dmg);
-                npc.stats.WILL = newNpcWill;
-                
-                // CRITICAL FIX: Update the state so the damage persists even if NPC hasn't reached 0 WILL
-                stateManager.updateMapNode(currentState.localPlayer.currentRoom, { npcs: room.npcs });
-                syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { npcs: room.npcs });
-
-                if (!isSilent) UI.addLog(`>>> [ ASTRAL FEEDBACK ]: ${npc.name.toUpperCase()} TOOK ${res.damage_to_npc} WILL DMG <<< (Remaining: ${newNpcWill})`, "#00ffff");
-                
-                if (newNpcWill <= 0) {
-                    if (!isSilent) UI.addLog(`[SYSTEM]: ${npc.name} has been dissipated. Victory!`, "var(--term-green)");
-                    // FIX: Remove all shadow clones from the room to clean up corrupted game states
-                    room.npcs = room.npcs.filter(n => {
-                        const lname = n.name.toLowerCase();
-                        return !lname.includes('shadow') && !lname.includes(npc.name.toLowerCase()) && !lname.includes('unknown entity');
-                    });
-                    
-                    stateManager.updateMapNode(currentState.localPlayer.currentRoom, { npcs: room.npcs });
-                    syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { npcs: room.npcs });
-
-                    // Reset Combat State
-                    stateManager.updatePlayer({ combat: { active: false, opponent: null } });
-                    stateChanged = true;
-
-                    // Auto-grant Resonant Key and Shift Stratum if Shadow is defeated
-                    const isNexusBoss = npc.name.toLowerCase().includes("shadow") || 
-                                        npc.name.toLowerCase().includes("unknown entity") || 
-                                        currentState.localPlayer.currentRoom.includes('astral_entry');
-                                        
-                    if (isNexusBoss) {
-                        const key = { name: "Resonant Key", type: "Key Item", description: "A vibrating, semi-translucent key that resonates with the apartment's front door." };
-                        const currentLocalPlayer = stateManager.getState().localPlayer;
-                        if (!currentLocalPlayer.inventory.some(i => i.name === key.name)) {
-                            stateManager.updatePlayer({ inventory: [...currentLocalPlayer.inventory, key] });
-                        }
-                        
-                        if (currentLocalPlayer.stratum !== 'mundane') {
-                            // 1. Break the generator in the physical realm
-                            // Derive the instanced closet ID from the current player state.
-                            // The astral room is `astral_entry_{avatarId}`; the closet is `instance_{uid}_closet`.
-                            const { user: currentUser } = stateManager.getState();
-                            const closetRoomId = currentUser
-                                ? `instance_${currentUser.uid}_closet`
-                                : 'closet'; // Fallback for guests
-                            const activeMap = stateManager.getActiveMap();
-                            const closet = activeMap[closetRoomId] || activeMap['closet'];
-                            const resolvedClosetId = activeMap[closetRoomId] ? closetRoomId : 'closet';
-                            if (closet && closet.description) {
-                                const newDesc = closet.description.replace('arcing with potential energy', 'smoking, its quantum core shattered');
-                                stateManager.updateMapNode(resolvedClosetId, { description: newDesc });
-                                syncEngine.updateMapNode(resolvedClosetId, { description: newDesc });
-                            }
-                            
-                            // 2. Queue the async MacGuffin Quest Generator
-                            (async () => {
-                                try {
-                                    const macGuffinRes = await callGemini(
-                                        `A hyper-advanced, occult-scientific "Hacked Schumann Resonance Generator" just shattered. Create a highly creative, 1-3 word name for the single critical component that needs to be replaced. Example: "Flux Capacitor", "Quantum Lobe", "Resonant Focusing Crystal", "Aetheric Diode". Output ONLY JSON format.`, 
-                                        "You are a sci-fi game engineer.",
-                                        { type: "object", properties: { part_name: { type: "string" } }, required: ["part_name"] }
-                                    );
-                                    
-                                    const partName = macGuffinRes?.part_name || "Aethal Relay Tube";
-                                    const newQuest = {
-                                        id: `quest_${Date.now()}`,
-                                        title: "Fix Resonator",
-                                        rank: 5,
-                                        description: `Your internal clash destabilized the Schumann Generator in your closet. To restore targeted planar traversal, you must locate a [${partName.toUpperCase()}] and install it.`,
-                                        status: "active",
-                                        objectives: [
-                                            { desc: `Find a ${partName}`, completed: false },
-                                            { desc: `Install ${partName} in the Schumann Generator`, completed: false }
-                                        ]
-                                    };
-                                    
-                                    const pState = stateManager.getState().localPlayer;
-                                    stateManager.updatePlayer({ quests: [...(pState.quests || []), newQuest] });
-                                    UI.addLog(`[SYSTEM]: NEW QUEST ADDED: 'Fix Resonator'. Consult your active tickets.`, "var(--term-amber)");
-                                } catch(e) {
-                                    console.error("Quest Generation Error", e);
-                                }
-                            })();
-
-                            stateManager.updatePlayer({ 
-                                currentRoom: 'closet', 
-                                stratum: 'mundane' 
-                            });
-                            if (updateMapListener) await updateMapListener();
-                            if (triggerVisual) triggerVisual();
-                            shiftStratum('mundane');
-                            
-                            if (!isSilent) UI.addLog(`[NARRATOR]: The frequency stabilizes. The Nexus collapses into static, and you are thrown back into your physical shell. You clench the Resonant Key in your hand.`, "#888");
-                            
-                            stateChanged = true;
-                        }
-                    }
-                }
-            }
-        }
-        
-        const currentLocalPlayer = stateManager.getState().localPlayer;
-        if (res.astral_jump && currentLocalPlayer.stratum !== 'astral') {
-            if (currentLocalPlayer.currentRoom === 'closet' || val.toLowerCase().includes('aethal')) {
-                shiftStratum('astral');
-                const entryId = currentLocalPlayer.activeAvatarId ? `astral_entry_${currentLocalPlayer.activeAvatarId}` : 'astral_entry';
-                const entryNode = {
-                    name: "Astral Nexus", shortName: "NEXUS",
-                    description: "The entry point to your isolated astral shard. Space is fluid and glowing.",
-                    visualPrompt: "Glowing astral nexus portal.",
-                    exits: {}, pinnedView: null, items: [], marginalia: [], npcs: []
-                };
-                stateManager.setLocalAreaCache({ [entryId]: entryNode });
-                stateManager.updatePlayer({ currentRoom: entryId });
-                stateChanged = true;
-                const welcomeMsg = stratumData?.description || "Conventional geometry discarded.";
-                if (!isSilent) UI.addLog(`[SYSTEM]: ${welcomeMsg}`, "var(--astral-pink)");
-                startAstralAmbushTimer(entryId, 45000);
-            } else {
-                if (!isSilent) UI.addLog("[SYSTEM]: Dimensional shift failed. Anchors too strong in this node.", "var(--term-red)");
-            }
-        } else if (res.trigger_stratum_shift) {
-            const target = res.trigger_stratum_shift.toLowerCase();
-            if (currentLocalPlayer.stratum !== target) { 
-                shiftStratum(target); 
-                stateChanged = true;
-            }
-        }
-        
-        if (res.give_item) {
-            const updatedLocalPlayer = stateManager.getState().localPlayer;
-            const target = res.give_item.target;
-            const hasAvatar = !!stateManager.getState().activeAvatar;
-            
-            if (target && target !== 'player') {
-                // ... logic for NPC receiving item ...
-                const activeMap = stateManager.getActiveMap();
-                const currentRoomData = activeMap[updatedLocalPlayer.currentRoom];
-                
-                // Find NPC in current room
-                const npc = currentRoomData.npcs?.find(n => 
-                    n.name.toLowerCase() === target.toLowerCase() || 
-                    n.id === target
-                );
-
-                if (npc) {
-                    if (!npc.inventory) npc.inventory = [];
-                    npc.inventory.push(res.give_item);
-                    
-                    // Update locally
-                    stateManager.updateMapNode(updatedLocalPlayer.currentRoom, { npcs: currentRoomData.npcs });
-                    
-                    // Persist to Firestore
-                    await syncEngine.updateNPCInRoom(updatedLocalPlayer.currentRoom, npc.id || npc.name, { inventory: npc.inventory });
-                    
-                    if (!isSilent) UI.addLog(`[SYSTEM]: ${npc.name} has received [${res.give_item.name}].`, "var(--term-amber)");
-                } else {
-                    // Fallback to player if target not found (Check for avatar first!)
-                    if (hasAvatar) {
-                        stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
-                        if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
-                    } else {
-                        if (!isSilent) UI.addLog(`[SYSTEM]: Your phantom hands pass through the [${res.give_item.name}]. You cannot hold it.`, "var(--term-amber)");
-                    }
-                }
-            } else {
-                // Target is player (Check for avatar first!)
-                if (hasAvatar) {
-                    stateManager.updatePlayer({ inventory: [...updatedLocalPlayer.inventory, res.give_item] });
-                    if (!isSilent) UI.addLog(`[REWARD]: You have obtained [${res.give_item.name}].`, "var(--term-green)");
-                } else {
-                    if (!isSilent) UI.addLog(`[SYSTEM]: Your phantom hands pass through the [${res.give_item.name}]. You cannot hold it.`, "var(--term-amber)");
-                }
-            }
-            stateChanged = true;
-        }
-
-        if (res.trigger_respawn) {
-            const currentAvatar = stateManager.getState().activeAvatar;
-            if (currentAvatar && user) syncEngine.markCharacterDeceased(currentAvatar.id);
-            stateManager.updatePlayer({ 
-                activeAvatar: null,
-                currentRoom: "bedroom", 
-                stratum: "mundane" 
-            });
-            if (updateMapListener) await updateMapListener();
-            if (triggerVisual) triggerVisual();
-            stateChanged = true;
-            if (!isSilent) UI.addLog(`Vessel destroyed. Connection severed.`, "var(--term-red)"); 
-            shiftStratum('mundane');
-        }
-        
+        // --- PHASE 1: TELEPORTATION & ROOM SHIFTS ---
+        // Handle this first so world edits happen in the correct location.
         if (res.trigger_teleport && !res.trigger_respawn) {
             let t = res.trigger_teleport;
-            const activeMap = stateManager.getActiveMap();
-            const currentLocalPlayer = stateManager.getState().localPlayer;
-            
-            // Fuzzy Match Protection: Check if the AI invented a new ID for an existing room name
             const existingEntry = Object.entries(activeMap).find(([id, r]) => 
                 (t.new_room_id && id.toLowerCase() === t.new_room_id.toLowerCase()) || 
                 (t.name && r.name && r.name.toLowerCase() === t.name.toLowerCase())
             );
+            if (existingEntry) t.new_room_id = existingEntry[0];
 
-            if (existingEntry) {
-                t.new_room_id = existingEntry[0];
-            }
-
-            // --- EXIT LOCK ENFORCEMENT (mirrors intentRouter.js) ---
-            // Find the exit definition in the current room that leads to this target,
-            // so we can enforce reqAuth and itemReq locks even for AI-directed movement.
-            const currentRoomData = activeMap[currentLocalPlayer.currentRoom] || {};
-            const matchingExit = Object.values(currentRoomData.exits || {}).find(exit =>
-                typeof exit === 'object' && exit.target === t.new_room_id
-            );
-            if (matchingExit) {
-                if (matchingExit.reqAuth && (!user || user.isAnonymous)) {
-                    if (!isSilent) {
-                        UI.addLog(matchingExit.lockMsg || "[SYSTEM]: Identity anchor required. Type 'LOGIN' to register your frequency.", "#b084e8");
-                        window.dispatchEvent(new CustomEvent('trigger-login-wizard'));
-                    }
-                    return; // Abort the teleport
+            if (t.new_room_id) {
+                targetRoomId = t.new_room_id;
+                if (!activeMap[targetRoomId]) {
+                    const newRoom = { 
+                        ...t, 
+                        shortName: t.name ? t.name.substring(0, 7).toUpperCase() : "AREA", 
+                        exits: { back: localPlayer.currentRoom }, 
+                        pinnedView: null, items: [], marginalia: [], npcs: [],
+                        metadata: { stratum: localPlayer.stratum, isInstance: true, owner: user?.uid || 'guest' }
+                    };
+                    stateManager.updateMapNode(targetRoomId, newRoom);
+                    await syncEngine.updateMapNode(targetRoomId, newRoom);
                 }
-                if (matchingExit.itemReq) {
-                    const hasItem = (currentLocalPlayer.inventory || []).some(i =>
-                        i.name.toLowerCase().includes(matchingExit.itemReq.toLowerCase())
-                    );
-                    if (!hasItem) {
-                        if (!isSilent) UI.addLog(matchingExit.lockMsg || `[SYSTEM]: Required item missing: [${matchingExit.itemReq}].`, "var(--term-amber)");
-                        return; // Abort the teleport
-                    }
-                }
+                stateManager.updatePlayer({ currentRoom: targetRoomId });
+                stateChanged = true;
+                if (!isSilent) UI.addLog(`Reality warp successful.`, "var(--gm-purple)");
             }
+        }
 
-            if (!activeMap[t.new_room_id]) {
-                // It's a truly new room, link it back to the current room so they aren't trapped
-                const returnDir = "back"; 
-                const newRoom = { 
-                    ...t, 
-                    shortName: t.name.substring(0, 7).toUpperCase(), 
-                    exits: { [returnDir]: currentLocalPlayer.currentRoom }, 
-                    pinnedView: null, 
-                    items: [], 
-                    marginalia: [], 
-                    npcs: [] 
-                };
-                
-                stateManager.updateMapNode(t.new_room_id, newRoom);
-                syncEngine.updateMapNode(t.new_room_id, newRoom);
-            }
-            stateManager.updatePlayer({ currentRoom: t.new_room_id }); 
-            if (triggerVisual) triggerVisual(t.visualPrompt);
-            stateChanged = true;
-            if (!isSilent) UI.addLog(`Reality warp successful.`, "var(--gm-purple)");
-            if (processRoomEvents) processRoomEvents(activeMap[t.new_room_id]);
-        }
-        
-        // Handle Bespoke Detail Projection
-        if (res.project_detail) {
-            const { prompt, is_permanent } = res.project_detail;
-            if (triggerVisual) {
-                triggerVisual(prompt, is_permanent);
-            }
-        }
-        
-        if (stateChanged) { 
-            if (typeof actions.savePlayerState === 'function') actions.savePlayerState(); 
-        }
-        
-        if (!isSilent) {
-            const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
-            UI.addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
-        }
-        
+        // --- PHASE 2: WORLD EDITS (Manifesting Entities/Items) ---
         if (res.world_edit) {
-            const currentState = stateManager.getState();
-            const activeMap = stateManager.getActiveMap();
-            const room = activeMap[currentState.localPlayer.currentRoom] || { npcs: [], items: [], marginalia: [], exits: {} };
+            const currentMap = stateManager.getActiveMap();
+            const room = currentMap[targetRoomId] || { npcs: [], items: [], marginalia: [], exits: {} };
             
             if (res.world_edit.type === 'add_marginalia' && res.world_edit.text) {
                 const marginalia = [...(room.marginalia || []), res.world_edit.text];
-                stateManager.updateMapNode(currentState.localPlayer.currentRoom, { marginalia });
-                syncEngine.addArrayElementToNode(currentState.localPlayer.currentRoom, 'marginalia', res.world_edit.text);
-            } else if (res.world_edit.type === 'unlock_exit' && res.world_edit.direction) {
-                const unlockDir = res.world_edit.direction.toLowerCase();
-                if (room.exits[unlockDir] && typeof room.exits[unlockDir] === 'object') {
-                    const exits = { ...room.exits };
-                    exits[unlockDir] = { ...exits[unlockDir], locked: false };
-                    stateManager.updateMapNode(currentState.localPlayer.currentRoom, { exits });
-                    syncEngine.updateMapNode(currentState.localPlayer.currentRoom, { [`exits.${unlockDir}.locked`]: false });
-                    if (!isSilent) UI.addLog(`[SYSTEM]: The path ${unlockDir.toUpperCase()} has been opened.`, "var(--term-green)");
-                }
-            } else if (res.world_edit.type === 'spawn_item' && res.world_edit.item) {
-                const items = [...(room.items || []), res.world_edit.item];
-                stateManager.updateMapNode(currentState.localPlayer.currentRoom, { items });
-                syncEngine.addArrayElementToNode(currentState.localPlayer.currentRoom, 'items', res.world_edit.item);
-                
-                const itemName = (typeof res.world_edit.item === 'string') ? res.world_edit.item : res.world_edit.item.name;
-                if (!isSilent) UI.addLog(`[SYSTEM]: ${itemName} has manifested in the room.`, "var(--term-green)");
+                stateManager.updateMapNode(targetRoomId, { marginalia });
+                syncEngine.addArrayElementToNode(targetRoomId, 'marginalia', res.world_edit.text);
             } else if (res.world_edit.type === 'spawn_npc' && res.world_edit.npc) {
-                const currentState = stateManager.getState();
-                const activeMap = stateManager.getActiveMap();
-                const roomId = currentState.localPlayer.currentRoom;
-                
-                // Safely get the room, ensuring arrays exist
-                const room = activeMap[roomId] || {};
-                const currentNpcs = room.npcs || [];
-                
-                const edit = res.world_edit.npc || {};
+                const edit = res.world_edit.npc;
                 let v_prompt = edit.visual_prompt || edit.description || edit.personality;
                 
-                // ASTRAL MIRROR VISUAL OVERRIDE
-                if (currentState.localPlayer.stratum === 'astral' && edit.name?.toLowerCase().includes('shadow') && currentState.activeAvatar) {
-                    v_prompt = `${currentState.activeAvatar.visual_prompt || currentState.activeAvatar.archetype}. Dark mirror, cosmic horror, void static.`;
+                if (localPlayer.stratum === 'astral' && edit.name?.toLowerCase().includes('shadow') && activeAvatar) {
+                    const avatarDesc = activeAvatar.visual_prompt || activeAvatar.description || activeAvatar.archetype;
+                    v_prompt = avatarDesc
+                        ? `${avatarDesc}. Stylized as a distorted digital reflection with neon glitch effects and purple energy.`
+                        : `A mysterious humanoid figure with neon purple glitch effects, digital distortion, futuristic aesthetic.`;
                 }
 
                 const newNpc = { 
@@ -501,77 +137,195 @@ export async function handleGMIntent(
                     visual_prompt: v_prompt || "A strange entity.",
                     archetype: edit.archetype || "Unknown",
                     stats: edit.stats || { AMN: 20, WILL: 7, AWR: 7, PHYS: 6 },
-                    image: null 
+                    image: (edit.name?.toLowerCase().includes('shadow')) ? "https://placehold.co/400x512/1a0033/a855f7.png?text=SHADOW+ENTITY" : null 
                 };
                 
-                // 1. Push to local array
+                console.log(`[GM DEBUG] Spawning NPC [${newNpc.name}] in room [${targetRoomId}]`);
+                
+                // Fetch FRESH state before updating NPCs to avoid race conditions with teleport room creation
+                const latestMap = stateManager.getActiveMap();
+                const latestRoom = latestMap[targetRoomId] || { npcs: [] };
+                const currentNpcs = [...(latestRoom.npcs || [])];
                 currentNpcs.push(newNpc);
                 
-                // 2. Update local state immediately so UI updates
-                stateManager.updateMapNode(roomId, { npcs: currentNpcs });
-                
-                // 3. Save to Firebase Room Document
-                syncEngine.updateMapNode(roomId, { npcs: currentNpcs });
+                stateManager.updateMapNode(targetRoomId, { npcs: currentNpcs });
+                await syncEngine.addArrayElementToNode(targetRoomId, 'npcs', newNpc);
                 
                 if (!isSilent) UI.addLog(`[SYSTEM]: WARNING. Entity [${newNpc.name}] has manifested in the sector.`, "var(--term-amber)");
 
-                // 4. If combat is active, immediately trigger portrait generation
-                if (res.combat_active || currentState.localPlayer.combat.active) {
+                // --- PORTRAIT GENERATION ---
+                (async () => {
+                    try {
+                        const { strata } = stateManager.getState();
+                        console.log(`[GM DEBUG] PORTRAIT GENERATION START for ${newNpc.name}. Prompt: ${newNpc.visual_prompt.substring(0, 50)}...`);
+                        
+                        const b64 = await generatePortrait(newNpc.visual_prompt, localPlayer.stratum, strata);
+                        const finalImage = b64
+                            ? await compressImage(`data:image/png;base64,${b64}`, 400, 0.7)
+                            : "https://placehold.co/400x512/1a0033/a855f7.png?text=SHADOW+ENTITY";
+
+                        newNpc.image = finalImage;
+
+                        // Re-fetch room to avoid clobbering any other concurrent state changes
+                        const mapNow = stateManager.getActiveMap();
+                        const roomNow = mapNow[targetRoomId];
+                        if (roomNow?.npcs) {
+                            const updatedNpcs = roomNow.npcs.map(n => n.id === newNpc.id ? { ...newNpc } : n);
+                            stateManager.updateMapNode(targetRoomId, { npcs: updatedNpcs });
+                            syncEngine.updateMapNode(targetRoomId, { npcs: updatedNpcs });
+                            console.log(`[GM DEBUG] NPC [${newNpc.name}] updated with portrait in state.`);
+                        }
+                    } catch (e) {
+                        console.error(`[GM DEBUG] PORTRAIT GENERATION ERROR for ${newNpc.name}:`, e);
+                    }
+                })();
+            } else if (res.world_edit.type === 'spawn_item' && res.world_edit.item) {
+                const items = [...(room.items || []), res.world_edit.item];
+                stateManager.updateMapNode(targetRoomId, { items });
+                syncEngine.addArrayElementToNode(targetRoomId, 'items', res.world_edit.item);
+                const itemName = (typeof res.world_edit.item === 'string') ? res.world_edit.item : res.world_edit.item.name;
+                if (!isSilent) UI.addLog(`[SYSTEM]: ${itemName} has manifested in the room.`, "var(--term-green)");
+            }
+        }
+
+        // --- PHASE 3: COMBAT & IDENTITY ---
+        if (res.combat_active !== undefined) {
+            if (res.combat_active && !localPlayer.combat.active) {
+                let opponentName = res.speaker || "Shadow";
+                if (res.world_edit?.type === 'spawn_npc' && res.world_edit.npc?.name) {
+                    opponentName = res.world_edit.npc.name;
+                }
+                const lowerO = opponentName.toLowerCase();
+                if (lowerO === 'narrator' || lowerO === 'system' || lowerO === 'tandy') opponentName = "Shadow Entity";
+                
+                stateManager.updatePlayer({ combat: { active: true, opponent: opponentName } });
+                if (!isSilent) UI.addLog(`[SYSTEM]: COMBAT INITIALIZED. BATTLE OF WILLS ENGAGED.`, "var(--term-red)");
+                stateChanged = true;
+
+                // AUTO-SPAWN FALLBACK: If no NPC was explicitly spawned by Phase 2,
+                // we guarantee one exists in the room for portrait + dossier rendering.
+                const freshMap = stateManager.getActiveMap();
+                const freshRoom = freshMap[targetRoomId] || { npcs: [] };
+                const hasCombatant = (freshRoom.npcs || []).some(n => 
+                    n.name.toLowerCase().includes(opponentName.toLowerCase()) ||
+                    opponentName.toLowerCase().includes(n.name.toLowerCase())
+                );
+
+                if (!hasCombatant) {
+                    // Build a safe portrait prompt using the avatar's actual appearance if available
+                    const avatarDesc = activeAvatar?.visual_prompt || activeAvatar?.description || activeAvatar?.archetype;
+                    const shadowVisualPrompt = avatarDesc
+                        ? `${avatarDesc}. Stylized as a distorted digital reflection with neon glitch effects and purple energy.`
+                        : `A mysterious hooded humanoid figure with neon purple glitch effects, digital distortion, futuristic aesthetic.`;
+
+                    const autoNpc = {
+                        id: `npc_${Date.now()}`,
+                        name: opponentName,
+                        description: "A glass-serrated, digital shadow of your own form.",
+                        visual_prompt: shadowVisualPrompt,
+                        archetype: "Astral Mirror",
+                        stats: { AMN: 20, WILL: 20, AWR: 20, PHYS: 20 },
+                        image: "https://placehold.co/400x512/1a0033/a855f7.png?text=MANIFESTING..."
+                    };
+
+                    const currentNpcs = [...(freshRoom.npcs || []), autoNpc];
+                    stateManager.updateMapNode(targetRoomId, { npcs: currentNpcs });
+                    syncEngine.updateMapNode(targetRoomId, { npcs: currentNpcs });
+
+                    console.log(`[GM DEBUG] Auto-spawned [${autoNpc.name}] in [${targetRoomId}] as combat fallback.`);
+
+                    // Generate portrait async without blocking
                     (async () => {
                         try {
                             const { strata } = stateManager.getState();
-                            const b64 = await generatePortrait(newNpc.visual_prompt, currentState.localPlayer.stratum, strata);
-                            if (b64) {
-                                newNpc.image = await compressImage(`data:image/png;base64,${b64}`, 400, 0.7);
-                                stateManager.updateMapNode(roomId, { npcs: currentNpcs });
-                                syncEngine.updateMapNode(roomId, { npcs: currentNpcs });
+                            const b64 = await generatePortrait(autoNpc.visual_prompt, localPlayer.stratum, strata);
+                            const finalImage = b64
+                                ? await compressImage(`data:image/png;base64,${b64}`, 400, 0.7)
+                                : "https://placehold.co/400x512/1a0033/a855f7.png?text=SHADOW+ENTITY";
+                            
+                            const mapNow = stateManager.getActiveMap();
+                            const roomNow = mapNow[targetRoomId];
+                            if (roomNow?.npcs) {
+                                const updatedNpcs = roomNow.npcs.map(n => n.id === autoNpc.id ? { ...n, image: finalImage } : n);
+                                stateManager.updateMapNode(targetRoomId, { npcs: updatedNpcs });
+                                syncEngine.updateMapNode(targetRoomId, { npcs: updatedNpcs });
+                                console.log(`[GM DEBUG] Auto-spawned portrait updated for [${autoNpc.name}].`);
                             }
                         } catch (e) {
-                            console.error("Portrait auto-gen failed for spawned combatant:", e);
+                            console.error(`[GM DEBUG] Auto-spawn portrait failed:`, e);
                         }
                     })();
                 }
-            }
-        }
-        
-        const isLooking = val.toLowerCase().includes('look') || val.toLowerCase().includes('examine') || val.toLowerCase().includes('search');
-        
-        // AUTO-REPAIR MISSING NPC PORTRAITS ON LOOK OR COMBAT
-        if ((isLooking || isCombatTurn) && currentRoomData.npcs) {
-            // Display stats if looking at a specific NPC
-            const lookMatch = val.toLowerCase().match(/(?:look at|examine|search)\s+(.+)/);
-            if (lookMatch) {
-                const targetName = lookMatch[1].trim();
-                const targetedNpc = currentRoomData.npcs.find(n => 
-                    n.name.toLowerCase() === targetName || 
-                    n.name.toLowerCase().includes(targetName) ||
-                    targetName.includes(n.name.toLowerCase())
-                );
-                if (targetedNpc && targetedNpc.stats) {
-                    const s = targetedNpc.stats;
-                    UI.addLog(`[ANALYSIS]: ${targetedNpc.name} - AMN: ${s.AMN ?? 20}, WILL: ${s.WILL ?? 0}, AWR: ${s.AWR ?? 0}, PHYS: ${s.PHYS ?? 0}`, "var(--term-amber)");
-                }
-            }
 
-            for (let [idx, npc] of currentRoomData.npcs.entries()) {
-                // Ensure visual_prompt exists (fallback to description)
-                if (!npc.visual_prompt) {
-                    npc.visual_prompt = npc.description || npc.personality || "A mysterious figure.";
-                }
-
-                if (npc.visual_prompt && !npc.image) {
-                    if (!isSilent) UI.addLog(`[REPAIR]: Re-weaving visual imprint for ${npc.name}...`, "var(--term-amber)");
-                    const { strata } = stateManager.getState();
-                    const b64 = await generatePortrait(npc.visual_prompt, stateManager.getState().localPlayer.stratum, strata);
-                    if (b64) {
-                        currentRoomData.npcs[idx].image = await compressImage(`data:image/png;base64,${b64}`, 400, 0.7) || null;
-                        stateManager.updateMapNode(stateManager.getState().localPlayer.currentRoom, { npcs: currentRoomData.npcs });
-                        syncEngine.updateMapNode(stateManager.getState().localPlayer.currentRoom, { npcs: currentRoomData.npcs });
-                    }
+            } else if (!res.combat_active && localPlayer.combat.active) {
+                const opponentName = (localPlayer.combat.opponent || "Shadow").toLowerCase();
+                if (opponentName.includes('shadow')) {
+                    res.combat_active = true;
+                } else {
+                    stateManager.updatePlayer({ combat: { active: false, opponent: null } });
+                    CombatTimer.stop();
+                    if (!isSilent) UI.addLog(`[SYSTEM]: Combat resolved.`, "var(--term-green)");
+                    stateChanged = true;
                 }
             }
         }
-        
+
+        // --- PHASE 4: DAMAGE & MECHANICS ---
+        if (res.damage_to_player && activeAvatar) {
+            const dmg = parseInt(res.damage_to_player) || 0;
+            const physStat = activeAvatar.stats?.PHYS?.total !== undefined ? activeAvatar.stats.PHYS.total : (activeAvatar.stats?.PHYS || 20);
+            const currentHP = (activeAvatar.hp !== undefined && !isNaN(activeAvatar.hp)) ? activeAvatar.hp : physStat;
+            const newHP = Math.max(0, currentHP - dmg);
+            const updatedAvatar = { ...activeAvatar, hp: newHP };
+            stateManager.setActiveAvatar(updatedAvatar);
+            if (!isSilent) UI.addLog(`>>> [ ASTRAL FEEDBACK ]: YOU TOOK ${dmg} PHYSICAL DMG <<<`, "#ff0055");
+            if (actions.syncAvatarStats) actions.syncAvatarStats(activeAvatar.id, { hp: newHP });
+
+            if (newHP <= 0) {
+                stateManager.updatePlayer({ currentRoom: user ? `instance_${user.uid}_bedroom` : 'bedroom', stratum: "mundane", combat: { active: false, opponent: null } });
+                if (updateMapListener) await updateMapListener();
+                if (triggerVisual) triggerVisual();
+                if (shiftStratum) shiftStratum('mundane');
+                stateChanged = true;
+                if (!isSilent) UI.addLog(`[NARRATOR]: You gasp as you wake up in your bedroom...`, "#888");
+            }
+        }
+
+        if (res.damage_to_npc && (stateManager.getState().localPlayer.combat.active || res.combat_active)) {
+            const currentMap = stateManager.getActiveMap();
+            const room = currentMap[targetRoomId] || { npcs: [] };
+            let opponentName = (localPlayer.combat.opponent || res.speaker || "Shadow").toLowerCase();
+            let npc = room.npcs?.find(n => n.name.toLowerCase().includes(opponentName) || opponentName.includes(n.name.toLowerCase()));
+            if (!npc && room.npcs?.length === 1) npc = room.npcs[0];
+            
+            if (npc) {
+                if (!npc.stats) npc.stats = { AMN: 20, WILL: 7, AWR: 7, PHYS: 6 };
+                const newWill = Math.max(0, (npc.stats.WILL || 7) - res.damage_to_npc);
+                npc.stats.WILL = newWill;
+                stateManager.updateMapNode(targetRoomId, { npcs: room.npcs });
+                await syncEngine.updateMapNode(targetRoomId, { npcs: room.npcs });
+                if (!isSilent) UI.addLog(`>>> [ ASTRAL FEEDBACK ]: ${npc.name.toUpperCase()} TOOK ${res.damage_to_npc} WILL DMG <<<`, "#00ffff");
+                
+                if (newWill <= 0) {
+                    room.npcs = room.npcs.filter(n => n.id !== npc.id);
+                    stateManager.updateMapNode(targetRoomId, { npcs: room.npcs });
+                    await syncEngine.updateMapNode(targetRoomId, { npcs: room.npcs });
+                    stateManager.updatePlayer({ combat: { active: false, opponent: null } });
+                    CombatTimer.stop();
+                    stateChanged = true;
+                    if (!isSilent) UI.addLog(`[SYSTEM]: ${npc.name} dissipate. Victory!`, "var(--term-green)");
+                }
+            }
+        }
+
+        // --- FINALIZATION ---
+        if (stateChanged && actions.savePlayerState) actions.savePlayerState();
+        if (!isSilent) {
+            const speakerPrefix = (res.speaker === 'SYSTEM' || res.speaker === 'NARRATOR') ? `[${res.speaker}]` : `${res.speaker.toUpperCase()}`;
+            UI.addLog(`${speakerPrefix}: ${res.narrative}`, res.color);
+        }
+        if (res.trigger_visual && triggerVisual) triggerVisual();
+
         return res.suggested_actions || [];
     } catch (err) { 
         console.error(err);

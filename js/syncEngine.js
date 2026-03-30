@@ -6,7 +6,7 @@ import {
 import { ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 import { db, auth, appId, storage, isSyncEnabled } from './firebaseConfig.js';
 import * as stateManager from './stateManager.js';
-import { blueprintApartment } from './mapData.js';
+import { blueprintApartment, blueprintGlobal } from './mapData.js';
 import { DEFAULT_STRATA } from './stratumData.js';
 
 let mapUnsubscribe = null;
@@ -44,6 +44,11 @@ export async function bootSyncEngine(mergeAndRefreshCallback) {
     await loadPlayerState(user);
     await loadUserCharacters(user);
     await startPresenceListener();
+
+    // --- GLOBAL EXIT REPAIR MIGRATION ---
+    // Finds and corrects any apartment exits that still point to old privatized
+    // versions of what are now shared global rooms (e.g. instance_uid_outside -> outside)
+    repairPrivatizedGlobalExits(user);
 
     // --- ZOMBIE RULE (Bedroom Respawn) ---
     // If not in combat and last active was long ago, reset to bedroom anchor
@@ -115,6 +120,72 @@ async function seedPlayerInstance(user) {
         });
     }
     await batch.commit();
+}
+
+/**
+ * MIGRATION: Repairs any apartment exit that incorrectly points to an old privatized
+ * version of a global room (e.g. `instance_uid_outside` instead of `outside`).
+ * 
+ * This corrects the fallout from a refactor that moved `outside` from blueprintApartment
+ * to blueprintGlobal. Players seeded before this change have a broken hallway exit.
+ * This function runs on every boot but is a no-op (fast) if nothing needs fixing.
+ */
+async function repairPrivatizedGlobalExits(user) {
+    if (!db || !user || !isSyncEnabled) return;
+
+    const globalRoomsRef = collection(db, 'artifacts', appId, 'rooms');
+    const batch = writeBatch(db);
+    let needsCommit = false;
+
+    // Build a list of room IDs that are canonical global rooms (not to be instanced)
+    const globalRoomIds = new Set(Object.keys(blueprintGlobal));
+
+    // For each apartment blueprint room, check if any exit target is a defunct private global
+    for (const [blueprintKey, data] of Object.entries(blueprintApartment)) {
+        if (!data.exits) continue;
+        const instancedRoomId = `instance_${user.uid}_${blueprintKey}`;
+        const instancedRoomRef = doc(globalRoomsRef, instancedRoomId);
+        const updatesNeeded = {};
+
+        for (const [dir, blueprintExit] of Object.entries(data.exits)) {
+            const blueprintTargetId = typeof blueprintExit === 'string' ? blueprintExit : blueprintExit.target;
+            // Is this exit supposed to go to a global room?
+            if (!globalRoomIds.has(blueprintTargetId)) continue;
+
+            // The correct target is the global room ID (e.g. "outside")
+            // If the player's Firestore room has something else (e.g. "instance_uid_outside"), fix it.
+            const activeMap = stateManager.getActiveMap();
+            const instancedRoom = activeMap[instancedRoomId];
+            if (!instancedRoom || !instancedRoom.exits) continue;
+
+            const storedExit = instancedRoom.exits[dir];
+            const storedTargetId = typeof storedExit === 'string' ? storedExit : storedExit?.target;
+
+            if (storedTargetId && storedTargetId !== blueprintTargetId) {
+                console.log(`[SYNC]: Repairing broken exit on ${instancedRoomId}.${dir}: ${storedTargetId} → ${blueprintTargetId}`);
+                // Rebuild correct exit object from blueprint
+                const correctedExit = typeof blueprintExit === 'string' 
+                    ? blueprintTargetId
+                    : { ...blueprintExit, target: blueprintTargetId };
+                updatesNeeded[`exits.${dir}`] = correctedExit;
+            }
+        }
+
+        if (Object.keys(updatesNeeded).length > 0) {
+            // Use updateDoc (supports dot paths) for surgical field updates
+            try {
+                await updateDoc(instancedRoomRef, updatesNeeded);
+                // Also update local cache immediately
+                for (const [key, val] of Object.entries(updatesNeeded)) {
+                    const exitDir = key.replace('exits.', '');
+                    stateManager.updateMapNode(instancedRoomId, { exits: { ...(stateManager.getActiveMap()[instancedRoomId]?.exits || {}), [exitDir]: val } });
+                }
+                console.log(`[SYNC]: Repaired exits on ${instancedRoomId} in Firestore.`);
+            } catch(e) {
+                console.warn(`[SYNC]: Could not repair exits on ${instancedRoomId}:`, e);
+            }
+        }
+    }
 }
 
 /**
@@ -244,19 +315,89 @@ export async function updateGlobalMapListener() {
     return new Promise((resolve) => {
         mapUnsubscribe = onSnapshot(globalRoomsRef, async (snapshot) => {
             const rooms = {};
-            snapshot.forEach(doc => { rooms[doc.id] = doc.data(); });
+            // ===== DIAGNOSTIC: Log snapshot summary =====
+            const outsideDoc = snapshot.docs?.find(d => d.id === 'outside');
+            console.log(`%c[SYNC DIAG] onSnapshot fired. ${snapshot.size} docs. "outside" in snapshot: ${!!outsideDoc}`, 'color: cyan; font-weight: bold');
+            if (outsideDoc) {
+                const od = outsideDoc.data();
+                console.log(`[SYNC DIAG] outside.name="${od.name}" outside.exits=`, od.exits);
+            } else {
+                console.warn('[SYNC DIAG] "outside" is NOT in this snapshot - dynamic seeder will inject blueprint!');
+            }
+            // ============================================
+            snapshot.forEach(doc => { 
+                const roomData = doc.data(); 
+                
+                // --- BACKWARD COMPATIBLE BLUEPRINT MERGE ---
+                // If this room originated from the apartment blueprint, ensure its exits
+                // have the latest locks (reqAuth, itemReq) and correct global targets.
+                const baseId = doc.id.replace(/^instance_[^_]+_/, '');
+                if (blueprintApartment[baseId] && blueprintApartment[baseId].exits && roomData.exits) {
+                    for (const [dir, exitData] of Object.entries(blueprintApartment[baseId].exits)) {
+                        if (typeof exitData === 'object' && roomData.exits[dir]) {
+                            // Upgrade string to object if necessary
+                            if (typeof roomData.exits[dir] === 'string') {
+                                roomData.exits[dir] = { target: roomData.exits[dir] };
+                            }
+                            // GLOBAL TARGET FIX: If the blueprint exit points to a global (non-apartment) room,
+                            // force the stored exit to use the correct global target.
+                            // This corrects old private exits like instance_uid_outside -> outside
+                            if (exitData.target && !blueprintApartment[exitData.target]) {
+                                roomData.exits[dir].target = exitData.target;
+                            }
+                            if (exitData.reqAuth !== undefined) roomData.exits[dir].reqAuth = exitData.reqAuth;
+                            if (exitData.itemReq !== undefined) roomData.exits[dir].itemReq = exitData.itemReq;
+                            if (exitData.lockMsg !== undefined) roomData.exits[dir].lockMsg = exitData.lockMsg;
+                        }
+                    }
+                }
+                
+                rooms[doc.id] = roomData; 
+            });
             
-            // Seeding logic: if global rooms collection is completely empty, seed with blueprintApartment
+            // Dynamic Seeding for Missing Global Rooms
+            // CRITICAL: Use getDoc to check Firestore directly before seeding.
+            // We cannot rely on snapshot timing alone - if we write blueprint data
+            // async (fire-and-forget), the write can arrive AFTER a player's edit
+            // and silently overwrite fields like name/description/visualPrompt.
+            for (const [roomId, roomData] of Object.entries(blueprintGlobal)) {
+                if (!rooms[roomId]) {
+                    // Double-check Firestore directly to confirm the room truly doesn't exist
+                    const roomRef = doc(globalRoomsRef, roomId);
+                    const existingSnap = await getDoc(roomRef);
+                    if (!existingSnap.exists()) {
+                        console.log(`[SYNC]: Global room [${roomId}] confirmed missing. Seeding...`);
+                        await setDoc(roomRef, { ...roomData, id: roomId });
+                        rooms[roomId] = { ...roomData, id: roomId };
+                    } else {
+                        // Doc exists in Firestore but wasn't in the snapshot yet (timing).
+                        // Use the real Firestore data, not the blueprint.
+                        console.log(`[SYNC]: Global room [${roomId}] found in Firestore (snapshot lag). Using live data.`);
+                        rooms[roomId] = existingSnap.data();
+                    }
+                }
+            }
+
+            // Seeding logic: if global rooms collection is completely empty, seed with blueprintApartment and blueprintGlobal
             if (snapshot.empty) {
-                console.log("[SYNC]: Global room collection empty. Seeding from blueprintApartment...");
+                console.log("[SYNC]: Global room collection empty. Seeding templates...");
                 const batch = writeBatch(db);
                 
                 for (const [roomId, roomData] of Object.entries(blueprintApartment)) {
                     const roomRef = doc(globalRoomsRef, roomId);
+                    // merge: true so future blueprint updates don't wipe custom room data
                     batch.set(roomRef, { 
                         ...roomData, 
                         id: roomId
-                    });
+                    }, { merge: true });
+                }
+                for (const [roomId, roomData] of Object.entries(blueprintGlobal)) {
+                    const roomRef = doc(globalRoomsRef, roomId);
+                    // merge: true protects all player-built exits on shared global rooms
+                    batch.set(roomRef, { 
+                        ...roomData, 
+                        id: roomId
+                    }, { merge: true });
                 }
                 await batch.commit();
                 // onSnapshot will trigger again after commit
@@ -384,6 +525,19 @@ export async function addArrayElementToNode(roomId, arrayPath, element) {
     } catch (e) { console.error("SyncEngine: Failed to add element to node:", e); }
 }
 
+export async function uploadNPCImage(npcId, dataUri) {
+    if (!db || !storage || !isSyncEnabled || !dataUri || !dataUri.startsWith('data:')) return dataUri;
+    try {
+        const storagePath = `artifacts/${appId}/npcs/${npcId}.png`;
+        const fileRef = ref(storage, storagePath);
+        await uploadString(fileRef, dataUri, 'data_url');
+        return await getDownloadURL(fileRef);
+    } catch (e) {
+        console.error("SyncEngine: NPC image upload failed:", e);
+        return dataUri;
+    }
+}
+
 export async function createCharacter(charData) {
     const { user } = stateManager.getState();
     if (!db || !user || !isSyncEnabled) return null;
@@ -471,8 +625,13 @@ export async function logManifestation(roomId, text) {
  * Loads a room by merging static blueprint data with dynamic Firestore state from the global collection.
  */
 export async function loadRoom(roomId) {
-    const blueprint = blueprintApartment[roomId] || {};
     const { user } = stateManager.getState();
+    
+    // Blueprint data is ONLY used for player-instanced apartment rooms.
+    // Global shared rooms (e.g. 'outside', 'room_xxx') must load purely from Firestore.
+    const isInstancedRoom = roomId.startsWith(`instance_`);
+    const baseId = isInstancedRoom ? roomId.replace(/^instance_[^_]+_/, '') : null;
+    const blueprint = (isInstancedRoom && baseId && blueprintApartment[baseId]) ? blueprintApartment[baseId] : {};
 
     const roomRef = doc(db, 'artifacts', appId, 'rooms', roomId);
     
