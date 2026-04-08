@@ -487,9 +487,9 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
     flex-direction: column;
 }
 
-/* MOBILE FULLSCREEN DOSSIER */
+/* MOBILE FULLSCREEN MODALS */
 @media (max-width: 640px) {
-    #dossier-modal {
+    #dossier-modal, #forge-modal {
         width: 100vw !important;
         height: 100dvh !important;
         max-height: none !important;

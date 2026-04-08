@@ -1,0 +1,86 @@
+{
+  "astral_entry": {
+    "storedImageUrl": "https://firebasestorage.googleapis.com/v0/b/terra-agnostum.firebasestorage.app/o/artifacts%2Fterra-agnostum-shared%2Frooms%2Fastral_entry.png?alt=media&token=552f1d62-f548-4209-9274-08946fd243bb"
+  },
+  "outside": {
+    "metadata": {
+      "stratum": "mundane",
+      "isEditable": false
+    },
+    "id": "outside",
+    "storedImageUrl": "https://firebasestorage.googleapis.com/v0/b/terra-agnostum.firebasestorage.app/o/artifacts%2Fterra-agnostum-shared%2Frooms%2Foutside.png?alt=media&token=94b64195-a7d8-4084-b09c-fef8cd6f71d5",
+    "visualPrompt": "A gritty, bustling cyberpunk urban street scene with new cars, old cars, white plasteel hovercraft and ox cart vendors.",
+    "name": "7th Ave.",
+    "description": "The busy urban hustle of 7th.  Just below the Archive.",
+    "shortName": "7TH AVE",
+    "exits": {
+      "north": "hallway",
+      "south": "room_69324c24",
+      "east": "room_678c4742"
+    }
+  },
+  "room_4877bdef": {
+    "npcs": [],
+    "exits": {
+      "south": "room_678c4742"
+    },
+    "items": [],
+    "visualPrompt": "A cluttered, gritty cyberpunk pawn shop interior, shelves packed with salvaged robotic arms and glowing cybernetic eyes, dusty glass display counters, dim neon sign lighting, industrial aesthetic, cinematic lighting, high detail, realistic textures.",
+    "name": "Second-Chance Cybernetics",
+    "description": "A cramped, dimly lit storefront cluttered with glass display cases containing salvaged robotic limbs, flickering ocular implants, and tangled nerve-interface cables. The air smells of ozone and industrial cleaning solvent, while a weary technician works behind a workbench covered in soldering irons and diagnostic pads.",
+    "shortName": "SECOND-",
+    "storedImageUrl": "https://firebasestorage.googleapis.com/v0/b/terra-agnostum.firebasestorage.app/o/artifacts%2Fterra-agnostum-shared%2Frooms%2Froom_4877bdef.png?alt=media&token=8df327ee-b90e-4d3d-b307-a9958892c8d6"
+  },
+  "room_678c4742": {
+    "npcs": [],
+    "visualPrompt": "An empty, newly constructed cyberpunk room, wireframe elements solidifying into reality.",
+    "name": "7th Ave.",
+    "description": "A newly woven pocket of reality. It is waiting for definition.",
+    "shortName": "7TH AVE",
+    "items": [],
+    "storedImageUrl": "https://firebasestorage.googleapis.com/v0/b/terra-agnostum.firebasestorage.app/o/artifacts%2Fterra-agnostum-shared%2Frooms%2Froom_678c4742.png?alt=media&token=14d6c753-c22f-4b4a-8a8c-486ea74db80a",
+    "exits": {
+      "west": "outside",
+      "north": "room_4877bdef",
+      "south": "room_ea90afda"
+    }
+  },
+  "room_69324c24": {
+    "npcs": [],
+    "name": "The Whistle Stop Cafe",
+    "shortName": "THE WHI",
+    "items": [],
+    "storedImageUrl": "https://firebasestorage.googleapis.com/v0/b/terra-agnostum.firebasestorage.app/o/artifacts%2Fterra-agnostum-shared%2Frooms%2Froom_69324c24.png?alt=media&token=cd72f9f3-5f3e-454d-957a-6c8e2a7f43c3",
+    "description": "An oddly anachronistic and warmly inviting coffee shop.",
+    "visualPrompt": "The interior of a warm and inviting coffee shop with big glass windows, cushy sofas and worn bookshelves full of second hand books..",
+    "exits": {
+      "north": "outside",
+      "south": "room_e47b925b"
+    }
+  },
+  "room_e47b925b": {
+    "npcs": [],
+    "visualPrompt": "An empty, newly constructed cyberpunk room, wireframe elements solidifying into reality.",
+    "exits": {
+      "north": "room_69324c24"
+    },
+    "name": "Cafe Back Office",
+    "description": "A newly woven pocket of reality. It is waiting for definition.",
+    "shortName": "CAFE BA",
+    "items": [],
+    "storedImageUrl": "https://firebasestorage.googleapis.com/v0/b/terra-agnostum.firebasestorage.app/o/artifacts%2Fterra-agnostum-shared%2Frooms%2Froom_e47b925b.png?alt=media&token=822c451f-263f-4d85-9986-cf948c31ab07"
+  },
+  "room_ea90afda": {
+    "npcs": [],
+    "exits": {
+      "north": "room_678c4742"
+    },
+    "items": [],
+    "visualPrompt": "Cinematic wide shot of a narrow, dark urban alleyway at night, overflowing with metallic dumpsters and piles of trash, multiple spindly multi-limbed scavenger robots with glowing optic sensors rummaging through garbage, gritty textures, cold industrial lighting, cyberpunk aesthetic, mundane atmosphere.",
+    "name": "The Scavenger's Alley",
+    "description": "A cramped, claustrophobic corridor choked with overflowing dumpsters and heaps of industrial refuse. Small, spindly robotic scavengers move with twitchy, jerky motions, their sensor lights flickering as they sift through the grime for salvageable scraps.",
+    "shortName": "THE SCA",
+    "storedImageUrl": "https://firebasestorage.googleapis.com/v0/b/terra-agnostum.firebasestorage.app/o/artifacts%2Fterra-agnostum-shared%2Frooms%2Froom_ea90afda.png?alt=media&token=e7ec9c21-e4d4-4a95-891b-dcaa0a1ae686",
+    "pinnedView": "https://firebasestorage.googleapis.com/v0/b/terra-agnostum.firebasestorage.app/o/artifacts%2Fterra-agnostum-shared%2Frooms%2Froom_ea90afda_pinned_1775164347189.png?alt=media&token=33729509-c902-4f07-8acd-ab00408baba1"
+  }
+}

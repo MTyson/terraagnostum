@@ -617,6 +617,25 @@ export async function saveLoreFragment(roomId, loreData) {
     } catch (e) { console.error("SyncEngine: Failed to save lore fragment:", e); }
 }
 
+export async function saveFeedback(feedbackData) {
+    const { user, localPlayer, activeAvatar } = stateManager.getState();
+    if (!db || !isSyncEnabled) return;
+    try {
+        const feedbackCol = collection(db, 'artifacts', appId, 'feedback');
+        await addDoc(feedbackCol, {
+            ...feedbackData,
+            uid: user?.uid || 'anonymous',
+            email: user?.email || null,
+            roomId: localPlayer.currentRoom,
+            stratum: localPlayer.stratum,
+            avatarName: activeAvatar?.name || null,
+            timestamp: serverTimestamp(),
+            userAgent: navigator.userAgent
+        });
+        console.log("[SYNC]: Feedback recorded.");
+    } catch (e) { console.error("SyncEngine: Failed to save feedback:", e); }
+}
+
 export async function logManifestation(roomId, text) {
     console.log(`[MANIFESTATION] ${roomId}: ${text}`);
 }
@@ -639,20 +658,26 @@ export async function loadRoom(roomId) {
         const snap = await getDoc(roomRef);
         const firestoreData = snap.exists() ? snap.data() : {};
 
-        const rawItems = [
-            ...(blueprint.items || []), 
-            ...(firestoreData.items || [])
-        ];
-        const rawNpcs = [
-            ...(blueprint.npcs || []),
-            ...(firestoreData.npcs || [])
-        ].map(npc => ({ ...npc, inventory: npc.inventory || [] }));
+        const mergedItems = new Map();
+        [...(blueprint.items || []), ...(firestoreData.items || [])].forEach(item => {
+            const key = item.id || item.name;
+            const existing = mergedItems.get(key) || {};
+            mergedItems.set(key, { ...existing, ...item });
+        });
+
+        const mergedNpcs = new Map();
+        [...(blueprint.npcs || []), ...(firestoreData.npcs || [])].forEach(npc => {
+            const key = npc.id || (npc.name + (npc.inventory?.length || 0));
+            const existing = mergedNpcs.get(key) || {};
+            mergedNpcs.set(key, { ...existing, ...npc, inventory: npc.inventory || existing.inventory || [] });
+        });
 
         return {
             ...blueprint,
             ...firestoreData,
-            items: Array.from(new Map(rawItems.map(item => [item.id || item.name, item])).values()),
-            npcs: Array.from(new Map(rawNpcs.map(npc => [npc.id || (npc.name + (npc.inventory?.length || 0)), npc])).values())
+            items: Array.from(mergedItems.values()),
+            npcs: Array.from(mergedNpcs.values())
+
         };
     } catch (e) {
         console.error(`SyncEngine: Failed to load room ${roomId}:`, e);
@@ -698,3 +723,81 @@ export async function updateRoom(roomId, updates) {
     const roomRef = doc(db, 'artifacts', appId, 'rooms', roomId);
     await setDoc(roomRef, updates, { merge: true });
 }
+
+/**
+ * Writes or updates the player's Anchor Portal record in the shared portals registry.
+ * This registry is read by the AIGM (Weave feature, Phase 3) and by portal traversal logic.
+ */
+export async function savePortal(portalData) {
+    const { user } = stateManager.getState();
+    if (!db || !user || !isSyncEnabled) return;
+    try {
+        const portalRef = doc(db, 'artifacts', appId, 'portals', user.uid);
+        await setDoc(portalRef, {
+            ...portalData,
+            ownerUid: user.uid,
+            lastActive: serverTimestamp()
+        }, { merge: true });
+        console.log('[SYNC]: Portal registry updated.');
+    } catch (e) { console.error('SyncEngine: Failed to save portal:', e); }
+}
+
+/**
+ * Marks a portal as inactive in the registry (lock portal command).
+ * The portal item is removed from the room separately via removeItemFromRoom.
+ */
+export async function setPortalActive(uid, active) {
+    if (!db || !isSyncEnabled) return;
+    try {
+        const portalRef = doc(db, 'artifacts', appId, 'portals', uid);
+        await setDoc(portalRef, { active, lastActive: serverTimestamp() }, { merge: true });
+    } catch (e) { console.error('SyncEngine: Failed to set portal active state:', e); }
+}
+
+/**
+ * Queries unread notifications for the current user, marks them read, and returns them.
+ * Call at boot time after loadPlayerState. Returns [] if none found.
+ */
+export async function checkPendingNotifications() {
+    const { user } = stateManager.getState();
+    if (!db || !user || user.isAnonymous || !isSyncEnabled) return [];
+    try {
+        const notifCol = collection(db, 'artifacts', appId, 'notifications');
+        const q = query(notifCol, where('targetUid', '==', user.uid));
+        const snap = await getDocs(q);
+        if (snap.empty) return [];
+
+        const notifications = [];
+        const batch = writeBatch(db);
+        snap.forEach(docSnap => {
+            const data = docSnap.data();
+            if (!data.read) {
+                notifications.push(data);
+                batch.update(docSnap.ref, { read: true });
+            }
+        });
+        if (notifications.length > 0) await batch.commit();
+        return notifications;
+    } catch (e) {
+        console.warn('[SYNC]: Failed to check notifications:', e);
+        return [];
+    }
+}
+
+/**
+ * Writes a persistent notification for another player.
+ * Stored in Firestore and surfaced to the recipient on next login.
+ */
+export async function sendNotification(targetUid, notifData) {
+    if (!db || !isSyncEnabled) return;
+    try {
+        const notifCol = collection(db, 'artifacts', appId, 'notifications');
+        await addDoc(notifCol, {
+            ...notifData,
+            targetUid,
+            timestamp: serverTimestamp(),
+            read: false
+        });
+    } catch (e) { console.warn('[SYNC]: Failed to send notification:', e); }
+}
+

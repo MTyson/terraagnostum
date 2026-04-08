@@ -249,7 +249,7 @@ export function updateCompassUI(room) {
 }
 
 export function updateContextualSuggestions(aigmSuggestions = []) {
-    const { wizardState, localPlayer } = stateManager.getState();
+    const { wizardState, localPlayer, showShareChip, activeAvatar } = stateManager.getState();
     if (wizardState.active) {
         renderContextualCommands(['Exit Wizard']);
         return;
@@ -261,6 +261,15 @@ export function updateContextualSuggestions(aigmSuggestions = []) {
 
     const tier = stateManager.getUserTier();
     let suggestions = [];
+
+    // Character room: surface the forge action prominently
+    const inCharRoom = localPlayer.currentRoom.endsWith('character_room') || localPlayer.currentRoom === 'character_room';
+    if (inCharRoom && !activeAvatar) {
+        suggestions = ["✦ Create Avatar", "Look"];
+        suggestions.push("💡 Suggest");
+        renderContextualCommands(suggestions);
+        return;
+    }
 
     if (tier === 'GUEST') {
         suggestions.push("/login");
@@ -278,7 +287,22 @@ export function updateContextualSuggestions(aigmSuggestions = []) {
         suggestions.push("FORGE ASTRAL WEAPON");
     }
 
+    // Portal system chips
+    const inAstral = localPlayer.stratum === 'astral' || localPlayer.currentRoom.toLowerCase().includes('astral');
+    if (inAstral && room?.exits?.resonator) {
+        suggestions.unshift('↩ Resonator');
+    }
+    const portalInRoom = room?.items?.find(i => i.type === 'Portal' && i.portalTargetId);
+    if (portalInRoom && !inAstral) {
+        suggestions.unshift(`⬡ Enter ${portalInRoom.portalOwnerName}'s Portal`);
+    }
+    // Discoverable anchor affordance: suggest setting an anchor if in the shared world with no anchor
+    if (!inAstral && activeAvatar && !localPlayer.currentRoom.startsWith('instance_') && !localPlayer.anchorPortal?.active) {
+        suggestions.push('⬡ Anchor Portal Here');
+    }
+
     const safeAigm = Array.isArray(aigmSuggestions) ? aigmSuggestions : [];
+
     suggestions = [...suggestions, ...safeAigm];
 
     if (suggestions.length < 4) {
@@ -286,6 +310,11 @@ export function updateContextualSuggestions(aigmSuggestions = []) {
         suggestions.push("Inventory");
     }
     suggestions.push("💡 Suggest");
+
+    // Prepend share chip after a nexus victory — it should be the most visible action
+    if (showShareChip) {
+        suggestions = ["🔗 Share Victory", ...suggestions];
+    }
 
     const uniqueSuggestions = [...new Set(suggestions)];
     renderContextualCommands(uniqueSuggestions);
@@ -296,7 +325,23 @@ export function updateCommandPrompt(tier) {
     const inputEl = document.getElementById('cmd-input');
     if (!prefixEl || !inputEl) return;
 
-    inputEl.placeholder = "Enter command...";
+    // Rotate placeholder hints for new players
+    if (!inputEl._hintInterval) {
+        const hints = [
+            "Enter command...",
+            "What do you do?",
+            "Try 'look' to begin.",
+            "The terminal awaits your intent...",
+            "Type 'help' to see commands.",
+            "Speak your will into the void...",
+        ];
+        let hintIndex = 0;
+        inputEl.placeholder = hints[0];
+        inputEl._hintInterval = setInterval(() => {
+            hintIndex = (hintIndex + 1) % hints.length;
+            inputEl.placeholder = hints[hintIndex];
+        }, 8000);
+    }
 
     let colorClass = "text-green-400";
     if (tier === 'VOID') colorClass = "text-purple-500";
@@ -384,8 +429,9 @@ export function updateAvatarUI(activeAvatar) {
     
     if (!activeAvatar) {
         container.innerHTML = `
-            <div class="text-amber-500 text-[10px] absolute inset-0 flex items-center justify-center text-center border border-dashed border-amber-900 p-4 m-2 uppercase tracking-tighter">
-                NO VESSEL DETECTED<br>DISEMBODIED STATE
+            <div class="text-amber-500 text-[10px] absolute inset-0 flex flex-col items-center justify-center text-center border border-dashed border-amber-900 p-4 m-2 uppercase tracking-tighter gap-2">
+                <span>NO VESSEL DETECTED<br>DISEMBODIED STATE</span>
+                <span class="text-green-700 text-[9px] animate-pulse tracking-widest">[ Type 'look' to orient ]</span>
             </div>`;
         return;
     }
@@ -593,11 +639,74 @@ export function updateRoomNPCPreviews(npcs = [], players = []) {
     });
 }
 
+/**
+ * Parse log text for bracketed voices and color code them.
+ * Propagates the voice color to all subsequent text until the next voice tag.
+ */
+function parseLogContent(text) {
+    const voiceColors = {
+        'NARRATOR': '#888888',
+        'TANDY': 'var(--gm-purple)',
+        'SYSTEM': 'var(--term-amber)',
+        'YOU SAY': '#ffffff',
+        'ERROR': 'var(--term-red)',
+        'REWARD': 'var(--term-green)',
+        'ASTRAL FEEDBACK': 'var(--astral-cyan)',
+        'ANALYSIS': 'var(--term-amber)',
+        'WIZARD': 'var(--term-amber)',
+        'SYSTEM WARN': 'var(--term-amber)'
+    };
+
+    // Split by bracketed tags while keeping them in the array
+    const parts = text.split(/(\[[^\]]+\])/);
+    let result = '';
+    let currentColor = '';
+
+    for (let part of parts) {
+        if (!part) continue;
+        
+        if (part.startsWith('[') && part.endsWith(']')) {
+            const voice = part.slice(1, -1).toUpperCase();
+            if (voiceColors[voice]) {
+                currentColor = voiceColors[voice];
+                result += `<span style="color: ${currentColor}; font-weight: bold;">${part}</span>`;
+            } else {
+                // Unknown tag, wrap in current color if one exists
+                if (currentColor) {
+                    result += `<span style="color: ${currentColor}">${part}</span>`;
+                } else {
+                    result += part;
+                }
+            }
+        } else {
+            // Regular text, wrap in current color if one exists
+            if (currentColor) {
+                result += `<span style="color: ${currentColor}">${part}</span>`;
+            } else {
+                result += part;
+            }
+        }
+    }
+
+    // Fallback for non-bracketed prefixes at the very start of the string (e.g. "TANDY: ")
+    if (!currentColor) {
+        for (const [voice, color] of Object.entries(voiceColors)) {
+            if (text.toUpperCase().startsWith(voice + ':')) {
+                return `<span style="color: ${color}">${text.replace(/\n/g, '<br>')}</span>`;
+            }
+        }
+    }
+
+    return result.replace(/\n/g, '<br>');
+}
+
 export function addLog(text, color = 'var(--term-green)') {
     if (stateManager.getState().activeTerminal) {
         terminalSystem.bbsWrite(text, color);
         return;
     }
+
+    const parsedContent = parseLogContent(text);
 
     // EXCLUSIVE ROUTING: If combat is active, write ONLY to the combat log feed
     const state = stateManager.getState();
@@ -607,7 +716,7 @@ export function addLog(text, color = 'var(--term-green)') {
             const pCombat = document.createElement('div');
             pCombat.style.color = color;
             pCombat.className = 'mb-1 drop-shadow-[0_0_2px_currentColor]';
-            pCombat.innerHTML = `> ${text.replace(/\n/g, '<br>')}`;
+            pCombat.innerHTML = `> ${parsedContent}`;
             combatLog.appendChild(pCombat);
             requestAnimationFrame(() => {
                 combatLog.scrollTo({ top: combatLog.scrollHeight, behavior: 'smooth' });
@@ -636,7 +745,7 @@ export function addLog(text, color = 'var(--term-green)') {
     const p = document.createElement('div');
     p.style.color = color;
     p.className = 'mb-1';
-    p.innerHTML = `> ${text.replace(/\n/g, '<br>')}`;
+    p.innerHTML = `> ${parsedContent}`;
     log.appendChild(p);
     
     const output = document.getElementById('output');
@@ -914,6 +1023,9 @@ export function toggleDossierBuffer(show, data = null) {
             const physBar = generateVisualBar(displayData.hp || getStatValue('PHYS'), getStatValue('PHYS'), 'bg-emerald-600');
             const awrBar = generateVisualBar(getStatValue('AWR'), 20, 'bg-emerald-600');
 
+            // ─── Credits Display ──────────────────────────────────────────────────────
+            const creditBalance = stateManager.getState().localPlayer.credits || 0;
+
             // Sub-stat Bars
             const stabilityBar = generateVisualBar(getStatValue('WILL', 'stability'), getStatValue('WILL', 'stability'), 'bg-blue-500', true);
             const projectionBar = generateVisualBar(getStatValue('WILL', 'projection'), getStatValue('WILL', 'projection'), 'bg-purple-500', true);
@@ -934,7 +1046,10 @@ export function toggleDossierBuffer(show, data = null) {
             statsArea.innerHTML = `
                 <div class="mb-4">
                     <div class="text-amber-500 font-bold text-lg mb-1 leading-tight">${displayData.name.toUpperCase()}</div>
-                    <div class="text-gray-500 text-[10px] italic mb-2">${displayData.archetype || 'VESSEL'}</div>
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="text-gray-500 text-[10px] italic">${displayData.archetype || 'VESSEL'}</div>
+                        <div class="text-amber-500 text-[10px] font-bold tracking-widest">[ ${creditBalance} CR ]</div>
+                    </div>
                     <details class="group">
                         <summary class="text-[9px] text-green-900 uppercase tracking-widest cursor-pointer hover:text-green-500 mb-1 list-none">
                             [ + ] Biometric_History

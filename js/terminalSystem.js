@@ -267,6 +267,12 @@ function showMainMenu() {
         },
         {
             key: '5',
+            label: 'The Ziggurat',
+            tag: '[MINIGAME]',
+            action: startZiggurat
+        },
+        {
+            key: '6',
             label: 'Sever Connection',
             danger: true,
             action: fireExit
@@ -358,6 +364,9 @@ function attemptHacking() {
             terminalState.traceLevel = Math.min(100, terminalState.traceLevel + 15);
             bbsWrite(`[SUCCESS]: ${credits} Credits extrapolated from data-stream.`);
             bbsWrite(`[WARNING]: Trace level increased to ${terminalState.traceLevel}%.`, 'amber');
+            
+            const currentCredits = stateManager.getState().localPlayer.credits || 0;
+            stateManager.updatePlayer({ credits: currentCredits + credits });
         } else {
             terminalState.traceLevel = Math.min(100, terminalState.traceLevel + 30);
             bbsWrite('[FAILURE]: Counter-measures triggered! Trace spiked.', 'red');
@@ -379,6 +388,91 @@ function attemptDoorOverride() {
         bbsWrite('TANDY: The Resonant Key from the Shadow Avatar would unlock this remotely.', 'purple');
         setTimeout(returnToMenu, 2000);
     }, 700);
+}
+
+// ─── The Ziggurat Minigame ───────────────────────────────────────────────────
+
+let zigguratState = {
+    floor: 0,
+    resonance: 3,
+    chance: 70
+};
+
+function startZiggurat() {
+    terminalState.mode = 'ZIGGURAT';
+    zigguratState = { floor: 0, resonance: 3, chance: 70 };
+    bbsClear();
+    bbsWrite('─────────────────────────────────────────', 'dim');
+    bbsWrite('  ▲ THE ZIGGURAT ▲', 'purple');
+    bbsWrite('─────────────────────────────────────────', 'dim');
+    bbsWrite('A flickering pyramid of light towers before you.', 'dim');
+    bbsWrite('Its apex is lost in neon clouds.');
+    bbsWrite('');
+    updateZiggurat();
+}
+
+function updateZiggurat() {
+    bbsWrite(`CURRENT FLOOR : ${zigguratState.floor}`, 'amber');
+    bbsWrite(`RESONANCE     : ${zigguratState.resonance}`, 'blue');
+    bbsWrite(`STABILITY     : ${zigguratState.chance}%`, 'green');
+    bbsWrite('');
+
+    renderBBSMenu([
+        {
+            key: 'A',
+            label: 'ASCEND',
+            action: zigguratAscend
+        },
+        {
+            key: 'R',
+            label: 'RITUAL',
+            tag: zigguratState.resonance > 0 ? `(-1 RESONANCE)` : '[EMPTY]',
+            locked: zigguratState.resonance <= 0,
+            action: zigguratRitual
+        },
+        {
+            key: 'W',
+            label: 'WITHDRAW',
+            action: zigguratWithdraw
+        }
+    ]);
+}
+
+function zigguratAscend() {
+    const roll = Math.floor(Math.random() * 100);
+    if (roll < zigguratState.chance) {
+        zigguratState.floor++;
+        // Climbing gets harder
+        zigguratState.chance = Math.max(10, zigguratState.chance - 5);
+        bbsWrite('SUCCESS. You climb higher into the static.', 'green');
+        updateZiggurat();
+    } else {
+        bbsWrite('COLLAPSE! Reality rejects your presence.', 'red');
+        bbsWrite(`You fell from floor ${zigguratState.floor}.`, 'dim');
+        setTimeout(returnToMenu, 2000);
+    }
+}
+
+function zigguratRitual() {
+    if (zigguratState.resonance > 0) {
+        zigguratState.resonance--;
+        zigguratState.chance = Math.min(95, zigguratState.chance + 15);
+        bbsWrite('You burn a fragment of memory to stabilize the climb.', 'purple');
+        updateZiggurat();
+    }
+}
+
+function zigguratWithdraw() {
+    bbsWrite('You step back from the Ziggurat.', 'amber');
+    bbsWrite(`Final Floor: ${zigguratState.floor}`, 'green');
+    if (zigguratState.floor > 0) {
+        const reward = zigguratState.floor * 10;
+        bbsWrite(`A faint echo of ${reward} credits manifests...`, 'dim');
+
+        const currentCredits = stateManager.getState().localPlayer.credits || 0;
+        stateManager.updatePlayer({ credits: currentCredits + reward });
+    }
+    setTimeout(returnToMenu, 2000);
 }
 
 function fireExit() {

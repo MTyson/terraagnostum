@@ -3,7 +3,7 @@
 // --- INITIAL STATE ---
 let state = {
     localPlayer: { 
-        hp: 20, currentRoom: "void", stratum: "mundane",
+        hp: 20, credits: 0, currentRoom: "void", stratum: "mundane",
         inventory: [], quests: [], closetDoorClosed: false, isArchitect: false,
         explorerMode: false,
         combat: { active: false, opponent: null, timerStartedAt: null }, activeAvatarId: null,
@@ -20,7 +20,7 @@ let state = {
     strata: {}, // Dynamic strata from Firestore
     localCharacters: [], activeAvatar: null, user: null,
     otherPlayers: {}, // Global presence map: { uid: { roomId, avatarName, ... } }
-    activeTerminal: false, isProcessing: false, suggestions: [],
+    activeTerminal: false, isProcessing: false, suggestions: [], showShareChip: false,
     wizardState: { active: false, type: null, step: 0, pendingData: {} }
 };
 
@@ -122,6 +122,11 @@ export function setProcessing(processing) {
 
 export function setSuggestions(suggestions) {
     state.suggestions = suggestions;
+    notify();
+}
+
+export function setShowShareChip(val) {
+    state.showShareChip = val;
     notify();
 }
 

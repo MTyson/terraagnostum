@@ -22,7 +22,20 @@ export const blueprintApartment = {
         description: "The western half of the main living area. A large, flickering computer console dominates the space against the west wall. The console hums with a strange energy, and the air is thick with forgotten secrets and intertwined histories.  Everything not covered by the character room and map room is here: races, planes, factions, geographies, it is endless. A closet door to the north is scrawled on with black marker 'Schrödinger's Closet', glowing with potent energy.",
         visualPrompt: "A gritty, glitchy cyberpunk apartment living room, a massive glowing green computer console, dim lighting, retro-futuristic furniture.  A closet door (closed) to the north is scrawled on with black marker 'Schrödinger's Closet', and a mysterious, astral purple-blue light is glowing out of the edges of the closed door.  Piles of reference books, documents and exoteric history and occult works are everywhere, evidence of an obsessive project ot catalog a vast, interdimensional Lore.  Everything not covered by the character room and map room is here: races, planes, factions, geographies, it is endless.",
         exits: { east: "maproom", north: "closet", south: "bedroom" },
-        metadata: { stratum: "mundane", isEditable: false }
+        metadata: { stratum: "mundane", isEditable: false },
+        npcs: [
+            {
+                id: "mira_silt",
+                name: "Mira Silt",
+                archetype: "Amn Sen Archivist",
+                description: "A slight woman surrounded by tottering stacks of annotated manuscripts. Her fingers are perpetually ink-stained, and she wears small round spectacles that seem to always be slightly askew. She looks up at you with the unsettling calm of someone who has catalogued stranger things than you.",
+                personality: "Speaks in oblique references and half-finished thoughts, as if most conversation happens elsewhere. She is not unfriendly — just operating at a different frequency. She knows the location of every Amn Sen stone ring in the Mundane, including one buried beneath Rain City that the Technate desperately wants destroyed.",
+                visual_prompt: "A slight scholarly woman surrounded by towering piles of manuscripts and occult charts. Ink-stained fingers, slightly crooked round spectacles, calm intelligent eyes. Sits cross-legged on a cluttered floor, a massive codex open in her lap.",
+                stats: { AMN: 20, WILL: 9, AWR: 11, PHYS: 5 },
+                inventory: [],
+                image: "assets/mira_silt.png"
+            }
+        ]
     },
     "maproom": {
         name: "Map Room",
@@ -30,7 +43,20 @@ export const blueprintApartment = {
         description: "The eastern half of the main living area, acting as a central nexus connecting the apartment.  It has a big, central table covered in copious maps, reference books and interdimensional diagrams tracking the connections of planes and strata.",
         visualPrompt: "A cyberpunk apartment living room, dim lighting, worn retro-futuristic couch, cables running along the floor.  The eastern half of the main living area, acting as a central nexus connecting the apartment.  It has a big, central table covered in copious maps, reference books and interdimensional diagrams tracking the connections of planes and strata. The walls are plastered with esoteric charts and maps, and a large, complex map of the Faen hangs prominently on the wall, with esoteric connections to Astral and Mundane.",
         exits: { west: "lore1", north: "kitchen", east: "character_room", south: "hallway" },
-        metadata: { stratum: "mundane", isEditable: false }
+        metadata: { stratum: "mundane", isEditable: false },
+        npcs: [
+            {
+                id: "kael_voss",
+                name: "Kael Voss",
+                archetype: "Technate Defector",
+                description: "A compact man in his late 40s. The left half of his face is cybernetic — a matte-grey titanium jawline with a glowing amber ocular implant that never blinks. He's bent over the maps on the table, occasionally muttering corrections under his breath with the confidence of someone who has walked those corridors.",
+                personality: "Gruff, paranoid, but not unkind. Has a soldier's directness and a defector's guilt. He won't volunteer information — but he'll trade it. Knows CityCore entry protocols, Technate patrol rhythms, and the location of at least two surveillance dead zones in Rain City. His price is always information, never credits.",
+                visual_prompt: "A weathered middle-aged man, the left half of his face replaced by matte titanium cybernetics with a glowing amber optical implant. Military posture, worn tactical jacket with no insignia. Bent over a map-covered table, tense but controlled.",
+                stats: { AMN: 18, WILL: 7, AWR: 8, PHYS: 8 },
+                inventory: [],
+                image: "assets/kael_voss.png"
+            }
+        ]
     },
     "bedroom": {
         name: "Bedroom & Bathroom",
@@ -84,7 +110,7 @@ export const blueprintApartment = {
                 target: "outside", 
                 itemReq: "Resonant Key", 
                 reqAuth: true,
-                lockMsg: "[SYSTEM]: The heavy metal door is sealed by a Technate biometric lock. A [Resonant Key] and verified account identity are required." 
+                lockMsg: "[SYSTEM]: You need to anchor your vessel. /login or /register." 
             } 
         },
         metadata: { stratum: "mundane", isEditable: false }

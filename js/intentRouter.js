@@ -119,9 +119,7 @@ export async function executeMovement(targetDir) {
                 return;
             }
             if (targetExit.reqAuth && (!user || user.isAnonymous)) {
-                UI.addLog(targetExit.lockMsg || "[SYSTEM]: Identity anchor required. Type '/LOGIN' to register your frequency.", "#b084e8");
-                startWizard('login');
-                UI.setWizardPrompt("AUTH@LOGIN:~$");
+                UI.addLog("[SYSTEM]: You need to anchor your vessel. /login or /register.", "#b084e8");
                 return;
             }
             if (targetExit.itemReq) {
@@ -264,6 +262,240 @@ export async function handleCommand(val) {
         }
         return;
     }
+
+    if (cmd === '🔗 share victory' || cmd === 'share victory' || cmd === 'share') {
+        const shareText = `I just defeated a Shadow Entity in the Astral Nexus of Terra Agnostum — a living, AI-mediated text adventure. Come find your vessel. 🔮`;
+        const shareUrl = window.location.origin;
+        const tweetUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+        window.open(tweetUrl, '_blank', 'noopener,noreferrer,width=600,height=400');
+        import('./stateManager.js').then(({ setShowShareChip }) => setShowShareChip(false));
+        UI.addLog(`[SYSTEM]: Transmission broadcast. The signal spreads.`, "var(--term-green)");
+        return;
+    }
+
+    // =========================================================
+    // === ANCHOR PORTAL SYSTEM ================================
+    // =========================================================
+
+    // --- ANCHOR PORTAL HERE ---
+    const anchorAliases = ['anchor portal here', 'anchor portal', 'set anchor here', 'set anchor', 'mark anchor', '⬡ anchor portal here'];
+    if (anchorAliases.includes(cmd)) {
+        if (!activeAvatar) {
+            UI.addLog('[SYSTEM]: You must have an active vessel to resonate an anchor.', 'var(--term-amber)');
+            return;
+        }
+        if (localPlayer.currentRoom.startsWith('instance_')) {
+            UI.addLog('[SYSTEM]: Portals must be anchored in the shared world, not within private instances.', 'var(--term-amber)');
+            return;
+        }
+        if (localPlayer.stratum === 'astral' || localPlayer.currentRoom.includes('astral')) {
+            UI.addLog('[SYSTEM]: The Astral is already the source. Anchor from a physical stratum.', 'var(--term-amber)');
+            return;
+        }
+
+        const activeMap = getActiveMap();
+        const astralEntryId = `astral_entry_${activeAvatar.id}`;
+
+        // Remove old portal item if one existed elsewhere
+        if (localPlayer.anchorPortal?.roomId && localPlayer.anchorPortal.roomId !== localPlayer.currentRoom) {
+            const oldRoom = activeMap[localPlayer.anchorPortal.roomId];
+            const oldPortalItem = (oldRoom?.items || []).find(i => i.id === `portal_${user.uid}`);
+            if (oldPortalItem) {
+                syncEngine.removeItemFromRoom(localPlayer.anchorPortal.roomId, oldPortalItem);
+                stateManager.updateMapNode(localPlayer.anchorPortal.roomId, {
+                    items: (oldRoom.items || []).filter(i => i.id !== `portal_${user.uid}`)
+                });
+            }
+            UI.addLog('[SYSTEM]: Previous anchor dissolved.', '#888');
+        }
+
+        // Build portal item
+        const portalItem = {
+            id: `portal_${user.uid}`,
+            name: 'Resonance Portal',
+            type: 'Portal',
+            description: `A shimmering fold in the air. It hums with ${activeAvatar.name}'s frequency — warm and familiar to those who know the sign.`,
+            scenery: false,
+            portalTargetId: astralEntryId,
+            portalOwnerName: activeAvatar.name,
+            portalOwnerUid: user.uid,
+            portalOwnerAvatarId: activeAvatar.id
+        };
+
+        // Seed portal item into current room
+        const currentRoom = activeMap[localPlayer.currentRoom];
+        const updatedItems = [...(currentRoom.items || []).filter(i => i.id !== portalItem.id), portalItem];
+        stateManager.updateMapNode(localPlayer.currentRoom, { items: updatedItems });
+        await syncEngine.addArrayElementToNode(localPlayer.currentRoom, 'items', portalItem);
+
+        // Add resonator exit to the astral entry room so visitors can return
+        const closetId = `instance_${user.uid}_closet`;
+        await syncEngine.updateMapNode(astralEntryId, { 'exits.resonator': closetId });
+
+        // Persist anchor to player state
+        stateManager.updatePlayer({
+            anchorPortal: {
+                roomId: localPlayer.currentRoom,
+                stratum: localPlayer.stratum,
+                astralEntryId,
+                active: true
+            }
+        });
+        await syncEngine.savePlayerState();
+
+        // Write to portals registry (used by AIGM Weave in Phase 3)
+        await syncEngine.savePortal({
+            ownerAvatarName: activeAvatar.name,
+            ownerAvatarId: activeAvatar.id,
+            astralEntryId,
+            anchorRoomId: localPlayer.currentRoom,
+            anchorStratum: localPlayer.stratum,
+            active: true
+        });
+
+        UI.addLog('[SYSTEM]: Resonance anchor set. A fold has materialized here.', 'var(--term-green)');
+        UI.addLog(`[TANDY]: Your frequency is now tethered to this place. Anyone who finds this fold can walk your Astral — and exit through your Resonator. Guard it, or leave it open. Your choice.`, '#b084e8');
+        return;
+    }
+
+    // --- LOCK / UNLOCK PORTAL ---
+    if (cmd === 'lock portal' || cmd === 'close portal' || cmd === 'close my portal') {
+        if (!localPlayer.anchorPortal?.roomId) {
+            UI.addLog('[SYSTEM]: No active anchor portal found.', 'var(--term-amber)');
+            return;
+        }
+        const activeMap = getActiveMap();
+        const anchorRoom = activeMap[localPlayer.anchorPortal.roomId];
+        const portalItem = (anchorRoom?.items || []).find(i => i.id === `portal_${user.uid}`);
+        if (portalItem) {
+            syncEngine.removeItemFromRoom(localPlayer.anchorPortal.roomId, portalItem);
+            stateManager.updateMapNode(localPlayer.anchorPortal.roomId, {
+                items: (anchorRoom.items || []).filter(i => i.id !== `portal_${user.uid}`)
+            });
+        }
+        stateManager.updatePlayer({ anchorPortal: { ...localPlayer.anchorPortal, active: false } });
+        await syncEngine.savePlayerState();
+        await syncEngine.setPortalActive(user.uid, false);
+        UI.addLog('[SYSTEM]: The fold collapses. Your anchor still exists — use \'open portal\' to rekindle it.', 'var(--term-amber)');
+        return;
+    }
+
+    if (cmd === 'open portal' || cmd === 'unlock portal' || cmd === 'open my portal') {
+        if (!localPlayer.anchorPortal?.roomId) {
+            UI.addLog('[SYSTEM]: No anchor set. Use \'anchor portal here\' first.', 'var(--term-amber)');
+            return;
+        }
+        if (localPlayer.anchorPortal.active) {
+            UI.addLog('[SYSTEM]: Your portal is already open.', '#888');
+            return;
+        }
+        if (!activeAvatar) {
+            UI.addLog('[SYSTEM]: You need an active vessel to reopen a portal.', 'var(--term-amber)');
+            return;
+        }
+        const portalItem = {
+            id: `portal_${user.uid}`,
+            name: 'Resonance Portal',
+            type: 'Portal',
+            description: `A shimmering fold in the air. It hums with ${activeAvatar.name}'s frequency.`,
+            scenery: false,
+            portalTargetId: localPlayer.anchorPortal.astralEntryId,
+            portalOwnerName: activeAvatar.name,
+            portalOwnerUid: user.uid,
+            portalOwnerAvatarId: activeAvatar.id
+        };
+        await syncEngine.addArrayElementToNode(localPlayer.anchorPortal.roomId, 'items', portalItem);
+        stateManager.updatePlayer({ anchorPortal: { ...localPlayer.anchorPortal, active: true } });
+        await syncEngine.savePlayerState();
+        await syncEngine.setPortalActive(user.uid, true);
+        UI.addLog('[SYSTEM]: The fold reopens. Your resonance anchor is live.', 'var(--term-green)');
+        return;
+    }
+
+    // --- ENTER PORTAL (traverse into owner's Astral) ---
+    const enterPortalAliases = ['enter portal', 'use portal', 'enter resonance portal', 'use resonance portal', 'step through portal', 'touch portal'];
+    // Also handle chip labels like "⬡ Enter Kira Vex's Portal" — match by prefix
+    const isEnterPortalCmd = enterPortalAliases.some(a => cmd.startsWith(a)) || cmd.startsWith('⬡ enter') || (cmd.startsWith('enter') && cmd.includes('portal'));
+    if (isEnterPortalCmd) {
+        const activeMap = getActiveMap();
+        const currentRoom = activeMap[localPlayer.currentRoom];
+        const portalItem = (currentRoom?.items || []).find(i => i.type === 'Portal' && i.portalTargetId);
+
+        if (!portalItem) {
+            UI.addLog('[SYSTEM]: No portal fold detected here.', 'var(--term-amber)');
+            return;
+        }
+
+        const isOwnPortal = portalItem.portalOwnerUid === user?.uid;
+        const targetEntryId = portalItem.portalTargetId;
+
+        UI.addLog(`[NARRATOR]: The fold shimmers. Reality peels back like wet paper. You step through.`, '#888');
+        UI.addLog(`[TANDY]: You're in ${isOwnPortal ? 'your own' : `${portalItem.portalOwnerName}'s`} Astral. The Resonator echo is accessible — or explore deeper.`, '#b084e8');
+
+        shiftStratum('astral');
+        stateManager.updatePlayer({ currentRoom: targetEntryId });
+
+        // Load entry room from Firestore (it may not be in local cache)
+        let entryRoom = activeMap[targetEntryId];
+        if (!entryRoom) {
+            entryRoom = await syncEngine.loadRoom(targetEntryId);
+            if (entryRoom) stateManager.updateMapNode(targetEntryId, entryRoom);
+        }
+
+        syncEngine.savePlayerState();
+
+        if (entryRoom) {
+            UI.printRoomDescription(entryRoom, true, stateManager.getActiveMap(), activeAvatar);
+        } else {
+            UI.addLog(`[SYSTEM]: The Astral entry is dark. The owner hasn't shaped it yet.`, 'var(--term-amber)');
+        }
+
+        // Notify the portal owner (persisted to Firestore for future login display)
+        if (!isOwnPortal && portalItem.portalOwnerUid) {
+            const travelerName = activeAvatar?.name || 'An unknown vessel';
+            const anchorDesc = currentRoom?.name || 'an unknown place';
+            syncEngine.sendNotification(portalItem.portalOwnerUid, {
+                type: 'portal_traversal',
+                message: `${travelerName} entered your Astral via your portal at ${anchorDesc}.`,
+                fromUid: user?.uid || null,
+                fromAvatarName: travelerName,
+                anchorRoomName: anchorDesc
+            });
+        }
+        return;
+    }
+
+
+    // --- RESONATOR (return through the owner's Resonator from their Astral) ---
+    if (cmd === 'resonator' || cmd === 'use resonator' || cmd === 'enter resonator' || cmd === '↩ resonator' || cmd.startsWith('↩')) {
+        const activeMap = getActiveMap();
+        const currentRoom = activeMap[localPlayer.currentRoom];
+        const resonatorTarget = currentRoom?.exits?.resonator;
+
+        if (!resonatorTarget) {
+            UI.addLog('[SYSTEM]: No Resonator echo detected in this sector.', 'var(--term-amber)');
+            return;
+        }
+
+        UI.addLog('[NARRATOR]: You press your consciousness toward the resonator echo. Reality tears. A dim apartment closet appears around you.', '#888');
+
+        // Load the closet room (it's an instanced room, may need loading)
+        let closetRoom = activeMap[resonatorTarget];
+        if (!closetRoom) {
+            closetRoom = await syncEngine.loadRoom(resonatorTarget);
+            if (closetRoom) stateManager.updateMapNode(resonatorTarget, closetRoom);
+        }
+
+        shiftStratum('mundane');
+        stateManager.updatePlayer({ currentRoom: resonatorTarget });
+        syncEngine.savePlayerState();
+
+        const updatedMap = stateManager.getActiveMap();
+        UI.printRoomDescription(updatedMap[resonatorTarget] || closetRoom, false, updatedMap, activeAvatar);
+        return;
+    }
+
+    // =========================================================
 
     if (cmd === 'logout') {
         if (user && user.isAnonymous) {
@@ -519,6 +751,10 @@ export async function handleCommand(val) {
         
         const items = (roomData.items || []).map(i => i.name).join(', ') || 'none';
         UI.addLog(`- ITEMS: ${items}`, "var(--term-amber)");
+
+        if (roomData.pinnedView) {
+            UI.addLog(`- PINNED VIEW: <br><img src="${roomData.pinnedView}" style="max-width: 100%; max-height: 200px; border: 1px solid var(--gm-purple); margin-top: 5px; cursor: zoom-in;" onclick="window.open('${roomData.pinnedView}', '_blank')">`, "var(--term-amber)");
+        }
         
         return;
     }
@@ -568,7 +804,7 @@ export async function handleCommand(val) {
     }
 
     // CORE SYSTEM COMMANDS
-    if (cmd === 'create avatar' || cmd === 'forge form' || cmd === 'make avatar') {
+    if (cmd === 'create avatar' || cmd === 'forge form' || cmd === 'make avatar' || cmd === '✦ create avatar') {
         if (!localPlayer.currentRoom.endsWith('character_room') && localPlayer.currentRoom !== 'character_room') {
             UI.addLog("[SYSTEM]: Vessel manifestation is only possible within The Forge (character_room).", "var(--term-amber)");
             return;
@@ -825,10 +1061,69 @@ export async function handleCommand(val) {
         if (localPlayer.inventory.length === 0) UI.addLog("Inventory empty.", "var(--term-amber)");
         else localPlayer.inventory.forEach(item => UI.addLog(`- ${item.name} [${item.type}]`, "var(--term-green)"));
         return;
+    } else if (cmd.startsWith('/feedback ') || cmd.startsWith('/bug ')) {
+        const msg = val.replace(/^\/(?:feedback|bug)\s+/i, '').trim();
+        if (!msg) {
+            UI.addLog("[SYSTEM]: Provide a message with your feedback. Example: /feedback The portal is stuck.", "var(--term-amber)");
+            return;
+        }
+        
+        UI.addLog("[SYSTEM]: Transmitting feedback to the Technate Architects...", "var(--term-green)");
+        syncEngine.saveFeedback({ message: msg, type: cmd.startsWith('/bug') ? 'bug' : 'feedback' });
+        return;
+    } else if (cmd === '/about' || cmd === 'about') {
+        UI.addLog(`[SYSTEM]: --- TERRA AGNOSTUM // SYSTEM MANIFEST ---`, "var(--term-green)");
+        UI.addLog(`v0.4.0-beta | Shared Reality Terminal`, "#888");
+        UI.addLog(`[SYSTEM]: A living, AI-mediated text adventure spanning multiple planes of existence.`, "var(--term-amber)");
+        UI.addLog(`[SYSTEM]: Woven by human intent. Rendered by machine imagination.`, "var(--term-amber)");
+        UI.addLog(`[SYSTEM]: Source Code ....... <a href="https://github.com/mindframegames/terraagnostum" target="_blank" class="text-green-400 hover:underline">github.com/mindframegames/terraagnostum</a>`, "#888");
+        UI.addLog(`[SYSTEM]: Feedback ......... /feedback [your message]`, "#888");
+        UI.addLog(`[SYSTEM]: Bug Reports ....... /bug [description]`, "#888");
+        UI.addLog(`[TANDY]: Thanks for being here. The universe is paying attention.`, "#b084e8");
+        return;
     } else if (cmd === 'help') {
-        UI.addLog("HELP // Commands: LOOK, N/S/E/W, WHOAMI, /LOGIN [EMAIL], /REGISTER [EMAIL], CREATE AVATAR, LEAVE VESSEL, ASSUME [NPC], CREATE NPC, LOCK [DIR], CREATE ITEM, EDIT ROOM, BUILD [DIR] [--AUTO], GENERATE ROOM, PIN, UNPIN, INV, MAP, STAT, INVESTIGATE, /RECALIBRATE, /ROOM, /STRATA.", "var(--term-amber)");
+        UI.addLog(`[SYSTEM]: --- TERMINAL COMMAND GUIDANCE ---`, "var(--term-amber)");
+        
+        UI.addLog(`[MOVEMENT & SENSORY]`, "var(--term-green)");
+        UI.addLog(`LOOK (L) ........ Analyze immediate surroundings.`, "#888");
+        UI.addLog(`N / S / E / W ... Traverse the sector topology.`, "#888");
+        UI.addLog(`MAP ............. Toggle the topological HUD readout.`, "#888");
+
+        UI.addLog(`[IDENTITY & SYNC]`, "var(--crayola-blue)");
+        UI.addLog(`WHOAMI .......... Verify current frequency and tier.`, "#888");
+        UI.addLog(`/LOGIN [EMAIL] .. Anchor your signature to the Technate.`, "#888");
+        UI.addLog(`CREATE AVATAR ... Forge a vessel (at The Forge / Archive).`, "#888");
+        UI.addLog(`STAT ............ Display vessel biometric data.`, "#888");
+        UI.addLog(`INV ............. Access vessel storage.`, "#888");
+
+        UI.addLog(`[INTERACTION]`, "var(--gm-purple)");
+        UI.addLog(`ASSUME [NPC] .... Materialize into an unoccupied vessel.`, "#888");
+        UI.addLog(`LEAVE VESSEL .... Return to a disembodied void state.`, "#888");
+        UI.addLog(`CREATE NPC ...... Spawn a new autonomous entity.`, "#888");
+        UI.addLog(`LOCK [DIR] ...... Obstruct a sector exit with narrative force.`, "#888");
+
+        UI.addLog(`[ARCHITECT / BETA]`, "var(--astral-cyan)");
+        UI.addLog(`BUILD [DIR] ..... Expand reality. Use '--auto' for AI weaving.`, "#888");
+        UI.addLog(`EDIT ROOM ....... Rewrite current sector description.`, "#888");
+        UI.addLog(`GENERATE ROOM ... Let the AI render the current sector.`, "#888");
+        UI.addLog(`PIN VIEW ........ Affix current projection to the room.`, "#888");
+
+        UI.addLog(`[UTILITIES]`, "var(--term-amber)");
+        UI.addLog(`/RECALIBRATE .... Return to your primary anchor (Home).`, "#888");
+        UI.addLog(`/STRATA ......... List known reality layers.`, "#888");
+        UI.addLog(`/FEEDBACK [MSG] . Transmit data to the Architects.`, "#888");
+
+        UI.addLog(`[ASTRAL & PORTALS]`, "#b084e8");
+        UI.addLog(`ANCHOR PORTAL HERE .. Tether your Astral to this location.`, "#888");
+        UI.addLog(`ENTER PORTAL ........ Step through a fold in reality.`, "#888");
+        UI.addLog(`RESONATOR ........... Return through an Astral resonator echo.`, "#888");
+        UI.addLog(`LOCK PORTAL ......... Collapse your portal fold (keeps anchor).`, "#888");
+        UI.addLog(`OPEN PORTAL ......... Rekindle a locked portal fold.`, "#888");
+        
+        UI.addLog(`[TIP]: If you're lost, just type your intent in plain English. Tandy is listening.`, "#666");
         return;
     }
+
 
     // COMBAT TIMER RESET: If the player acts during combat, reset the 45s timer
     if (localPlayer.combat.active) {

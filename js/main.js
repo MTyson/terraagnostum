@@ -13,16 +13,35 @@ import './forgeSystem.js';
 // --- CONFIG & DB VERSION ---
 let hasInitialized = false;
 
+// --- FIRST-RUN ONBOARDING ---
+/**
+ * Plays a one-time atmospheric boot sequence for brand-new players.
+ * Checks localStorage so it only fires once, ever.
+ */
+function playFirstRunSequence() {
+    const FIRST_RUN_KEY = 'ta_firstRun_v1';
+    if (localStorage.getItem(FIRST_RUN_KEY)) return;
+    localStorage.setItem(FIRST_RUN_KEY, 'done');
+
+    const lines = [
+        { text: `[SYSTEM]: WELCOME, TRAVELER. You have breached the membrane.`, color: 'var(--term-amber)', delay: 1800 },
+        { text: `[SYSTEM]: This terminal is a window into Terra Agnostum — a living, shared reality woven by AI and human intent alike.`, color: 'var(--term-amber)', delay: 8000 },
+        { text: `[NARRATOR]: You are currently disembodied. A formless ripple in the signal. You will need to forge a vessel before you can touch this world.`, color: '#888888', delay: 18000 },
+        { text: `[TANDY]: Hey. Tandy here. Your onboard AI. Start with <span class="text-green-400 font-bold cursor-pointer hover:underline" onclick="document.getElementById('cmd-input').value='look'; document.getElementById('cmd-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))">look</span> — or just type it. We'll figure out the rest together.`, color: '#b084e8', delay: 30000 },
+    ];
+
+    lines.forEach(({ text, color, delay }) => {
+        setTimeout(() => UI.addLog(text, color), delay);
+    });
+}
+
 // Initial config fetch
 import { fetchSystemConfig } from './apiService.js';
 await fetchSystemConfig();
 
 // Sync app version from dedicated version file
 import { APP_VERSION } from './version.js';
-const versionEl = document.querySelector('#utc-version-display a');
-if (versionEl) {
-    versionEl.textContent = `v${APP_VERSION}`;
-}
+// (Version display replaced by static [ SOURCES ] link)
 
 // --- AUTHENTICATION & SYNC ---
 if (isSyncEnabled) {
@@ -52,6 +71,9 @@ if (isSyncEnabled) {
                 const isAstral = updatedState.localPlayer.stratum === 'astral' || strata[updatedState.localPlayer.stratum.toLowerCase()]?.rules?.combat === 'Battle of Wills';
                 UI.printRoomDescription(currentRoom, isAstral, activeMap, updatedState.activeAvatar);
             }
+
+            // First-run onboarding: fires once, after the room is rendered
+            playFirstRunSequence();
             
             if (!user.isAnonymous && localStorage.getItem('awaitingNewUserHint') === 'true') {
                 localStorage.removeItem('awaitingNewUserHint');
@@ -59,6 +81,32 @@ if (isSyncEnabled) {
                     UI.addLog(`[TANDY]: Your signature is anchored. Good. Now, go investigate the resonator in the closet.`, "#b084e8");
                 }, 1500);
             }
+
+            // --- LOGIN NOTIFICATIONS ---
+            // Check for any messages that were queued while the player was offline.
+            // Authenticated players only — guests cannot own portals or receive notifications.
+            if (!user.isAnonymous) {
+                try {
+                    const notifications = await syncEngine.checkPendingNotifications();
+                    if (notifications.length > 0) {
+                        setTimeout(() => {
+                            UI.addLog(`[TANDY]: Incoming transmissions from while you were away...`, '#b084e8');
+                        }, 3500);
+                        notifications.forEach((notif, i) => {
+                            setTimeout(() => {
+                                if (notif.type === 'portal_traversal') {
+                                    UI.addLog(`[TANDY]: ${notif.message}`, '#b084e8');
+                                } else {
+                                    UI.addLog(`[SYSTEM]: ${notif.message}`, 'var(--term-amber)');
+                                }
+                            }, 4500 + i * 1200);
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[BOOT]: Notification check failed silently.', e);
+                }
+            }
+
         }
         UI.initHUDWidgets();
     });
@@ -207,11 +255,3 @@ document.addEventListener('click', (e) => {
     }
 });
 
-setInterval(() => { 
-    const timeEl = document.getElementById('utc-time');
-    if(timeEl) {
-        const now = new Date();
-        const utcStr = now.toISOString().split('T')[1].split('.')[0];
-        timeEl.innerText = utcStr; 
-    }
-}, 1000);
